@@ -3,509 +3,942 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Outreach Desk</title>
+    <title>Outreach Desk 2 · Sales Operations</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <aside class="sidebar">
-      <a class="brand" href="/"
-        ><span class="monogram" id="brandMark">OD</span
-        ><span
-          ><span id="brandName">OUTREACH DESK</span
-          ><small>TEAM WORKSPACE</small></span
-        ></a
-      >
-      <nav>
-        <a href="#settings">Mailbox & settings</a
-        ><a href="#leads">Lead workspace</a
-        ><a href="#campaign">Campaign & templates</a
-        ><a href="#activity">Activity & recovery</a
-        ><a href="#suppression">Do not contact</a>
-      </nav>
-      <div class="sidebar-foot">
-        <span id="profileName">My mailbox</span><br /><span
-          >Local workspace · v2.0</span
-        >
-      </div>
-    </aside>
-    <main>
-      <header>
-        <div>
-          <p class="eyebrow">SALES OPERATIONS</p>
-          <h1>Make the first move.</h1>
-          <p class="subtle">Relevant introductions. Clear follow-through.</p>
+    <div class="app-shell">
+      <!-- Desktop Application Titlebar -->
+      <header class="app-titlebar">
+        <div class="titlebar-left">
+          <div class="window-dots">
+            <span class="window-dot close"></span>
+            <span class="window-dot minimize"></span>
+            <span class="window-dot maximize"></span>
+          </div>
+          <a class="titlebar-brand" href="#dashboard">
+            <span class="brand-monogram" id="brandMark">OD</span>
+            <span id="brandName">OUTREACH DESK</span>
+            <span class="brand-subtext">Desktop v2.0</span>
+          </a>
         </div>
-        <span class="pill" id="connection">Mailbox disconnected</span>
+
+        <div class="titlebar-center">
+          <div class="titlebar-campaign-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span id="workbookName">No workbook imported.</span>
+          </div>
+        </div>
+
+        <div class="titlebar-right">
+          <span class="connection-pill" id="connection">
+            <span class="connection-dot"></span>
+            Mailbox disconnected
+          </span>
+        </div>
       </header>
-      <div id="notice" role="status" hidden></div>
-      <section class="stats" aria-label="Campaign summary">
-        <div><span>Total leads</span><strong id="total">0</strong></div>
-        <div><span>Ready for outreach</span><strong id="ready">0</strong></div>
-        <div>
-          <span>Excluded from sending</span><strong id="excluded">0</strong>
-        </div>
-        <div><span>Sent by this tool</span><strong id="sent">0</strong></div>
-      </section>
-      <section class="panel setup">
-        <div>
-          <p class="eyebrow">01 · SOURCE</p>
-          <h2>Bring your leads in.</h2>
-          <label>Active campaign<select id="campaignSelect"></select></label>
-          <p id="workbookName" class="subtle">No workbook imported.</p>
-          <div class="actions">
-            <button id="reload" class="secondary">Reload workbook</button
-            ><label class="button secondary" for="upload"
-              >Add .xlsx campaign</label
-            ><input id="upload" type="file" accept=".xlsx" hidden /><a
-              class="button secondary"
-              href="/api/download"
-              id="download"
-              >Download status workbook</a
-            >
-          </div>
-          <p class="hint">
-            Works on a local copy. Your original workbook stays intact.
-          </p>
-        </div>
-        <div>
-          <p class="eyebrow">02 · MAILBOX</p>
-          <h2>Connect Private Email.</h2>
-          <label>Mailbox profile<select id="profileSelect"></select></label
-          ><label for="password">Password for the selected mailbox</label>
-          <div class="actions">
-            <input
-              id="password"
-              type="password"
-              autocomplete="off"
-              placeholder="Enter mailbox password"
-            /><button id="connect">Connect mailbox</button
-            ><button id="resume" class="secondary" hidden>
-              Continue sign-in</button
-            ><button id="disconnect" class="secondary" hidden>
-              Disconnect
-            </button>
-          </div>
-          <p class="hint">
-            Opens the selected browser. Password is used for sign-in only and is
-            never saved.
-          </p>
-        </div>
-      </section>
-      <section class="panel" id="settings">
-        <p class="eyebrow">WORKSPACE SETTINGS</p>
-        <h2>Set it up for your team.</h2>
-        <details id="settingsDetails">
-          <summary>
-            Mailbox profiles, sending pace, and team coordination
-          </summary>
-          <div class="campaign">
-            <div>
-              <h3>Mailbox profile</h3>
-              <label>Profile name<input id="accountName" /></label
-              ><label
-                >Email<input
-                  id="accountEmail"
-                  type="email"
-                  autocomplete="username" /></label
-              ><label
-                >Provider<select id="provider">
-                  <option value="privateemail">Private Email webmail</option>
-                </select></label
-              ><label>Webmail URL<input id="accountUrl" type="url" /></label
-              ><label
-                >Browser<select id="browserChannel">
-                  <option value="chrome">Google Chrome</option>
-                  <option value="msedge">Microsoft Edge</option>
-                </select></label
-              >
-              <div class="filters">
-                <label>Sender name<input id="senderName" /></label
-                ><label>Business name<input id="businessName" /></label>
-              </div>
-              <label>Legal business name<input id="legalName" /></label
-              ><label>Postal address<input id="address" /></label
-              ><label
-                >Services you offer<textarea id="services" rows="3"></textarea>
-              </label>
-              <div class="actions">
-                <button id="saveProfile">Save mailbox profile</button
-                ><button id="newProfile" class="secondary">New profile</button>
-              </div>
-              <p class="hint">
-                Passwords stay in memory for login only. Each profile has its
-                own sender and business details. Switching profiles disconnects
-                the previous mailbox.
-              </p>
-            </div>
-            <div>
-              <h3>Sending pace</h3>
-              <div class="filters">
-                <label
-                  >Gap minimum (seconds)<input
-                    id="minSeconds"
-                    type="number"
-                    min="1" /></label
-                ><label
-                  >Gap maximum (seconds)<input
-                    id="maxSeconds"
-                    type="number"
-                    min="1"
-                /></label>
-              </div>
-              <div class="filters">
-                <label
-                  >Rolling hourly limit<input
-                    id="hourlyCap"
-                    type="number"
-                    min="1" /></label
-                ><label
-                  >Rolling 24-hour limit<input
-                    id="dailyCap"
-                    type="number"
-                    min="1"
-                /></label>
-              </div>
-              <div class="filters">
-                <label
-                  >Rest after at least N sends<input
-                    id="pauseEveryMin"
-                    type="number"
-                    min="1" /></label
-                ><label
-                  >Rest after at most N sends<input
-                    id="pauseEveryMax"
-                    type="number"
-                    min="1"
-                /></label>
-              </div>
-              <div class="filters">
-                <label
-                  >Rest minimum (seconds)<input
-                    id="pauseMinSeconds"
-                    type="number"
-                    min="0" /></label
-                ><label
-                  >Rest maximum (seconds)<input
-                    id="pauseMaxSeconds"
-                    type="number"
-                    min="0"
-                /></label>
-              </div>
-              <label
-                >Empty queue check (seconds)<input
-                  id="pollSeconds"
-                  type="number"
-                  min="5"
-              /></label>
-              <p class="hint">
-                Gaps and rests are sampled within these ranges. Use limits
-                within your mailbox plan; manual sends outside this tool are not
-                counted.
-              </p>
-              <h3>Lead eligibility</h3>
-              <label class="check"
-                ><input id="requireActive" type="checkbox" /> Require Active
-                operating status</label
-              ><label class="check"
-                ><input id="requireNoOutOfService" type="checkbox" /> Require No
-                out-of-service flag</label
-              ><label class="check"
-                ><input id="allowHidden" type="checkbox" /> Allow hidden
-                worksheets</label
-              ><label
-                >Ready statuses (comma separated; use blank for empty
-                cells)<input id="readyStatuses" /></label
-              ><label
-                >Status after a confirmed send<input id="sentStatus"
-              /></label>
-              <h3>Shared team server</h3>
-              <label class="check"
-                ><input id="teamEnabled" type="checkbox" /> Use shared team
-                coordination</label
-              ><label
-                >Server URL<input
-                  id="teamUrl"
-                  type="url"
-                  placeholder="https://outreach.example.com" /></label
-              ><label>This PC’s name<input id="workerName" /></label
-              ><label
-                >Access token<input
-                  id="teamToken"
-                  type="password"
-                  autocomplete="off"
-                  placeholder="Token is not shown or saved by this PC"
-              /></label>
-              <p id="teamStatus" class="hint"></p>
-              <button id="saveSettings">Save sending settings</button>
-              <p class="hint">
-                All PCs must connect to the same team server for shared
-                duplicate protection, suppression, and mailbox allowances. A
-                local workspace alone only tracks this PC.
-              </p>
+
+      <!-- App Main Layout (Sidebar + Viewport) -->
+      <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="app-sidebar">
+          <nav class="sidebar-nav">
+            <div class="nav-category">Workspace</div>
+            <a class="nav-link active" href="#dashboard" data-view="dashboard">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+              <span>Dashboard</span>
+            </a>
+            <a class="nav-link" href="#leads" data-view="leads">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              <span>Leads Workspace</span>
+            </a>
+            <a class="nav-link" href="#campaigns" data-view="campaigns">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>Campaigns & Sheets</span>
+            </a>
+            <a class="nav-link" href="#templates" data-view="templates">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              <span>Templates Studio</span>
+            </a>
+
+            <div class="nav-category">Operations</div>
+            <a class="nav-link" href="#activity" data-view="activity">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              <span>Activity & Audit</span>
+            </a>
+            <a class="nav-link" href="#suppression" data-view="suppression">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+              </svg>
+              <span>Do Not Contact</span>
+            </a>
+            <a class="nav-link" href="#settings" data-view="settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+              <span>Mailbox & Settings</span>
+            </a>
+          </nav>
+
+          <div class="sidebar-foot">
+            <div class="profile-avatar">FC</div>
+            <div class="profile-info">
+              <span class="profile-name" id="profileName">My Mailbox</span>
+              <span class="profile-role">Private Email · Local Active</span>
             </div>
           </div>
-        </details>
-      </section>
-      <section class="panel" id="campaignSettings">
-        <details>
-          <summary>Campaign settings and column mapping</summary>
-          <label>Campaign name<input id="campaignName" /></label
-          ><label class="check"
-            ><input id="campaignEnabled" type="checkbox" /> Include this
-            campaign in continuous outreach</label
-          ><label
-            >Included worksheets (one exact name per line; leave empty for
-            all)<textarea id="campaignSheets" rows="3"></textarea>
-          </label>
-          <details>
-            <summary>Column mapping for custom workbooks</summary>
-            <p class="hint">
-              Optional JSON: {"Sheet1":{"email":"H","carrier legal
-              name":"A","status":"G","owner / principal":"I"}}. Map Status to
-              the correct tracking column; mappings control which cells are
-              updated. Default header aliases include Company, Company name,
-              Email address, Contact, and Contact name.
-            </p>
-            <label
-              >Column mapping<textarea
-                id="mapping"
-                rows="5"
-                spellcheck="false"
-              ></textarea>
-            </label>
-            <pre id="headers" class="hint"></pre>
-          </details>
-          <button id="saveCampaign" class="secondary">Save campaign</button>
-        </details>
-      </section>
-      <section class="panel" id="leads">
-        <div class="section-head">
+        </aside>
+
+        <!-- Main Viewport -->
+        <main class="app-viewport">
+          <!-- Notification Toast -->
+          <div id="notice" role="status" hidden></div>
+
+          <!-- Hidden compatibility elements to support app.js state methods -->
+          <details id="settingsDetails" hidden></details>
+
+          <!-- ========================================== -->
+          <!-- VIEW 1: DASHBOARD (MISSION CONTROL)       -->
+          <!-- ========================================== -->
+          <section class="view-page active" id="view-dashboard">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">MISSION CONTROL</p>
+                <h1 class="page-title">Operational Desk</h1>
+                <p class="page-subtitle">Real-time delivery status, queue pacing, and continuous outreach.</p>
+              </div>
+              <div class="header-actions">
+                <button id="start">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                  Start continuous outreach
+                </button>
+                <button id="stop" class="danger" hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12"></rect></svg>
+                  Stop outreach
+                </button>
+              </div>
+            </div>
+
+            <!-- KPI Summary Cards -->
+            <div class="stats-grid" aria-label="Campaign summary">
+              <div class="stat-card total">
+                <div class="stat-label">
+                  Total Leads
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                </div>
+                <div class="stat-value" id="total">0</div>
+                <div class="stat-hint">In active campaign workbook</div>
+              </div>
+              <div class="stat-card ready">
+                <div class="stat-label">
+                  Ready For Outreach
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+                <div class="stat-value" id="ready">0</div>
+                <div class="stat-hint">Active, verified & eligible</div>
+              </div>
+              <div class="stat-card excluded">
+                <div class="stat-label">
+                  Excluded From Sending
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                </div>
+                <div class="stat-value" id="excluded">0</div>
+                <div class="stat-hint">Duplicates, bounces or inactive</div>
+              </div>
+              <div class="stat-card sent">
+                <div class="stat-label">
+                  Sent By This Tool
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </div>
+                <div class="stat-value" id="sent">0</div>
+                <div class="stat-hint">Confirmed webmail submissions</div>
+              </div>
+            </div>
+
+            <!-- Dashboard Operations Grid -->
+            <div class="dashboard-grid">
+              <!-- Left Column: Runner Status & Pacing -->
+              <div>
+                <!-- Runner Control Panel -->
+                <div class="runner-card">
+                  <div class="runner-header">
+                    <div class="runner-status-group">
+                      <span class="status-badge" id="jobStatus">Idle</span>
+                      <strong style="color: #fff; font-size: 14px;">Outreach Runner</strong>
+                    </div>
+                    <span id="nextSend" style="font-size: 12px; color: var(--accent-amber); font-weight: 500;"></span>
+                  </div>
+
+                  <p class="runner-message" id="jobMessage">Ready to initiate dispatch queue.</p>
+                  <progress id="progress" value="0" max="1"></progress>
+
+                  <div class="quota-banner">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span id="quota">Checking rolling hour and daily allowances…</span>
+                  </div>
+
+                  <div class="runner-meta">
+                    <span>Single recipient per message</span>
+                    <span>Direct webmail injection via Playwright</span>
+                  </div>
+                </div>
+
+                <!-- Batch / Manual Action Widget -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                      Manual Batch Dispatch
+                    </h2>
+                    <span class="status-pill ready" id="selectedCount">0 selected</span>
+                  </div>
+                  <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px;">
+                    Select leads from the <a href="#leads" style="color: var(--accent-red); text-decoration: underline;">Leads Workspace</a>, then dispatch them here with human-paced intervals.
+                  </p>
+                  <div class="form-group">
+                    <label class="check">
+                      <input id="randomTemplates" type="checkbox" checked />
+                      Randomly select from enabled, matching templates
+                    </label>
+                  </div>
+                  <div class="form-actions">
+                    <button id="batch" class="secondary">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                      Send selected leads
+                    </button>
+                    <a href="#leads" class="button secondary">Browse leads table</a>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column: Quick Mailbox Session & Events Stream -->
+              <div>
+                <!-- Mailbox Session Box -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                      Mailbox Connection
+                    </h2>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="profileSelect">Active Mailbox Profile</label>
+                    <select id="profileSelect"></select>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="password">Session Password</label>
+                    <input id="password" type="password" autocomplete="off" placeholder="Enter password to authenticate" />
+                  </div>
+
+                  <div class="form-actions">
+                    <button id="connect">Connect mailbox</button>
+                    <button id="resume" class="secondary" hidden>Continue sign-in</button>
+                    <button id="disconnect" class="danger" hidden>Disconnect</button>
+                  </div>
+                  <p class="hint">Passwords stay in memory only and are never saved or sent to any server.</p>
+                </div>
+
+                <!-- Recent Events Stream -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                      Live System Activity
+                    </h2>
+                    <a href="#activity" class="button secondary" style="font-size: 11px; padding: 4px 8px;">View all</a>
+                  </div>
+                  <ol id="events" class="events-stream"></ol>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- VIEW 2: LEADS WORKSPACE                    -->
+          <!-- ========================================== -->
+          <section class="view-page" id="view-leads">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">DATA MANAGEMENT</p>
+                <h1 class="page-title">Leads Workspace</h1>
+                <p class="page-subtitle">Inspect contacts, verify eligibility, select targets, and preview personalized outreach.</p>
+              </div>
+              <div class="header-actions">
+                <button id="reload" class="secondary">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                  Reload workbook
+                </button>
+                <label class="button secondary" for="upload" style="cursor: pointer;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  Add .xlsx campaign
+                </label>
+                <input id="upload" type="file" accept=".xlsx" hidden />
+                <a class="button secondary" href="/api/download" id="download">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Download updated workbook
+                </a>
+              </div>
+            </div>
+
+            <!-- Filter & Search Toolbar -->
+            <div class="toolbar">
+              <div class="toolbar-group">
+                <div style="min-width: 170px;">
+                  <select id="sheet" aria-label="Select worksheet">
+                    <option value="">All worksheets</option>
+                  </select>
+                </div>
+                <div style="min-width: 160px;">
+                  <select id="filter" aria-label="Filter status">
+                    <option value="ready">Ready for outreach</option>
+                    <option value="all">All leads</option>
+                    <option value="excluded">Excluded leads</option>
+                  </select>
+                </div>
+                <div class="toolbar-search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input id="search" type="search" placeholder="Search company, contact, or email…" />
+                </div>
+              </div>
+
+              <div class="toolbar-group">
+                <button id="clearSelection" class="secondary" style="font-size: 11.5px;">Clear selection</button>
+              </div>
+            </div>
+
+            <!-- Leads Data Grid -->
+            <div class="table-container">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 44px; text-align: center;">
+                        <input type="checkbox" id="selectPage" aria-label="Select eligible leads on this page" />
+                      </th>
+                      <th>Company / Principal</th>
+                      <th>Contact Email</th>
+                      <th>Location</th>
+                      <th>Status / Reason</th>
+                      <th style="width: 120px; text-align: right;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="leadRows"></tbody>
+                </table>
+              </div>
+
+              <div class="table-footer">
+                <span id="pageInfo">Loading leads…</span>
+                <div class="pagination-controls">
+                  <button id="previous" class="secondary">Previous</button>
+                  <button id="next" class="secondary">Next</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- VIEW 3: CAMPAIGNS & SHEETS MAPPING         -->
+          <!-- ========================================== -->
+          <section class="view-page" id="view-campaigns">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">DATA SCHEMA</p>
+                <h1 class="page-title">Campaigns & Column Mapping</h1>
+                <p class="page-subtitle">Configure campaign scopes, included worksheets, and spreadsheet column mappings.</p>
+              </div>
+              <div class="header-actions">
+                <button id="saveCampaign">Save campaign settings</button>
+              </div>
+            </div>
+
+            <div class="dashboard-grid">
+              <!-- Left: Campaign Scope -->
+              <div class="panel">
+                <div class="panel-head">
+                  <h2 class="panel-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    Campaign Parameters
+                  </h2>
+                </div>
+
+                <div class="form-group">
+                  <label for="campaignSelect">Active Campaign Selection</label>
+                  <select id="campaignSelect"></select>
+                </div>
+
+                <div class="form-group">
+                  <label for="campaignName">Campaign Display Name</label>
+                  <input id="campaignName" placeholder="e.g. Jessica Miller - Motus leads" />
+                </div>
+
+                <div class="form-group">
+                  <label class="check">
+                    <input id="campaignEnabled" type="checkbox" />
+                    Include this campaign in continuous outreach queue
+                  </label>
+                </div>
+
+                <div class="form-group">
+                  <label for="campaignSheets">Included Worksheets (one exact sheet name per line; leave blank for all)</label>
+                  <textarea id="campaignSheets" rows="4" placeholder="Leads&#10;July Carriers"></textarea>
+                  <p class="hint">Continuous queue only processes worksheets matching these names.</p>
+                </div>
+              </div>
+
+              <!-- Right: Column Mapping -->
+              <div class="panel">
+                <div class="panel-head">
+                  <h2 class="panel-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                    Custom Column Mapping (JSON)
+                  </h2>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+                  Define JSON column mappings to target custom layouts. The status column mapping controls which cell is updated after confirmed send.
+                </p>
+
+                <div class="form-group">
+                  <label for="mapping">JSON Mapping Configuration</label>
+                  <textarea id="mapping" rows="7" spellcheck="false" style="font-family: var(--font-mono); font-size: 12px;"></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label>Detected Sheet Headers</label>
+                  <pre id="headers" style="background: #111319; border: 1px solid var(--border-subtle); padding: 12px; border-radius: var(--radius-sm); font-size: 11.5px; color: var(--text-muted); max-height: 160px; overflow-y: auto;"></pre>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- VIEW 4: TEMPLATES STUDIO                   -->
+          <!-- ========================================== -->
+          <section class="view-page" id="view-templates">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">MESSAGE PERSONALIZATION</p>
+                <h1 class="page-title">Templates Studio</h1>
+                <p class="page-subtitle">Craft deterministic, personalized outreach introductions with lead token interpolation.</p>
+              </div>
+              <div class="header-actions">
+                <button id="newTemplate" class="secondary">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  New variant
+                </button>
+                <button id="deleteTemplate" class="danger">Delete template</button>
+                <button id="saveTemplate">Save template</button>
+              </div>
+            </div>
+
+            <div class="dashboard-grid">
+              <!-- Left: Template Editor -->
+              <div class="panel">
+                <div class="form-group">
+                  <label for="template">Select Template Variant</label>
+                  <select id="template"></select>
+                </div>
+
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="templateName">Template Variant Name</label>
+                    <input id="templateName" />
+                  </div>
+                  <div class="form-group">
+                    <label for="templateWeight">Selection Weight</label>
+                    <input id="templateWeight" type="number" min="1" max="100" value="1" />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="check">
+                    <input id="templateEnabled" type="checkbox" checked />
+                    Enabled for random weighted selection
+                  </label>
+                </div>
+
+                <div class="form-group">
+                  <label for="requiredFields">Required Lead Fields (comma separated)</label>
+                  <input id="requiredFields" placeholder="e.g. city, state" />
+                  <p class="hint">Variants will be skipped if the lead is missing any required field.</p>
+                </div>
+
+                <div class="form-group">
+                  <label for="subject">Email Subject Line</label>
+                  <input id="subject" placeholder="e.g. Quick question regarding {{company}}" />
+                </div>
+
+                <div class="form-group">
+                  <label>Insert Personalization Tokens (Click to insert)</label>
+                  <div class="token-bar">
+                    <button type="button" class="token-chip" data-token="{{firstName}}">{{firstName}}</button>
+                    <button type="button" class="token-chip" data-token="{{company}}">{{company}}</button>
+                    <button type="button" class="token-chip" data-token="{{city}}">{{city}}</button>
+                    <button type="button" class="token-chip" data-token="{{state}}">{{state}}</button>
+                    <button type="button" class="token-chip" data-token="{{locationPhrase}}">{{locationPhrase}}</button>
+                    <button type="button" class="token-chip" data-token="{{senderName}}">{{senderName}}</button>
+                    <button type="button" class="token-chip" data-token="{{businessName}}">{{businessName}}</button>
+                    <button type="button" class="token-chip" data-token="{{services}}">{{services}}</button>
+                    <button type="button" class="token-chip" data-token="{{legalName}}">{{legalName}}</button>
+                    <button type="button" class="token-chip" data-token="{{address}}">{{address}}</button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="body">Message Body</label>
+                  <textarea id="body" rows="11" style="font-family: var(--font-sans); line-height: 1.6;"></textarea>
+                  <p class="hint">The existing webmail signature is preserved automatically by Private Email.</p>
+                </div>
+              </div>
+
+              <!-- Right: Live Sample Preview -->
+              <div class="panel">
+                <div class="panel-head">
+                  <h2 class="panel-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    Live Template Preview
+                  </h2>
+                  <span class="status-pill ready">Simulated Lead</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+                  <strong>Recipient:</strong> John Doe &lt;johndoe@sampletrucking.com&gt; · Sample Trucking LLC, Dallas, TX
+                </div>
+                <div class="message-preview-box" id="templateLivePreview">
+                  Select a template to view the live preview.
+                </div>
+                <div class="signature-box">
+                  <strong>Attached Signature (from Webmail):</strong><br />
+                  <span>Mark Anthony | Fleet Core Logistics LLC | Dispatch & Carrier Services</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- VIEW 5: MAILBOX & SETTINGS                 -->
+          <!-- ========================================== -->
+          <section class="view-page" id="view-settings">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">CONFIGURATION</p>
+                <h1 class="page-title">Mailbox & Settings</h1>
+                <p class="page-subtitle">Manage sender profiles, human-like pacing bounds, carrier eligibility, and shared coordinator.</p>
+              </div>
+              <div class="header-actions">
+                <button id="saveSettings">Save sending settings</button>
+              </div>
+            </div>
+
+            <div class="dashboard-grid">
+              <!-- Left Column: Mailbox Profile -->
+              <div>
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"></circle><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path></svg>
+                      Mailbox Profile Setup
+                    </h2>
+                    <button id="newProfile" class="secondary" style="font-size: 11px; padding: 4px 8px;">New profile</button>
+                  </div>
+
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label for="accountName">Profile Label</label>
+                      <input id="accountName" placeholder="e.g. Mark Anthony" />
+                    </div>
+                    <div class="form-group">
+                      <label for="accountEmail">Email Address</label>
+                      <input id="accountEmail" type="email" autocomplete="username" />
+                    </div>
+                  </div>
+
+                  <div class="form-grid-3">
+                    <div class="form-group">
+                      <label for="provider">Provider</label>
+                      <select id="provider">
+                        <option value="privateemail">Private Email Webmail</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="browserChannel">Browser</label>
+                      <select id="browserChannel">
+                        <option value="chrome">Google Chrome</option>
+                        <option value="msedge">Microsoft Edge</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="senderName">Sender First Name</label>
+                      <input id="senderName" placeholder="Mark" />
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="accountUrl">Webmail Interface URL</label>
+                    <input id="accountUrl" type="url" />
+                  </div>
+
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label for="businessName">Display Brand Name</label>
+                      <input id="businessName" placeholder="FC Logistics" />
+                    </div>
+                    <div class="form-group">
+                      <label for="legalName">Legal Registered Entity</label>
+                      <input id="legalName" placeholder="Fleet Core Logistics LLC" />
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="address">Postal Business Address</label>
+                    <input id="address" placeholder="132 French Creek Dr, Rochester, NY 14618" />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="services">Services Offered (used in templates)</label>
+                    <textarea id="services" rows="2"></textarea>
+                  </div>
+
+                  <div class="form-actions">
+                    <button id="saveProfile">Save mailbox profile</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column: Pacing, Eligibility & Team -->
+              <div>
+                <!-- Sending Pace -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                      Sending Pace & Quotas
+                    </h2>
+                  </div>
+
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label for="minSeconds">Gap Minimum (seconds)</label>
+                      <input id="minSeconds" type="number" min="1" />
+                    </div>
+                    <div class="form-group">
+                      <label for="maxSeconds">Gap Maximum (seconds)</label>
+                      <input id="maxSeconds" type="number" min="1" />
+                    </div>
+                  </div>
+
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label for="hourlyCap">Rolling Hourly Cap</label>
+                      <input id="hourlyCap" type="number" min="1" />
+                    </div>
+                    <div class="form-group">
+                      <label for="dailyCap">Rolling 24-Hour Cap</label>
+                      <input id="dailyCap" type="number" min="1" />
+                    </div>
+                  </div>
+
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label for="pauseEveryMin">Rest After At Least N Sends</label>
+                      <input id="pauseEveryMin" type="number" min="1" />
+                    </div>
+                    <div class="form-group">
+                      <label for="pauseEveryMax">Rest After At Most N Sends</label>
+                      <input id="pauseEveryMax" type="number" min="1" />
+                    </div>
+                  </div>
+
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label for="pauseMinSeconds">Rest Minimum (seconds)</label>
+                      <input id="pauseMinSeconds" type="number" min="0" />
+                    </div>
+                    <div class="form-group">
+                      <label for="pauseMaxSeconds">Rest Maximum (seconds)</label>
+                      <input id="pauseMaxSeconds" type="number" min="0" />
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="pollSeconds">Empty Queue Check Interval (seconds)</label>
+                    <input id="pollSeconds" type="number" min="5" />
+                  </div>
+                </div>
+
+                <!-- Carrier Eligibility Rules -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                      Lead Eligibility Rules
+                    </h2>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="check">
+                      <input id="requireActive" type="checkbox" />
+                      Require Active operating status (FMCSA)
+                    </label>
+                    <label class="check">
+                      <input id="requireNoOutOfService" type="checkbox" />
+                      Require No out-of-service flag
+                    </label>
+                    <label class="check">
+                      <input id="allowHidden" type="checkbox" />
+                      Allow reading from hidden worksheets
+                    </label>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="readyStatuses">Ready Statuses (comma separated; use blank for empty cells)</label>
+                    <input id="readyStatuses" />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="sentStatus">Status Written After Send</label>
+                    <input id="sentStatus" placeholder="e.g. Proposal Sent" />
+                  </div>
+                </div>
+
+                <!-- Shared Team Server -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                      Shared Team Coordination
+                    </h2>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="check">
+                      <input id="teamEnabled" type="checkbox" />
+                      Enable shared team coordination server
+                    </label>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="teamUrl">Coordinator Server URL</label>
+                    <input id="teamUrl" type="url" placeholder="http://192.168.1.50:4318" />
+                  </div>
+
+                  <div class="form-grid-2">
+                    <div class="form-group">
+                      <label for="workerName">Local PC Identifier</label>
+                      <input id="workerName" placeholder="PC-01" />
+                    </div>
+                    <div class="form-group">
+                      <label for="teamToken">Access Token</label>
+                      <input id="teamToken" type="password" autocomplete="off" placeholder="Coordinator token" />
+                    </div>
+                  </div>
+
+                  <p id="teamStatus" class="hint"></p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- VIEW 6: ACTIVITY & AUDIT                   -->
+          <!-- ========================================== -->
+          <section class="view-page" id="view-activity">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">AUDIT & RECONCILIATION</p>
+                <h1 class="page-title">Activity & History</h1>
+                <p class="page-subtitle">Complete durable send log, recovery action center, and system events stream.</p>
+              </div>
+              <div class="header-actions">
+                <a class="button secondary" href="/api/export-history">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Export full history (JSON)
+                </a>
+              </div>
+            </div>
+
+            <!-- Recovery & Reconciliation Center -->
+            <div id="recovery"></div>
+
+            <!-- Send History Section -->
+            <div class="panel">
+              <div class="panel-head">
+                <h2 class="panel-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  Recorded Send Attempts
+                </h2>
+              </div>
+
+              <!-- History Filters -->
+              <div class="toolbar" style="margin-bottom: 12px; background: var(--bg-surface-elevated);">
+                <div class="toolbar-group">
+                  <div class="toolbar-search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input id="historySearch" type="search" placeholder="Search recipient, mailbox, or subject…" />
+                  </div>
+                  <div style="min-width: 170px;">
+                    <select id="historyStatus" aria-label="Outcome filter">
+                      <option value="">All outcomes</option>
+                      <option>Sent</option>
+                      <option>Uncertain</option>
+                      <option>Sending</option>
+                      <option>Not sent — manual review</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- History Data Table -->
+              <div class="table-container">
+                <div class="table-wrap" style="max-height: 420px; min-height: 250px;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Time / Recipient</th>
+                        <th>Mailbox / Template</th>
+                        <th>Subject</th>
+                        <th>Outcome</th>
+                        <th style="text-align: right;">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody id="historyRows"></tbody>
+                  </table>
+                </div>
+
+                <div class="table-footer">
+                  <span id="historyPageInfo">Loading attempts…</span>
+                  <div class="pagination-controls">
+                    <button id="historyPrev" class="secondary">Previous</button>
+                    <button id="historyNext" class="secondary">Next</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Inspector Viewer for selected message -->
+              <div id="historyMessage" class="history-inspector" hidden></div>
+            </div>
+          </section>
+
+          <!-- ========================================== -->
+          <!-- VIEW 7: SUPPRESSION (DO NOT CONTACT)       -->
+          <!-- ========================================== -->
+          <section class="view-page" id="view-suppression">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">COMPLIANCE & PROTECTION</p>
+                <h1 class="page-title">Do Not Contact</h1>
+                <p class="page-subtitle">Universal suppression list preventing accidental outreach to opt-outs, bounces, or competitors.</p>
+              </div>
+            </div>
+
+            <div class="dashboard-grid">
+              <!-- Add Suppression Card -->
+              <div class="panel">
+                <div class="panel-head">
+                  <h2 class="panel-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                    Add Suppressed Recipient
+                  </h2>
+                </div>
+
+                <div class="form-group">
+                  <label for="suppressEmail">Recipient Email Address</label>
+                  <input id="suppressEmail" type="email" placeholder="e.g. carrier@example.com" />
+                </div>
+
+                <div class="form-group">
+                  <label for="suppressReason">Reason for Suppression</label>
+                  <input id="suppressReason" placeholder="e.g. Opt-out requested, permanent bounce, or competitor" />
+                </div>
+
+                <div class="form-actions">
+                  <button id="suppress">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><plus></plus><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    Add to suppression list
+                  </button>
+                </div>
+                <p class="hint">Suppression is durable across all imported workbooks and shared via the team coordinator.</p>
+              </div>
+
+              <!-- Suppressed Records List -->
+              <div class="panel">
+                <div class="panel-head">
+                  <h2 class="panel-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    Suppressed Records
+                  </h2>
+                </div>
+                <ul id="suppressionList"></ul>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- Slide-over Drawer for Lead Preview & Direct Dispatch -->
+    <div class="drawer-backdrop" id="leadPreviewDrawer">
+      <div class="drawer-panel">
+        <div class="drawer-header">
           <div>
-            <p class="eyebrow">03 · LEAD WORKSPACE</p>
-            <h2>Choose the right conversations.</h2>
+            <span class="page-eyebrow" style="font-size: 9px;">LEAD DISPATCH INSPECTOR</span>
+            <h3 class="drawer-title" id="previewTitle">Message Preview</h3>
           </div>
-          <span class="pill" id="selectedCount">0 selected</span>
+          <button type="button" class="drawer-close" id="closePreviewDrawer" aria-label="Close drawer">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </div>
-        <div class="filters">
-          <label
-            >Worksheet<select id="sheet">
-              <option value="">All worksheets</option>
-            </select></label
-          ><label
-            >Show<select id="filter">
-              <option value="ready">Ready for outreach</option>
-              <option value="all">All leads</option>
-              <option value="excluded">Excluded leads</option>
-            </select></label
-          ><label class="search"
-            >Find a lead<input
-              id="search"
-              type="search"
-              placeholder="Company, contact or email"
-          /></label>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    id="selectPage"
-                    aria-label="Select eligible leads on this page"
-                  />
-                </th>
-                <th>Company / contact</th>
-                <th>Email</th>
-                <th>Location</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="leadRows"></tbody>
-          </table>
-        </div>
-        <div class="pagination">
-          <span id="pageInfo">No leads</span>
-          <div class="actions">
-            <button id="clearSelection" class="secondary">
-              Clear selection</button
-            ><button id="previous" class="secondary">Previous</button
-            ><button id="next" class="secondary">Next</button>
-          </div>
-        </div>
-        <p class="hint">
-          Already contacted, duplicate, suppressed, inactive and malformed
-          records are excluded. Unlabelled historical notes are checked too.
-        </p>
-      </section>
-      <section class="campaign" id="campaign">
-        <div class="panel">
-          <p class="eyebrow">04 · CAMPAIGN</p>
-          <h2>A useful introduction.</h2>
-          <label>Template<select id="template"></select></label>
-          <div class="actions">
-            <button id="newTemplate" class="secondary">New template</button
-            ><button id="deleteTemplate" class="secondary">
-              Delete template
-            </button>
-          </div>
-          <label>Template name<input id="templateName" /></label>
-          <div class="filters">
-            <label
-              >Selection weight<input
-                id="templateWeight"
-                type="number"
-                min="1"
-                max="100"
-                value="1" /></label
-            ><label class="check"
-              ><input id="templateEnabled" type="checkbox" checked /> Enabled
-              for random selection</label
-            >
-          </div>
-          <label
-            >Required lead fields (comma separated, optional)<input
-              id="requiredFields"
-              placeholder="city, state" /></label
-          ><label>Subject<input id="subject" /></label
-          ><label>Body<textarea id="body" rows="12"></textarea></label>
-          <p class="hint">
-            Fields: {{firstName}}, {{company}}, {{city}}, {{state}},
-            {{locationPhrase}}, {{senderName}}, {{businessName}}, {{services}},
-            {{legalName}}, {{address}}. Existing mail signature is appended in
-            webmail.
-          </p>
-          <button id="saveTemplate" class="secondary">Save template</button>
-          <div class="batch">
-            <label class="check"
-              ><input id="randomTemplates" type="checkbox" checked /> Randomly
-              select from enabled, matching templates</label
-            >
-            <p class="hint" id="quota"></p>
-            <div class="actions">
-              <button id="start">Start continuous outreach</button
-              ><button id="batch" class="secondary">Send selected leads</button
-              ><button id="stop" class="secondary" hidden>Stop outreach</button>
-            </div>
-            <p class="hint">
-              Continuous mode checks all enabled campaigns until you stop it.
-              Keep the tool, browser, and PC running. It waits when no leads or
-              allowance remain.
-            </p>
-          </div>
-        </div>
-        <div class="panel preview">
-          <p class="eyebrow">MESSAGE PREVIEW</p>
-          <h2 id="previewTitle">Select a lead to preview.</h2>
-          <p id="previewTo" class="subtle"></p>
-          <div id="previewBody" class="message">
+
+        <div class="drawer-body">
+          <p id="previewTo" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500;"></p>
+          <div id="warnings" class="warning-callout" hidden></div>
+          <div id="previewBody" class="message-preview-box">
             A personalized message will appear here.
           </div>
-          <div id="warnings" class="hint"></div>
-          <div class="signature">
-            <span id="signatureText"
-              >Your existing webmail signature will appear below the
-              message.</span
-            >
-          </div>
-          <div class="actions">
-            <button id="prepare" disabled>Fill webmail compose</button
-            ><button id="sendOne" disabled>Send prepared message</button
-            ><button id="release" class="secondary" disabled>
-              Close compose
-            </button>
-          </div>
-          <p class="hint">
-            Review the subject, recipient, message, and signature in your
-            browser before sending.
-          </p>
-        </div>
-      </section>
-      <section class="panel" id="activity">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">ACTIVITY</p>
-            <h2>Every attempt accounted for.</h2>
-          </div>
-          <span class="pill" id="jobStatus">Idle</span>
-        </div>
-        <progress id="progress" value="0" max="1"></progress>
-        <p id="jobMessage" class="subtle"></p>
-        <p id="nextSend" class="hint"></p>
-        <a class="button secondary" href="/api/export-history"
-          >Export full history</a
-        >
-        <div id="recovery"></div>
-        <h3>Send history</h3>
-        <div class="filters">
-          <label class="search"
-            >Search history<input
-              id="historySearch"
-              type="search"
-              placeholder="Recipient, mailbox, campaign or subject" /></label
-          ><label
-            >Outcome<select id="historyStatus">
-              <option value="">All outcomes</option>
-              <option>Sent</option>
-              <option>Uncertain</option>
-              <option>Sending</option>
-              <option>Not sent — manual review</option>
-            </select></label
-          >
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Time / recipient</th>
-                <th>Mailbox / template</th>
-                <th>Subject</th>
-                <th>Outcome</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody id="historyRows"></tbody>
-          </table>
-        </div>
-        <div class="pagination">
-          <span id="historyPageInfo"></span>
-          <div class="actions">
-            <button id="historyPrev" class="secondary">Previous history</button
-            ><button id="historyNext" class="secondary">Next history</button>
+          <div class="signature-box">
+            <span id="signatureText">Your existing webmail signature will appear below the message.</span>
           </div>
         </div>
-        <div id="historyMessage" class="message history-message" hidden></div>
-        <h3>Activity log</h3>
-        <ol id="events"></ol>
-      </section>
-      <section class="panel" id="suppression">
-        <p class="eyebrow">DO NOT CONTACT</p>
-        <h2>Respect the next move.</h2>
-        <div class="actions">
-          <label
-            >Email<input
-              id="suppressEmail"
-              type="email"
-              placeholder="carrier@example.com" /></label
-          ><label
-            >Reason<input
-              id="suppressReason"
-              placeholder="Opt-out, bounce, or other reason" /></label
-          ><button id="suppress">Add to suppression list</button>
+
+        <div class="drawer-footer">
+          <button id="prepare" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            Fill webmail compose
+          </button>
+          <button id="sendOne" class="success" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            Send prepared message
+          </button>
+          <button id="release" class="secondary" disabled>Close compose</button>
         </div>
-        <ul id="suppressionList"></ul>
-        <p class="hint">
-          Add opt-outs and permanent bounces as they arrive. This list applies
-          across every imported workbook.
-        </p>
-      </section>
-      <footer>
-        One recipient per email. No tracking pixels. Sending pauses on errors or
-        uncertain results. Random pacing does not guarantee inbox placement or
-        bypass provider controls.
-      </footer>
-    </main>
+      </div>
+    </div>
+
     <script src="/app.js" type="module"></script>
   </body>
 </html>
