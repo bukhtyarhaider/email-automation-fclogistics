@@ -70,6 +70,33 @@ class WorkbookTests(unittest.TestCase):
         self.assertEqual(lead["email"], "owner@example.com")
         self.assertTrue(lead["layoutIssue"])
 
+    def test_generic_header_aliases_import_company_and_email(self):
+        with zipfile.ZipFile(self.path) as z:
+            parts = {i: z.read(i) for i in z.namelist()}
+        parts["xl/worksheets/sheet1.xml"] = self.xml.replace("Carrier Legal Name", "Company name").replace(cell("H1", "Email"), cell("H1", "Email address")).encode()
+        with zipfile.ZipFile(self.path, "w") as z:
+            for part, content in parts.items():
+                z.writestr(part, content)
+        lead = workbook.read(self.path)["leads"][0]
+        self.assertEqual(lead["company"], "Example LLC")
+        self.assertEqual(lead["email"], "owner@example.com")
+
+    def test_explicit_column_mapping_is_used_for_read_and_status_patch(self):
+        with zipfile.ZipFile(self.path) as z:
+            parts = {i: z.read(i) for i in z.namelist()}
+        parts["xl/worksheets/sheet1.xml"] = self.xml.replace(cell("H2", "owner@example.com"), cell("H2", "3 months") + cell("O2", "owner@example.com")).replace(cell("G1", "Status"), cell("G1", "Tracking")).encode()
+        with zipfile.ZipFile(self.path, "w") as z:
+            for part, content in parts.items():
+                z.writestr(part, content)
+        mapping = {"Leads": {"email": "O", "status": "G"}}
+        lead = workbook.read(self.path, mapping)["leads"][0]
+        self.assertFalse(lead["layoutIssue"])
+        self.assertEqual(lead["statusCell"], "G2")
+        workbook.patch(self.path, [{"id":lead["id"], "email":lead["email"], "status":"Sent"}], mapping)
+        self.assertEqual(workbook.read(self.path, mapping)["leads"][0]["status"], "Sent")
+        with zipfile.ZipFile(self.path) as z:
+            self.assertIn(cell("H2", "3 months"), z.read("xl/worksheets/sheet1.xml").decode())
+
 
 if __name__ == "__main__":
     unittest.main()

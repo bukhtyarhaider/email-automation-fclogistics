@@ -14,7 +14,7 @@ NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
 
 
-def read(path):
+def read(path, mapping=None):
     with zipfile.ZipFile(path) as z:
         if sum(i.file_size for i in z.infolist()) > 150_000_000:
             raise ValueError("Workbook exceeds the 150 MB uncompressed limit")
@@ -46,11 +46,20 @@ def read(path):
                 continue
             headers = cells(rows[0])
             fields = {value.lower(): col for col, value in headers.items() if value}
+            aliases = {"company": "carrier legal name", "company name": "carrier legal name", "legal name": "carrier legal name", "email address": "email", "contact": "owner / principal", "contact name": "owner / principal", "name": "owner / principal"}
+            for alias, canonical in aliases.items():
+                if canonical not in fields and alias in fields:
+                    fields[canonical] = fields[alias]
+            overrides = (mapping or {}).get(sheet.attrib["name"], {})
+            for field, col in overrides.items():
+                if not isinstance(col, str) or not re.fullmatch(r"[A-Z]{1,3}", col):
+                    raise ValueError("Column mappings must use Excel column letters")
+                fields[field.lower()] = col
             email_col = fields.get("email")
             status_col = fields.get("status")
             meta = {"name": sheet.attrib["name"], "part": part,
                     "hidden": sheet.attrib.get("state", "visible") != "visible",
-                    "emailColumn": email_col, "statusColumn": status_col, "rows": 0}
+                    "emailColumn": email_col, "statusColumn": status_col, "headers": headers, "rows": 0}
             sheets.append(meta)
             if not email_col:
                 continue
@@ -83,9 +92,9 @@ def read(path):
         return {"sheets": sheets, "leads": leads}
 
 
-def patch(path, changes):
+def patch(path, changes, mapping=None):
     # Reject mismatched rows before modifying anything.
-    current = {x["id"]: x for x in read(path)["leads"]}
+    current = {x["id"]: x for x in read(path, mapping)["leads"]}
     by_part = {}
     for change in changes:
         lead = current.get(change["id"])
@@ -141,9 +150,11 @@ if __name__ == "__main__":
     try:
         command, path = sys.argv[1:3]
         if command == "read":
-            print(json.dumps(read(path)))
+            raw = sys.stdin.read()
+            print(json.dumps(read(path, json.loads(raw) if raw else None)))
         elif command == "patch":
-            patch(path, json.load(sys.stdin))
+            payload = json.load(sys.stdin)
+            patch(path, payload if isinstance(payload, list) else payload["changes"], None if isinstance(payload, list) else payload.get("mapping"))
             print(json.dumps({"ok": True}))
         else:
             raise ValueError("Unknown command")

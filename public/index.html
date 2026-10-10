@@ -1,13 +1,511 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FC Logistics · Outreach</title><link rel="stylesheet" href="/style.css"></head>
-<body>
-<aside class="sidebar"><a class="brand" href="/"><span class="monogram">FC</span><span>FC LOGISTICS<small>OUTREACH DESK</small></span></a><nav><a href="#leads">Lead workspace</a><a href="#campaign">Campaign & templates</a><a href="#activity">Activity & recovery</a><a href="#suppression">Do not contact</a></nav><div class="sidebar-foot">Mark Anthony<br><span>Local workspace · v1.0</span></div></aside>
-<main><header><div><p class="eyebrow">SALES OPERATIONS</p><h1>Make the first move.</h1><p class="subtle">Relevant introductions. Clear follow-through.</p></div><span class="pill" id="connection">Mailbox disconnected</span></header>
-<div id="notice" role="status" hidden></div>
-<section class="stats" aria-label="Campaign summary"><div><span>Total leads</span><strong id="total">0</strong></div><div><span>Ready for outreach</span><strong id="ready">0</strong></div><div><span>Excluded from sending</span><strong id="excluded">0</strong></div><div><span>Sent by this tool</span><strong id="sent">0</strong></div></section>
-<section class="panel setup"><div><p class="eyebrow">01 · SOURCE</p><h2>Bring your leads in.</h2><p id="workbookName" class="subtle">No workbook imported.</p><div class="actions"><button id="importAttached">Import attached workbook</button><label class="button secondary" for="upload">Choose another .xlsx</label><input id="upload" type="file" accept=".xlsx" hidden><a class="button secondary" href="/api/download" id="download">Download status workbook</a></div><p class="hint">Works on a local copy. Your original workbook stays intact.</p></div><div><p class="eyebrow">02 · MAILBOX</p><h2>Connect Private Email.</h2><label for="password">Password for markanthony@fclogistics.us</label><div class="actions"><input id="password" type="password" autocomplete="off" placeholder="Enter mailbox password"><button id="connect">Connect mailbox</button><button id="resume" class="secondary" hidden>Continue sign-in</button><button id="disconnect" class="secondary" hidden>Disconnect</button></div><p class="hint">Opens Chrome. Password is used for sign-in only and is never saved.</p></div></section>
-<section class="panel" id="leads"><div class="section-head"><div><p class="eyebrow">03 · LEAD WORKSPACE</p><h2>Choose the right conversations.</h2></div><span class="pill" id="selectedCount">0 selected</span></div><div class="filters"><label>Worksheet<select id="sheet"><option value="">All worksheets</option></select></label><label>Show<select id="filter"><option value="ready">Ready for outreach</option><option value="all">All leads</option><option value="excluded">Excluded leads</option></select></label><label class="search">Find a lead<input id="search" type="search" placeholder="Company, contact or email"></label></div><div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="selectPage" aria-label="Select up to 20 eligible leads on this page"></th><th>Carrier / contact</th><th>Email</th><th>Location</th><th>Status</th><th>Action</th></tr></thead><tbody id="leadRows"></tbody></table></div><div class="pagination"><span id="pageInfo">No leads</span><div class="actions"><button id="clearSelection" class="secondary">Clear selection</button><button id="previous" class="secondary">Previous</button><button id="next" class="secondary">Next</button></div></div><p class="hint">Already contacted, duplicate, suppressed, inactive and malformed records are excluded. Unlabelled historical notes are checked too.</p></section>
-<section class="campaign" id="campaign"><div class="panel"><p class="eyebrow">04 · CAMPAIGN</p><h2>A useful introduction.</h2><label>Template<select id="template"></select></label><label>Subject<input id="subject"></label><label>Body<textarea id="body" rows="12"></textarea></label><p class="hint">Fields: {{firstName}}, {{company}}, {{city}}, {{state}}, {{locationPhrase}}. Existing mail signature is appended in webmail.</p><button id="saveTemplate" class="secondary">Save template</button><div class="batch"><label>Seconds between sends<input id="interval" type="number" value="180" min="180" max="3600"></label><p class="hint" id="quota">Maximum 20 attempts per rolling hour.</p><button id="batch">Send selected leads</button><button id="stop" class="secondary" hidden>Stop batch</button></div></div><div class="panel preview"><p class="eyebrow">MESSAGE PREVIEW</p><h2 id="previewTitle">Select a lead to preview.</h2><p id="previewTo" class="subtle"></p><div id="previewBody" class="message">A personalized message will appear here.</div><div id="warnings" class="hint"></div><div class="signature"><span id="signatureText">Your existing webmail signature will appear below the message.</span></div><div class="actions"><button id="prepare" disabled>Fill webmail compose</button><button id="sendOne" disabled>Send prepared message</button><button id="release" class="secondary" disabled>Close compose</button></div><p class="hint">Review the subject, recipient, message, and signature in Chrome before sending.</p></div></section>
-<section class="panel" id="activity"><div class="section-head"><div><p class="eyebrow">ACTIVITY</p><h2>Every attempt accounted for.</h2></div><span class="pill" id="jobStatus">Idle</span></div><progress id="progress" value="0" max="1"></progress><p id="jobMessage" class="subtle"></p><div id="recovery"></div><ol id="events"></ol></section>
-<section class="panel" id="suppression"><p class="eyebrow">DO NOT CONTACT</p><h2>Respect the next move.</h2><div class="actions"><label>Email<input id="suppressEmail" type="email" placeholder="carrier@example.com"></label><label>Reason<input id="suppressReason" placeholder="Opt-out, bounce, or other reason"></label><button id="suppress">Add to suppression list</button></div><ul id="suppressionList"></ul><p class="hint">Add opt-outs and permanent bounces as they arrive. This list applies across every imported workbook.</p></section>
-<footer>One recipient per email. No tracking pixels. Sending pauses on errors or uncertain results.</footer></main><script src="/app.js" type="module"></script></body></html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Outreach Desk</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/"
+        ><span class="monogram" id="brandMark">OD</span
+        ><span
+          ><span id="brandName">OUTREACH DESK</span
+          ><small>TEAM WORKSPACE</small></span
+        ></a
+      >
+      <nav>
+        <a href="#settings">Mailbox & settings</a
+        ><a href="#leads">Lead workspace</a
+        ><a href="#campaign">Campaign & templates</a
+        ><a href="#activity">Activity & recovery</a
+        ><a href="#suppression">Do not contact</a>
+      </nav>
+      <div class="sidebar-foot">
+        <span id="profileName">My mailbox</span><br /><span
+          >Local workspace · v2.0</span
+        >
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">SALES OPERATIONS</p>
+          <h1>Make the first move.</h1>
+          <p class="subtle">Relevant introductions. Clear follow-through.</p>
+        </div>
+        <span class="pill" id="connection">Mailbox disconnected</span>
+      </header>
+      <div id="notice" role="status" hidden></div>
+      <section class="stats" aria-label="Campaign summary">
+        <div><span>Total leads</span><strong id="total">0</strong></div>
+        <div><span>Ready for outreach</span><strong id="ready">0</strong></div>
+        <div>
+          <span>Excluded from sending</span><strong id="excluded">0</strong>
+        </div>
+        <div><span>Sent by this tool</span><strong id="sent">0</strong></div>
+      </section>
+      <section class="panel setup">
+        <div>
+          <p class="eyebrow">01 · SOURCE</p>
+          <h2>Bring your leads in.</h2>
+          <label>Active campaign<select id="campaignSelect"></select></label>
+          <p id="workbookName" class="subtle">No workbook imported.</p>
+          <div class="actions">
+            <button id="reload" class="secondary">Reload workbook</button
+            ><label class="button secondary" for="upload"
+              >Add .xlsx campaign</label
+            ><input id="upload" type="file" accept=".xlsx" hidden /><a
+              class="button secondary"
+              href="/api/download"
+              id="download"
+              >Download status workbook</a
+            >
+          </div>
+          <p class="hint">
+            Works on a local copy. Your original workbook stays intact.
+          </p>
+        </div>
+        <div>
+          <p class="eyebrow">02 · MAILBOX</p>
+          <h2>Connect Private Email.</h2>
+          <label>Mailbox profile<select id="profileSelect"></select></label
+          ><label for="password">Password for the selected mailbox</label>
+          <div class="actions">
+            <input
+              id="password"
+              type="password"
+              autocomplete="off"
+              placeholder="Enter mailbox password"
+            /><button id="connect">Connect mailbox</button
+            ><button id="resume" class="secondary" hidden>
+              Continue sign-in</button
+            ><button id="disconnect" class="secondary" hidden>
+              Disconnect
+            </button>
+          </div>
+          <p class="hint">
+            Opens the selected browser. Password is used for sign-in only and is
+            never saved.
+          </p>
+        </div>
+      </section>
+      <section class="panel" id="settings">
+        <p class="eyebrow">WORKSPACE SETTINGS</p>
+        <h2>Set it up for your team.</h2>
+        <details id="settingsDetails">
+          <summary>
+            Mailbox profiles, sending pace, and team coordination
+          </summary>
+          <div class="campaign">
+            <div>
+              <h3>Mailbox profile</h3>
+              <label>Profile name<input id="accountName" /></label
+              ><label
+                >Email<input
+                  id="accountEmail"
+                  type="email"
+                  autocomplete="username" /></label
+              ><label
+                >Provider<select id="provider">
+                  <option value="privateemail">Private Email webmail</option>
+                </select></label
+              ><label>Webmail URL<input id="accountUrl" type="url" /></label
+              ><label
+                >Browser<select id="browserChannel">
+                  <option value="chrome">Google Chrome</option>
+                  <option value="msedge">Microsoft Edge</option>
+                </select></label
+              >
+              <div class="filters">
+                <label>Sender name<input id="senderName" /></label
+                ><label>Business name<input id="businessName" /></label>
+              </div>
+              <label>Legal business name<input id="legalName" /></label
+              ><label>Postal address<input id="address" /></label
+              ><label
+                >Services you offer<textarea id="services" rows="3"></textarea>
+              </label>
+              <div class="actions">
+                <button id="saveProfile">Save mailbox profile</button
+                ><button id="newProfile" class="secondary">New profile</button>
+              </div>
+              <p class="hint">
+                Passwords stay in memory for login only. Each profile has its
+                own sender and business details. Switching profiles disconnects
+                the previous mailbox.
+              </p>
+            </div>
+            <div>
+              <h3>Sending pace</h3>
+              <div class="filters">
+                <label
+                  >Gap minimum (seconds)<input
+                    id="minSeconds"
+                    type="number"
+                    min="1" /></label
+                ><label
+                  >Gap maximum (seconds)<input
+                    id="maxSeconds"
+                    type="number"
+                    min="1"
+                /></label>
+              </div>
+              <div class="filters">
+                <label
+                  >Rolling hourly limit<input
+                    id="hourlyCap"
+                    type="number"
+                    min="1" /></label
+                ><label
+                  >Rolling 24-hour limit<input
+                    id="dailyCap"
+                    type="number"
+                    min="1"
+                /></label>
+              </div>
+              <div class="filters">
+                <label
+                  >Rest after at least N sends<input
+                    id="pauseEveryMin"
+                    type="number"
+                    min="1" /></label
+                ><label
+                  >Rest after at most N sends<input
+                    id="pauseEveryMax"
+                    type="number"
+                    min="1"
+                /></label>
+              </div>
+              <div class="filters">
+                <label
+                  >Rest minimum (seconds)<input
+                    id="pauseMinSeconds"
+                    type="number"
+                    min="0" /></label
+                ><label
+                  >Rest maximum (seconds)<input
+                    id="pauseMaxSeconds"
+                    type="number"
+                    min="0"
+                /></label>
+              </div>
+              <label
+                >Empty queue check (seconds)<input
+                  id="pollSeconds"
+                  type="number"
+                  min="5"
+              /></label>
+              <p class="hint">
+                Gaps and rests are sampled within these ranges. Use limits
+                within your mailbox plan; manual sends outside this tool are not
+                counted.
+              </p>
+              <h3>Lead eligibility</h3>
+              <label class="check"
+                ><input id="requireActive" type="checkbox" /> Require Active
+                operating status</label
+              ><label class="check"
+                ><input id="requireNoOutOfService" type="checkbox" /> Require No
+                out-of-service flag</label
+              ><label class="check"
+                ><input id="allowHidden" type="checkbox" /> Allow hidden
+                worksheets</label
+              ><label
+                >Ready statuses (comma separated; use blank for empty
+                cells)<input id="readyStatuses" /></label
+              ><label
+                >Status after a confirmed send<input id="sentStatus"
+              /></label>
+              <h3>Shared team server</h3>
+              <label class="check"
+                ><input id="teamEnabled" type="checkbox" /> Use shared team
+                coordination</label
+              ><label
+                >Server URL<input
+                  id="teamUrl"
+                  type="url"
+                  placeholder="https://outreach.example.com" /></label
+              ><label>This PC’s name<input id="workerName" /></label
+              ><label
+                >Access token<input
+                  id="teamToken"
+                  type="password"
+                  autocomplete="off"
+                  placeholder="Token is not shown or saved by this PC"
+              /></label>
+              <p id="teamStatus" class="hint"></p>
+              <button id="saveSettings">Save sending settings</button>
+              <p class="hint">
+                All PCs must connect to the same team server for shared
+                duplicate protection, suppression, and mailbox allowances. A
+                local workspace alone only tracks this PC.
+              </p>
+            </div>
+          </div>
+        </details>
+      </section>
+      <section class="panel" id="campaignSettings">
+        <details>
+          <summary>Campaign settings and column mapping</summary>
+          <label>Campaign name<input id="campaignName" /></label
+          ><label class="check"
+            ><input id="campaignEnabled" type="checkbox" /> Include this
+            campaign in continuous outreach</label
+          ><label
+            >Included worksheets (one exact name per line; leave empty for
+            all)<textarea id="campaignSheets" rows="3"></textarea>
+          </label>
+          <details>
+            <summary>Column mapping for custom workbooks</summary>
+            <p class="hint">
+              Optional JSON: {"Sheet1":{"email":"H","carrier legal
+              name":"A","status":"G","owner / principal":"I"}}. Map Status to
+              the correct tracking column; mappings control which cells are
+              updated. Default header aliases include Company, Company name,
+              Email address, Contact, and Contact name.
+            </p>
+            <label
+              >Column mapping<textarea
+                id="mapping"
+                rows="5"
+                spellcheck="false"
+              ></textarea>
+            </label>
+            <pre id="headers" class="hint"></pre>
+          </details>
+          <button id="saveCampaign" class="secondary">Save campaign</button>
+        </details>
+      </section>
+      <section class="panel" id="leads">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">03 · LEAD WORKSPACE</p>
+            <h2>Choose the right conversations.</h2>
+          </div>
+          <span class="pill" id="selectedCount">0 selected</span>
+        </div>
+        <div class="filters">
+          <label
+            >Worksheet<select id="sheet">
+              <option value="">All worksheets</option>
+            </select></label
+          ><label
+            >Show<select id="filter">
+              <option value="ready">Ready for outreach</option>
+              <option value="all">All leads</option>
+              <option value="excluded">Excluded leads</option>
+            </select></label
+          ><label class="search"
+            >Find a lead<input
+              id="search"
+              type="search"
+              placeholder="Company, contact or email"
+          /></label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    id="selectPage"
+                    aria-label="Select eligible leads on this page"
+                  />
+                </th>
+                <th>Company / contact</th>
+                <th>Email</th>
+                <th>Location</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="leadRows"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span id="pageInfo">No leads</span>
+          <div class="actions">
+            <button id="clearSelection" class="secondary">
+              Clear selection</button
+            ><button id="previous" class="secondary">Previous</button
+            ><button id="next" class="secondary">Next</button>
+          </div>
+        </div>
+        <p class="hint">
+          Already contacted, duplicate, suppressed, inactive and malformed
+          records are excluded. Unlabelled historical notes are checked too.
+        </p>
+      </section>
+      <section class="campaign" id="campaign">
+        <div class="panel">
+          <p class="eyebrow">04 · CAMPAIGN</p>
+          <h2>A useful introduction.</h2>
+          <label>Template<select id="template"></select></label>
+          <div class="actions">
+            <button id="newTemplate" class="secondary">New template</button
+            ><button id="deleteTemplate" class="secondary">
+              Delete template
+            </button>
+          </div>
+          <label>Template name<input id="templateName" /></label>
+          <div class="filters">
+            <label
+              >Selection weight<input
+                id="templateWeight"
+                type="number"
+                min="1"
+                max="100"
+                value="1" /></label
+            ><label class="check"
+              ><input id="templateEnabled" type="checkbox" checked /> Enabled
+              for random selection</label
+            >
+          </div>
+          <label
+            >Required lead fields (comma separated, optional)<input
+              id="requiredFields"
+              placeholder="city, state" /></label
+          ><label>Subject<input id="subject" /></label
+          ><label>Body<textarea id="body" rows="12"></textarea></label>
+          <p class="hint">
+            Fields: {{firstName}}, {{company}}, {{city}}, {{state}},
+            {{locationPhrase}}, {{senderName}}, {{businessName}}, {{services}},
+            {{legalName}}, {{address}}. Existing mail signature is appended in
+            webmail.
+          </p>
+          <button id="saveTemplate" class="secondary">Save template</button>
+          <div class="batch">
+            <label class="check"
+              ><input id="randomTemplates" type="checkbox" checked /> Randomly
+              select from enabled, matching templates</label
+            >
+            <p class="hint" id="quota"></p>
+            <div class="actions">
+              <button id="start">Start continuous outreach</button
+              ><button id="batch" class="secondary">Send selected leads</button
+              ><button id="stop" class="secondary" hidden>Stop outreach</button>
+            </div>
+            <p class="hint">
+              Continuous mode checks all enabled campaigns until you stop it.
+              Keep the tool, browser, and PC running. It waits when no leads or
+              allowance remain.
+            </p>
+          </div>
+        </div>
+        <div class="panel preview">
+          <p class="eyebrow">MESSAGE PREVIEW</p>
+          <h2 id="previewTitle">Select a lead to preview.</h2>
+          <p id="previewTo" class="subtle"></p>
+          <div id="previewBody" class="message">
+            A personalized message will appear here.
+          </div>
+          <div id="warnings" class="hint"></div>
+          <div class="signature">
+            <span id="signatureText"
+              >Your existing webmail signature will appear below the
+              message.</span
+            >
+          </div>
+          <div class="actions">
+            <button id="prepare" disabled>Fill webmail compose</button
+            ><button id="sendOne" disabled>Send prepared message</button
+            ><button id="release" class="secondary" disabled>
+              Close compose
+            </button>
+          </div>
+          <p class="hint">
+            Review the subject, recipient, message, and signature in your
+            browser before sending.
+          </p>
+        </div>
+      </section>
+      <section class="panel" id="activity">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">ACTIVITY</p>
+            <h2>Every attempt accounted for.</h2>
+          </div>
+          <span class="pill" id="jobStatus">Idle</span>
+        </div>
+        <progress id="progress" value="0" max="1"></progress>
+        <p id="jobMessage" class="subtle"></p>
+        <p id="nextSend" class="hint"></p>
+        <a class="button secondary" href="/api/export-history"
+          >Export full history</a
+        >
+        <div id="recovery"></div>
+        <h3>Send history</h3>
+        <div class="filters">
+          <label class="search"
+            >Search history<input
+              id="historySearch"
+              type="search"
+              placeholder="Recipient, mailbox, campaign or subject" /></label
+          ><label
+            >Outcome<select id="historyStatus">
+              <option value="">All outcomes</option>
+              <option>Sent</option>
+              <option>Uncertain</option>
+              <option>Sending</option>
+              <option>Not sent — manual review</option>
+            </select></label
+          >
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time / recipient</th>
+                <th>Mailbox / template</th>
+                <th>Subject</th>
+                <th>Outcome</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="historyRows"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span id="historyPageInfo"></span>
+          <div class="actions">
+            <button id="historyPrev" class="secondary">Previous history</button
+            ><button id="historyNext" class="secondary">Next history</button>
+          </div>
+        </div>
+        <div id="historyMessage" class="message history-message" hidden></div>
+        <h3>Activity log</h3>
+        <ol id="events"></ol>
+      </section>
+      <section class="panel" id="suppression">
+        <p class="eyebrow">DO NOT CONTACT</p>
+        <h2>Respect the next move.</h2>
+        <div class="actions">
+          <label
+            >Email<input
+              id="suppressEmail"
+              type="email"
+              placeholder="carrier@example.com" /></label
+          ><label
+            >Reason<input
+              id="suppressReason"
+              placeholder="Opt-out, bounce, or other reason" /></label
+          ><button id="suppress">Add to suppression list</button>
+        </div>
+        <ul id="suppressionList"></ul>
+        <p class="hint">
+          Add opt-outs and permanent bounces as they arrive. This list applies
+          across every imported workbook.
+        </p>
+      </section>
+      <footer>
+        One recipient per email. No tracking pixels. Sending pauses on errors or
+        uncertain results. Random pacing does not guarantee inbox placement or
+        bypass provider controls.
+      </footer>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
