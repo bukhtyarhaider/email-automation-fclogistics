@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Outreach Desk 2 · Sales Operations</title>
+    <title>Outreach Desk 1· Sales Operations</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
@@ -19,7 +19,7 @@
           <a class="titlebar-brand" href="#dashboard">
             <span class="brand-monogram" id="brandMark">OD</span>
             <span id="brandName">OUTREACH DESK</span>
-            <span class="brand-subtext">Desktop v2.0</span>
+            <span class="brand-subtext">Desktop v1.0</span>
           </a>
         </div>
 
@@ -37,6 +37,10 @@
         </div>
 
         <div class="titlebar-right">
+          <span class="dev-pill">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            Dev: Bukhtyar Haider
+          </span>
           <span class="connection-pill" id="connection">
             <span class="connection-dot"></span>
             Mailbox disconnected
@@ -105,11 +109,17 @@
             </a>
           </nav>
 
-          <div class="sidebar-foot">
-            <div class="profile-avatar">FC</div>
-            <div class="profile-info">
-              <span class="profile-name" id="profileName">My Mailbox</span>
-              <span class="profile-role">Private Email · Local Active</span>
+          <div class="sidebar-bottom">
+            <div class="sidebar-foot">
+              <div class="profile-avatar">FC</div>
+              <div class="profile-info">
+                <span class="profile-name" id="profileName">My Mailbox</span>
+                <span class="profile-role">Private Email · Local Active</span>
+              </div>
+            </div>
+            <div class="sidebar-developer">
+              <span class="dev-tag">Developer</span>
+              <span class="dev-name">Bukhtyar Haider</span>
             </div>
           </div>
         </aside>
@@ -759,6 +769,32 @@
                   </div>
 
                   <p id="teamStatus" class="hint"></p>
+                </div>
+
+                <!-- Engineering & Developer Info -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                      Developer & System Info
+                    </h2>
+                    <span class="status-pill ready">v1.0.0</span>
+                  </div>
+
+                  <div style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;">
+                    <div style="display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border-subtle);">
+                      <span style="color: var(--text-muted);">Lead Engineer / Developer</span>
+                      <strong style="color: #fff;">Bukhtyar Haider</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border-subtle);">
+                      <span style="color: var(--text-muted);">Application</span>
+                      <span style="color: var(--text-primary);">Outreach Desk (Desktop Edition)</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 7px 0;">
+                      <span style="color: var(--text-muted);">Architecture</span>
+                      <span style="color: var(--text-primary);">Playwright Webmail Automation & Queue Coordinator</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
