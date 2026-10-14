@@ -4,7 +4,7 @@ import zipfile
 root=Path(__file__).resolve().parents[1]
 dest=root/'dist'/'Outreach-Desk-2.0.0.zip'
 dest.parent.mkdir(exist_ok=True)
-files=[root/name for name in ['package.json','package-lock.json','README.md','Setup-Windows.cmd','Start-Windows.cmd','Setup-Mac.command','Start-Mac.command']]
+files=[root/name for name in ['package.json','package-lock.json','README.md','TRACKING.md','.env.example','Setup-Windows.cmd','Start-Windows.cmd','Setup-Mac.command','Start-Mac.command']]
 for directory in ['src','public','scripts','tests']:
  files.extend(p for p in (root/directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ['.pyc','.log'])
 with zipfile.ZipFile(dest,'w',zipfile.ZIP_DEFLATED) as z:
