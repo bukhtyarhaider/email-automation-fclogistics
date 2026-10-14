@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Outreach Desk 1· Sales Operations</title>
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/style.css?v=2.1" />
   </head>
   <body>
     <div class="app-shell">
@@ -1027,27 +1027,49 @@
       </div>
     </div>
 
-    <!-- Slide-over Drawer for Lead Preview & Direct Dispatch -->
+    <!-- Slide-over Drawer for Lead Details Inspection & Direct Dispatch -->
     <div class="drawer-backdrop" id="leadPreviewDrawer">
       <div class="drawer-panel">
         <div class="drawer-header">
           <div>
-            <span class="page-eyebrow" style="font-size: 9px;">LEAD DISPATCH INSPECTOR</span>
-            <h3 class="drawer-title" id="previewTitle">Message Preview</h3>
+            <span class="page-eyebrow" style="font-size: 9px;" id="leadDrawerEyebrow">LEAD DETAILS INSPECTOR</span>
+            <h3 class="drawer-title" id="previewTitle">Lead Details</h3>
           </div>
           <button type="button" class="drawer-close" id="closePreviewDrawer" aria-label="Close drawer">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
 
+        <!-- Segmented Tab Switcher -->
+        <div class="drawer-tabs">
+          <button type="button" class="drawer-tab active" id="tabLeadDetails">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            Lead Details
+          </button>
+          <button type="button" class="drawer-tab" id="tabEmailDraft">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+            Email Preview
+          </button>
+        </div>
+
         <div class="drawer-body">
-          <p id="previewTo" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500;"></p>
-          <div id="warnings" class="warning-callout" hidden></div>
-          <div id="previewBody" class="message-preview-box">
-            A personalized message will appear here.
+          <!-- SECTION 1: LEAD DETAILS (DEFAULT ACTIVE) -->
+          <div id="leadDetailsSection" class="drawer-tab-pane active">
+            <div id="leadDetailsContainer">
+              <p style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 30px;">Loading lead details...</p>
+            </div>
           </div>
-          <div class="signature-box">
-            <span id="signatureText">Your existing webmail signature will appear below the message.</span>
+
+          <!-- SECTION 2: EMAIL DRAFT (SECONDARY) -->
+          <div id="emailDraftSection" class="drawer-tab-pane" style="display: none;">
+            <p id="previewTo" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500;"></p>
+            <div id="warnings" class="warning-callout" hidden></div>
+            <div id="previewBody" class="message-preview-box">
+              A personalized message will appear here.
+            </div>
+            <div class="signature-box">
+              <span id="signatureText">Your existing webmail signature will appear below the message.</span>
+            </div>
           </div>
         </div>
 
@@ -1061,10 +1083,11 @@
             Send prepared message
           </button>
           <button id="release" class="secondary" disabled>Close compose</button>
+          <button type="button" class="secondary" id="closeDrawerBtn" style="margin-left: auto;">Close</button>
         </div>
       </div>
     </div>
 
-    <script src="/app.js" type="module"></script>
+    <script src="/app.js?v=2.1" type="module"></script>
   </body>
 </html>

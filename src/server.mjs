@@ -495,6 +495,7 @@ async function runner() {
             await persist();
             break;
           }
+          busy = false;
           await waitFor(
             state.settings.pacing.pollSeconds,
             "Waiting for leads",
@@ -1280,16 +1281,24 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (pathname === "/api/preview") {
-      const l = activeData().leads.find(
-        (l) => l.id === url.searchParams.get("id"),
-      );
+      const id = url.searchParams.get("id");
+      const l =
+        candidates().find((x) => x.id === id) ||
+        activeData().leads.find((x) => x.id === id);
       if (!l) throw new Error("Lead not found.");
-      const message = render(
-        l,
-        template(url.searchParams.get("key")),
-        business(),
-      );
-      return response(res, { message, warnings: assess(message) });
+      let message = null,
+        warnings = [];
+      try {
+        const key =
+          url.searchParams.get("key") || Object.keys(state.templates)[0];
+        if (key && state.templates[key]) {
+          message = render(l, state.templates[key], business());
+          warnings = assess(message);
+        }
+      } catch (err) {
+        warnings.push(err.message);
+      }
+      return response(res, { lead: l, message, warnings });
     }
     if (pathname === "/api/download") {
       if (busy) throw new Error("Wait for the current operation to finish.");

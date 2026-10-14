@@ -252,3 +252,46 @@ test("delete leads and delete workspace campaign features work", async (t) => {
   assert.equal(sAfter.campaigns.length, 0);
   assert.equal(sAfter.activeCampaign, null);
 });
+
+test("lead preview returns full lead details for inspection", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "outreach-lead-preview-"));
+  const port = 14325;
+  let child;
+  t.after(async () => {
+    if (child?.exitCode === null) await stop(child);
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  const workbook = path.join(dir, "sample.xlsx");
+  execFileSync(process.platform === "win32" ? "python" : "python3", [
+    path.join(ROOT, "tests/fixtures/workbook.py"),
+    workbook,
+  ]);
+
+  child = await start(dir, port);
+  async function api(route, data) {
+    const r = await fetch(`http://127.0.0.1:${port}/api/${route}`, {
+      method: data !== undefined ? "POST" : "GET",
+      headers: { "Content-Type": "application/json", "X-FC-Request": "1" },
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+    });
+    const val = await r.json();
+    if (!r.ok) throw new Error(val.error);
+    return val;
+  }
+
+  await api("import", { path: workbook });
+  const leadsRes = await api("leads");
+  assert.ok(leadsRes.leads.length > 0);
+  const targetLead = leadsRes.leads[0];
+
+  const prev = await api(`preview?id=${targetLead.id}&key=dispatch`);
+  assert.ok(prev.lead);
+  assert.equal(prev.lead.id, targetLead.id);
+  assert.equal(prev.lead.company, targetLead.company);
+  assert.equal(prev.lead.email, targetLead.email);
+  assert.ok(prev.lead.fields);
+  assert.ok(typeof prev.lead.row === "number");
+  assert.ok(prev.lead.sheet);
+});
+
