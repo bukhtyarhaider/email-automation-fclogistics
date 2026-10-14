@@ -5,8 +5,9 @@ const files = fs
   .readdirSync("tests")
   .filter((f) => f.endsWith(".test.mjs"))
   .map((f) => `tests/${f}`);
-const node = spawnSync(process.execPath, ["--test", ...files], {
+const node = spawnSync(process.execPath, ["--test", "--test-concurrency=1", ...files], {
   stdio: "inherit",
+  env: { ...process.env, FC_MONITOR_ENABLED: "0", FC_OPEN_TRACKING_ENABLED: "0", FC_OPEN_TRACKING_CONSENT: "0" },
 });
 if (node.status !== 0) process.exit(node.status || 1);
 const python = spawnSync(
