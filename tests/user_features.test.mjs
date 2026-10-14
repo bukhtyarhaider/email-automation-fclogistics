@@ -295,3 +295,84 @@ test("lead preview returns full lead details for inspection", async (t) => {
   assert.ok(prev.lead.sheet);
 });
 
+test("recommended sending pace and quota presets are valid and persist cleanly", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "outreach-pacing-presets-"));
+  const port = 14326;
+  let child;
+  t.after(async () => {
+    if (child?.exitCode === null) await stop(child);
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  child = await start(dir, port);
+  async function api(route, data) {
+    const r = await fetch(`http://127.0.0.1:${port}/api/${route}`, {
+      method: data !== undefined ? "POST" : "GET",
+      headers: { "Content-Type": "application/json", "X-FC-Request": "1" },
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+    });
+    const val = await r.json();
+    if (!r.ok) throw new Error(val.error);
+    return val;
+  }
+
+  const presets = {
+    warmup: {
+      minSeconds: 240,
+      maxSeconds: 480,
+      hourlyCap: 10,
+      dailyCap: 40,
+      pauseEveryMin: 5,
+      pauseEveryMax: 8,
+      pauseMinSeconds: 900,
+      pauseMaxSeconds: 1800,
+      pollSeconds: 60,
+    },
+    balanced: {
+      minSeconds: 150,
+      maxSeconds: 300,
+      hourlyCap: 18,
+      dailyCap: 80,
+      pauseEveryMin: 8,
+      pauseEveryMax: 14,
+      pauseMinSeconds: 600,
+      pauseMaxSeconds: 1200,
+      pollSeconds: 60,
+    },
+    established: {
+      minSeconds: 90,
+      maxSeconds: 180,
+      hourlyCap: 25,
+      dailyCap: 120,
+      pauseEveryMin: 12,
+      pauseEveryMax: 20,
+      pauseMinSeconds: 480,
+      pauseMaxSeconds: 900,
+      pollSeconds: 45,
+    },
+    stealth: {
+      minSeconds: 300,
+      maxSeconds: 600,
+      hourlyCap: 8,
+      dailyCap: 50,
+      pauseEveryMin: 6,
+      pauseEveryMax: 10,
+      pauseMinSeconds: 900,
+      pauseMaxSeconds: 1500,
+      pollSeconds: 60,
+    },
+  };
+
+  const current = await api("state");
+  for (const [name, pacingValues] of Object.entries(presets)) {
+    const settingsToSave = structuredClone(current.settings);
+    settingsToSave.pacing = pacingValues;
+    await api("settings", { settings: settingsToSave });
+    const updated = await api("state");
+    for (const [k, v] of Object.entries(pacingValues)) {
+      assert.equal(updated.settings.pacing[k], v, `${name} preset field ${k} should match`);
+    }
+  }
+});
+
+

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Outreach Desk 1· Sales Operations</title>
-    <link rel="stylesheet" href="/style.css?v=2.1" />
+    <link rel="stylesheet" href="/style.css?v=2.2" />
   </head>
   <body>
     <div class="app-shell">
@@ -734,6 +734,83 @@
                     </h2>
                   </div>
 
+                  <!-- Recommended Anti-Spam Deliverability Presets -->
+                  <div class="pacing-presets-section">
+                    <div class="pacing-presets-header">
+                      <div class="pacing-presets-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                        Recommended Anti-Spam Deliverability Presets
+                      </div>
+                      <span class="pacing-presets-subtext">Click any preset to apply safe human thresholds</span>
+                    </div>
+
+                    <div class="pacing-presets-grid" id="pacingPresetsGrid">
+                      <!-- Preset 1: Warmup -->
+                      <div class="pacing-preset-card" data-preset="warmup">
+                        <div class="preset-card-top">
+                          <span class="preset-badge warmup">Safe Warmup</span>
+                          <span class="preset-stat">40 / day</span>
+                        </div>
+                        <div class="preset-card-name">New Mailbox Warmup</div>
+                        <p class="preset-card-desc">High delays (4–8 min) & small batches with long rests. Protects new domains against early reputation burn.</p>
+                        <div class="preset-specs">
+                          <span>4–8m gaps</span> • <span>10/hr</span> • <span>15–30m rest</span>
+                        </div>
+                        <button type="button" class="preset-apply-btn">Apply Warmup</button>
+                      </div>
+
+                      <!-- Preset 2: Balanced (Recommended) -->
+                      <div class="pacing-preset-card" data-preset="balanced">
+                        <div class="preset-card-top">
+                          <span class="preset-badge recommended">Recommended</span>
+                          <span class="preset-stat">80 / day</span>
+                        </div>
+                        <div class="preset-card-name">Balanced Human Pace</div>
+                        <p class="preset-card-desc">Realistic sales rep pacing (2.5–5 min) with irregular intervals & 10–20 min rests. Standard for daily outreach.</p>
+                        <div class="preset-specs">
+                          <span>2.5–5m gaps</span> • <span>18/hr</span> • <span>10–20m rest</span>
+                        </div>
+                        <button type="button" class="preset-apply-btn">Apply Balanced</button>
+                      </div>
+
+                      <!-- Preset 3: Established -->
+                      <div class="pacing-preset-card" data-preset="established">
+                        <div class="preset-card-top">
+                          <span class="preset-badge established">High Volume</span>
+                          <span class="preset-stat">120 / day</span>
+                        </div>
+                        <div class="preset-card-name">Aged / Established Domain</div>
+                        <p class="preset-card-desc">Faster pace (1.5–3 min) for warmed mailboxes with strong SPF/DKIM/DMARC and seasoned sender score.</p>
+                        <div class="preset-specs">
+                          <span>1.5–3m gaps</span> • <span>25/hr</span> • <span>8–15m rest</span>
+                        </div>
+                        <button type="button" class="preset-apply-btn">Apply High Volume</button>
+                      </div>
+
+                      <!-- Preset 4: Stealth Background -->
+                      <div class="pacing-preset-card" data-preset="stealth">
+                        <div class="preset-card-top">
+                          <span class="preset-badge stealth">All-Day Trickle</span>
+                          <span class="preset-stat">50 / day</span>
+                        </div>
+                        <div class="preset-card-name">Stealth Background</div>
+                        <p class="preset-card-desc">Ultra-gentle trickle (5–10 min) running quietly across an 8–10 hour workday without triggering rate spikes.</p>
+                        <div class="preset-specs">
+                          <span>5–10m gaps</span> • <span>8/hr</span> • <span>15–25m rest</span>
+                        </div>
+                        <button type="button" class="preset-apply-btn">Apply Stealth</button>
+                      </div>
+                    </div>
+
+                    <!-- Deliverability info banner -->
+                    <div class="pacing-info-banner">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                      <div>
+                        <strong>Spam & Rate-Limit Protections:</strong> Randomized gaps prevent ESP bot-fingerprinting. Rolling hourly & daily caps protect domain reputation from blacklists. Periodic rest pauses simulate natural human breaks.
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="form-grid-2">
                     <div class="form-group">
                       <label for="minSeconds">Gap Minimum (seconds)</label>
@@ -1088,6 +1165,6 @@
       </div>
     </div>
 
-    <script src="/app.js?v=2.1" type="module"></script>
+    <script src="/app.js?v=2.2" type="module"></script>
   </body>
 </html>

@@ -1202,6 +1202,101 @@ const pacingFields = [
   "pollSeconds",
 ];
 
+const PACING_PRESETS = {
+  warmup: {
+    name: "New Mailbox Warmup",
+    minSeconds: 240,
+    maxSeconds: 480,
+    hourlyCap: 10,
+    dailyCap: 40,
+    pauseEveryMin: 5,
+    pauseEveryMax: 8,
+    pauseMinSeconds: 900,
+    pauseMaxSeconds: 1800,
+    pollSeconds: 60,
+  },
+  balanced: {
+    name: "Balanced Human Pace",
+    minSeconds: 150,
+    maxSeconds: 300,
+    hourlyCap: 18,
+    dailyCap: 80,
+    pauseEveryMin: 8,
+    pauseEveryMax: 14,
+    pauseMinSeconds: 600,
+    pauseMaxSeconds: 1200,
+    pollSeconds: 60,
+  },
+  established: {
+    name: "Aged / Established Domain",
+    minSeconds: 90,
+    maxSeconds: 180,
+    hourlyCap: 25,
+    dailyCap: 120,
+    pauseEveryMin: 12,
+    pauseEveryMax: 20,
+    pauseMinSeconds: 480,
+    pauseMaxSeconds: 900,
+    pollSeconds: 45,
+  },
+  stealth: {
+    name: "Stealth Background",
+    minSeconds: 300,
+    maxSeconds: 600,
+    hourlyCap: 8,
+    dailyCap: 50,
+    pauseEveryMin: 6,
+    pauseEveryMax: 10,
+    pauseMinSeconds: 900,
+    pauseMaxSeconds: 1500,
+    pollSeconds: 60,
+  },
+};
+
+function highlightPacingPreset(presetKey) {
+  document.querySelectorAll(".pacing-preset-card").forEach((card) => {
+    card.classList.toggle("active", card.dataset.preset === presetKey);
+  });
+}
+
+function detectActivePreset() {
+  for (const [key, preset] of Object.entries(PACING_PRESETS)) {
+    let matches = true;
+    for (const [field, val] of Object.entries(preset)) {
+      if (field !== "name") {
+        const inputVal = Number($(field)?.value);
+        if (inputVal !== val) {
+          matches = false;
+          break;
+        }
+      }
+    }
+    if (matches) {
+      highlightPacingPreset(key);
+      return key;
+    }
+  }
+  highlightPacingPreset(null);
+  return null;
+}
+
+function applyPacingPreset(presetKey, showNotice = true) {
+  const preset = PACING_PRESETS[presetKey];
+  if (!preset) return;
+
+  for (const [key, val] of Object.entries(preset)) {
+    if (key !== "name" && $(key)) {
+      $(key).value = val;
+    }
+  }
+
+  highlightPacingPreset(presetKey);
+
+  if (showNotice) {
+    notice(`Applied "${preset.name}" preset. Click "Save sending settings" to persist.`);
+  }
+}
+
 function readBusiness() {
   return {
     company: $("businessName")?.value || "",
@@ -1257,6 +1352,7 @@ function fillSettings() {
   if ($("teamEnabled")) $("teamEnabled").checked = s.team.enabled;
   if ($("teamUrl")) $("teamUrl").value = s.team.url;
   if ($("workerName")) $("workerName").value = s.team.workerName;
+  detectActivePreset();
 }
 
 function fillCampaign() {
@@ -1430,6 +1526,23 @@ if ($("saveSettings"))
       await api("/api/settings", { settings: s, teamToken: token });
       notice("Sending settings saved.");
     });
+
+// Pacing presets click and input listeners
+const presetsGrid = $("pacingPresetsGrid");
+if (presetsGrid) {
+  presetsGrid.onclick = (e) => {
+    const card = e.target.closest(".pacing-preset-card");
+    if (card && card.dataset.preset) {
+      applyPacingPreset(card.dataset.preset, true);
+    }
+  };
+}
+
+for (const key of pacingFields) {
+  if ($(key)) {
+    $(key).addEventListener("input", detectActivePreset);
+  }
+}
 
 if ($("saveCampaign"))
   $("saveCampaign").onclick = () =>
