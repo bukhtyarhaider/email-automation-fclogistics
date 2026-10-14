@@ -30,6 +30,7 @@ export class MailBrowser {
       headless: false,
     });
     const context = await this.browser.newContext(); // Ephemeral: no saved auth state or password.
+    await context.route(/\/o\/[\w-]+\.gif/, (route) => route.abort());
     this.page = await context.newPage();
     this.page.setDefaultTimeout(15000);
     await this.page.goto(account.url, { waitUntil: "domcontentloaded" });

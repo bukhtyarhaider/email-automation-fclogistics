@@ -2060,7 +2060,7 @@ async function loadHistory() {
       ? historyRecords
           .map(
             (r, index) =>
-              `<tr><td><strong>${escape(r.to)}</strong><small>${escape(new Date(r.at).toLocaleString())}</small></td><td>${escape(r.accountEmail || "Legacy")}<small>${escape(state.templates[r.templateKey]?.name || r.templateKey || "Variant")}</small></td><td>${escape(r.subject)}</td><td><span class="status-pill ${r.status === "Sent" ? "good" : "blocked"}">${escape(r.status)}</span></td><td style="text-align: right;"><button class="secondary" style="font-size: 11px; padding: 4px 8px;" data-history="${index}">View</button></td></tr>`,
+              `<tr><td><strong>${escape(r.to)}</strong><small>${escape(new Date(r.at).toLocaleString())}</small></td><td>${escape(r.accountEmail || "Legacy")}<small>${escape(state.templates[r.templateKey]?.name || r.templateKey || "Variant")}</small></td><td>${escape(r.subject)}</td><td><span class="status-pill ${r.status === "Sent" ? "good" : "blocked"}">${r.status === "Sent" ? "✓ Sent" : escape(r.status)}</span>${r.firstOpenAt ? `<span class="status-pill good" style="margin-left:4px;background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:700;">👁️ Seen${r.opensCount > 1 ? ` (${r.opensCount}x)` : ''}</span>` : `<span class="status-pill" style="margin-left:4px;background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;font-weight:500;">✉️ Unopened</span>`}${r.bounceStatus ? `<span class="status-pill blocked" style="margin-left:4px;">⛔ ${escape(r.bounceStatus)}</span>` : ''}</td><td style="text-align: right;"><button class="secondary" style="font-size: 11px; padding: 4px 8px;" data-history="${index}">View</button></td></tr>`,
           )
           .join("")
       : '<tr><td colspan="5" style="text-align: center; padding: 30px; color: var(--text-muted);">No attempts match your filters.</td></tr>';
@@ -2156,7 +2156,27 @@ async function loadTracking() {
     $('trackingMetrics').innerHTML = Object.entries(trackingLabels).map(([key, label]) => `<div><span>${label}</span><strong>${data.summary[key] || 0}</strong></div>`).join('');
     const bounced = data.summary.hard_bounced + data.summary.soft_bounced;
     $('trackingRate').textContent = `Observed bounce rate: ${data.summary.attempts ? (100 * bounced / data.summary.attempts).toFixed(1) + '%' : 'No attempts'}. Definition: unique messages with a DSN failure / attempted messages in this filtered view. Incomplete mailbox monitoring can undercount failures.`;
-    $('trackingRows').innerHTML = data.records.length ? data.records.map((r, i) => `<tr><td><strong>${escape(r.recipient)}</strong><small>${escape(r.subject)}</small></td><td>${escape(r.sendStatus)}<small>${escape(r.attemptedAt || r.createdAt)}</small></td><td>${escape(r.bounceStatus || 'None observed')}<small>${escape(r.bounceReason || '')}</small></td><td>${escape(r.firstOpenAt ? 'Image request detected' : 'No image request detected')}<small>${escape(r.placement?.status || (r.seedId ? 'Awaiting test' : ''))}</small></td><td><button class="secondary" data-track="${i}">Details</button>${r.seedId && r.sendStatus === 'pending' && !r.preparationStartedAt ? `<button data-seed-send="${escape(r.id)}">Send seed</button>` : ''}</td></tr>`).join('') : '<tr><td colspan="5">No tracking records match your filters.</td></tr>';
+    $('trackingRows').innerHTML = data.records.length ? data.records.map((r, i) => {
+      const sendStatusBadge = r.sendStatus === 'webmail_sent'
+        ? `<span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid rgba(16,185,129,0.3);font-weight:600;">✓ Delivered</span>`
+        : r.sendStatus === 'send_failed'
+          ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:600;">✕ Failed</span>`
+          : r.sendStatus === 'send_attempted'
+            ? `<span class="status-pill" style="background:#eff6ff;color:#1d4ed8;font-weight:600;">⏳ Sending...</span>`
+            : `<span class="status-pill" style="color:var(--text-muted);">${escape(r.sendStatus)}</span>`;
+
+      const bounceBadge = r.bounceStatus === 'hard_bounced'
+        ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:700;">⛔ Hard Bounce</span>`
+        : r.bounceStatus === 'soft_bounced'
+          ? `<span class="status-pill" style="background:#fffbeb;color:#b45309;border:1px solid rgba(245,158,11,0.3);font-weight:600;">⚠️ Soft Bounce</span>`
+          : `<span style="color:#059669;font-size:12px;font-weight:500;">✓ Clean</span>`;
+
+      const seenBadge = r.firstOpenAt
+        ? `<div style="display:inline-flex;flex-direction:column;gap:2px;"><span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:700;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:12px;">👁️ Seen${r.opens?.length > 1 ? ` (${r.opens.length}x)` : ''}</span><small style="color:#059669;font-weight:500;">Opened ${new Date(r.firstOpenAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</small></div>`
+        : `<span class="status-pill" style="background:#f1f5f9;color:#64748b;font-weight:500;font-size:11.5px;">✉️ Unopened</span>`;
+
+      return `<tr><td><strong>${escape(r.recipient)}</strong><small>${escape(r.subject)}</small></td><td>${sendStatusBadge}<small>${escape(new Date(r.attemptedAt || r.createdAt).toLocaleString())}</small></td><td>${bounceBadge}<small>${escape(r.bounceReason || '')}</small></td><td>${seenBadge}<small>${escape(r.placement?.status || (r.seedId ? 'Awaiting test' : ''))}</small></td><td><button class="secondary" data-track="${i}">Details</button>${r.seedId && r.sendStatus === 'pending' && !r.preparationStartedAt ? `<button data-seed-send="${escape(r.id)}">Send seed</button>` : ''}</td></tr>`;
+    }).join('') : '<tr><td colspan="5">No tracking records match your filters.</td></tr>';
     $('trackingPageInfo').textContent = data.total ? `${trackingOffset + 1}–${Math.min(trackingOffset + 50, data.total)} of ${data.total}` : 'No messages recorded';
     $('trackingPrev').disabled = trackingOffset === 0;
     $('trackingNext').disabled = trackingOffset + 50 >= data.total;

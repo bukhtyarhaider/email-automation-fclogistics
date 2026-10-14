@@ -1482,7 +1482,16 @@ const server = http.createServer(async (req, res) => {
       const query = (url.searchParams.get("q") || "").toLowerCase(),
         status = url.searchParams.get("status");
       let records = Object.entries(state.history)
-        .map(([to, { teamToken, ...h }]) => ({ to, ...h }))
+        .map(([to, { teamToken, ...h }]) => {
+          const tRecord = h.trackingId ? state.tracking?.records?.[h.trackingId] : null;
+          return {
+            to,
+            ...h,
+            firstOpenAt: tRecord?.firstOpenAt || null,
+            opensCount: tRecord?.opens?.length || 0,
+            bounceStatus: tRecord?.bounceStatus || null,
+          };
+        })
         .sort((a, b) => b.at.localeCompare(a.at));
       if (query)
         records = records.filter((r) =>

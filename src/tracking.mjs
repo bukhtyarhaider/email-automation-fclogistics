@@ -81,6 +81,7 @@ export function recordOpen(t, token, enabled = true, at = now()) {
   const digest = hash(token);
   const r = t.records[t.openIndex?.[digest]];
   if (!r || !r.attemptedAt) return false;
+  if (r.sendStatus === "send_attempted" && !r.confirmedAt) return false;
   const bucket = at.slice(0, 13);
   if (r.opens.some((e) => e.bucket === bucket)) return false;
   r.opens.push({ bucket, at });
