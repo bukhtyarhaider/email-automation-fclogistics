@@ -122,6 +122,7 @@ function persist() {
 }
 function event(message, details = {}) {
   state.events.push({ at: new Date().toISOString(), message, ...details });
+  if (state.events.length > 5000) state.events = state.events.slice(-5000);
 }
 function python(command, filename, input) {
   return new Promise((resolve, reject) => {
@@ -741,7 +742,7 @@ const server = http.createServer(async (req, res) => {
               Date.parse(state.automation.nextAt) <= Date.now()
             )
               state.automation.nextAt = null;
-            event(`Connected ${account.email}.`);
+            event(`Connected ${account.email}.`, { kind: "system" });
             await persist();
             return response(res, result);
           } finally {
@@ -761,6 +762,8 @@ const server = http.createServer(async (req, res) => {
         if (pathname === "/api/disconnect") {
           await mail.close();
           prepared = null;
+          event("Mailbox session disconnected.", { kind: "system" });
+          await persist();
           return response(res, { ok: true });
         }
         if (pathname === "/api/profile") {
@@ -1181,9 +1184,15 @@ const server = http.createServer(async (req, res) => {
             await syncStatus(lead, state.settings.eligibility.sentStatus, c.id);
             item.syncNeeded = false;
           }
-          event(`Reviewed ${input.email}: ${item.status}.`);
+          event(`Reviewed ${input.email}: ${item.status}.`, { kind: "system" });
           await persist();
           return response(res, { ok: true });
+        }
+        if (pathname === "/api/clear-events") {
+          state.events = [];
+          event("System activity log cleared by operator.", { kind: "system" });
+          await persist();
+          return response(res, { ok: true, events: state.events });
         }
         throw new Error("Unknown action.");
       } finally {
@@ -1239,6 +1248,92 @@ const server = http.createServer(async (req, res) => {
         dayRemaining: currentQuota().dayRemaining,
         teamConnected: !state.settings.team.enabled || !!team.token,
       });
+    }
+    if (pathname === "/api/events") {
+      let events = [...state.events];
+      const q = (url.searchParams.get("q") || "").toLowerCase().trim();
+      const kind = url.searchParams.get("kind");
+      if (q) {
+        events = events.filter(
+          (e) =>
+            (e.message || "").toLowerCase().includes(q) ||
+            (e.kind || "").toLowerCase().includes(q),
+        );
+      }
+      if (kind && kind !== "all") {
+        events = events.filter((e) => {
+          if (kind === "error")
+            return (
+              e.kind === "error" ||
+              /fail|error|uncertain|needs attention/i.test(e.message)
+            );
+          if (kind === "pause" || kind === "pacing")
+            return (
+              e.kind === "pause" ||
+              /pause|rest|seconds|waiting for leads|team pacing|interval/i.test(
+                e.message,
+              )
+            );
+          if (kind === "send" || kind === "outreach")
+            return (
+              e.kind === "sent" ||
+              e.kind === "start" ||
+              /sent to|sending to|started .* outreach/i.test(e.message)
+            );
+          if (kind === "system" || kind === "config")
+            return (
+              e.kind === "system" ||
+              e.kind === "template" ||
+              /saved|imported|connected|disconnected|reloaded|deleted|profile|template|settings|workbook|suppress/i.test(
+                e.message,
+              )
+            );
+          return e.kind === kind;
+        });
+      }
+      const limit = Number(url.searchParams.get("limit")) || 0;
+      const total = state.events.length;
+      if (limit > 0 && limit < events.length) {
+        events = events.slice(-limit);
+      }
+      return response(res, {
+        total,
+        count: events.length,
+        events: events.slice().reverse(),
+      });
+    }
+    if (pathname === "/api/export-events") {
+      const format = url.searchParams.get("format") || "json";
+      if (format === "txt") {
+        const text = state.events
+          .map(
+            (e) =>
+              `[${e.at}] [${(e.kind || "INFO").toUpperCase()}] ${e.message}`,
+          )
+          .join("\n");
+        res.writeHead(200, {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="system-activity.log"',
+          "Cache-Control": "no-store",
+        });
+        return res.end(text);
+      }
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Content-Disposition": 'attachment; filename="system-activity.json"',
+        "Cache-Control": "no-store",
+      });
+      return res.end(
+        JSON.stringify(
+          {
+            exportedAt: new Date().toISOString(),
+            totalEvents: state.events.length,
+            events: state.events,
+          },
+          null,
+          2,
+        ),
+      );
     }
     if (pathname === "/api/leads") {
       let leads = candidates();

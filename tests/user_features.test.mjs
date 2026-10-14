@@ -375,4 +375,78 @@ test("recommended sending pace and quota presets are valid and persist cleanly",
   }
 });
 
+test("live system activity /api/events endpoint, filtering, export and clear features work", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "outreach-events-"));
+  const port = 14327;
+  let child;
+  t.after(async () => {
+    if (child?.exitCode === null) await stop(child);
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  child = await start(dir, port);
+  async function api(route, data) {
+    const r = await fetch(`http://127.0.0.1:${port}/api/${route}`, {
+      method: data !== undefined ? "POST" : "GET",
+      headers: { "Content-Type": "application/json", "X-FC-Request": "1" },
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+    });
+    const val = await r.json();
+    if (!r.ok) throw new Error(val.error);
+    return val;
+  }
+
+  // 1. Initial events fetch
+  const initial = await api("events");
+  assert.ok(Array.isArray(initial.events));
+  assert.equal(typeof initial.total, "number");
+  assert.equal(typeof initial.count, "number");
+
+  // 2. Perform actions that emit classified events (suppress, settings, profile)
+  await api("suppress", { email: "logtest@example.com" });
+  const currState = await api("state");
+  const settingsToSave = structuredClone(currState.settings);
+  settingsToSave.pacing.minSeconds = 99;
+  await api("settings", { settings: settingsToSave });
+
+  // 3. Verify /api/events returns updated events
+  const afterActions = await api("events");
+  assert.ok(afterActions.events.length >= 2);
+  const suppressEvt = afterActions.events.find((e) => e.message.includes("logtest@example.com"));
+  assert.ok(suppressEvt, "Suppression event should be present in /api/events");
+
+  // 4. Test filtering by search query `q`
+  const searchResult = await api("events?q=logtest");
+  assert.ok(searchResult.events.length >= 1);
+  assert.ok(searchResult.events.every((e) => e.message.includes("logtest")));
+
+  // 5. Test limiting results
+  const limited = await api("events?limit=1");
+  assert.equal(limited.count, 1);
+  assert.equal(limited.events.length, 1);
+
+  // 6. Test export endpoints
+  const jsonRes = await fetch(`http://127.0.0.1:${port}/api/export-events?format=json`);
+  assert.equal(jsonRes.status, 200);
+  assert.ok(jsonRes.headers.get("content-type")?.includes("application/json"));
+  const exportData = await jsonRes.json();
+  assert.ok(Array.isArray(exportData.events));
+  assert.equal(typeof exportData.totalEvents, "number");
+
+  const txtRes = await fetch(`http://127.0.0.1:${port}/api/export-events?format=txt`);
+  assert.equal(txtRes.status, 200);
+  assert.ok(txtRes.headers.get("content-type")?.includes("text/plain"));
+  const txtContent = await txtRes.text();
+  assert.ok(txtContent.includes("logtest@example.com"));
+
+  // 7. Test clearing events
+  const clearRes = await api("clear-events", {});
+  assert.equal(clearRes.ok, true);
+  const afterClear = await api("events");
+  // Should have exactly 1 event (the confirmation that the log was cleared)
+  assert.equal(afterClear.total, 1);
+  assert.match(afterClear.events[0].message, /log cleared/i);
+});
+
+
 
