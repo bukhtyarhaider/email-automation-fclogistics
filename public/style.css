@@ -2439,3 +2439,25 @@ button.danger-hover:hover, .button.danger-hover:hover {
 }
 
 
+
+/* Tracking extends the existing dashboard components. */
+.tracking-note { color: var(--text-muted); font-size: 12px; line-height: 1.7; margin: 12px 0 20px; }
+.tracking-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 16px 0; }
+.tracking-filters label { display: grid; gap: 6px; flex: 1 1 150px; min-width: 0; font-size: 12px; color: var(--text-muted); }
+.tracking-filters input, .tracking-filters select { width: 100%; min-width: 0; }
+.tracking-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1px; background: var(--border-subtle, #292929); margin: 20px 0; border: 1px solid var(--border-subtle, #292929); }
+.tracking-metrics > div { display: grid; gap: 8px; padding: 14px; background: var(--bg-surface, #181818); }
+.tracking-metrics span { color: var(--text-muted); font-size: 11px; }
+.tracking-metrics strong { font-size: 24px; }
+.tracking-output { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; padding: 16px; font-size: 12px; line-height: 1.7; background: var(--bg-surface-elevated, #202020); border-radius: 8px; }
+#trackingRows small { max-width: 300px; white-space: normal; overflow-wrap: anywhere; }
+#view-tracking .panel { margin-bottom: 24px; }
+#view-tracking [hidden] { display: none; }
+
+#view-tracking .table-wrap { min-height: 0; max-height: 420px; }
+@media (max-width: 680px) {
+  #view-tracking .page-header { flex-direction: column; gap: 12px; }
+  #view-tracking .tracking-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #view-tracking .tracking-filters button { width: 100%; }
+  #view-tracking .panel { padding: 16px; }
+}

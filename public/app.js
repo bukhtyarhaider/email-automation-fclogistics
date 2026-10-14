@@ -853,6 +853,7 @@ function navigate(viewName) {
     "templates",
     "live-activity",
     "activity",
+    "tracking",
     "suppression",
     "settings",
   ];
@@ -866,6 +867,7 @@ function navigate(viewName) {
     link.classList.toggle("active", link.dataset.view === target);
   });
 
+  if (target === "tracking" && state) void loadTracking().catch((e) => notice(e.message));
   if (target === "live-activity") {
     renderLiveActivityView();
   }
@@ -2082,7 +2084,7 @@ if ($("historyRows"))
     const msgEl = $("historyMessage");
     if (!msgEl) return;
     msgEl.hidden = false;
-    msgEl.textContent = `To: ${r.to}\nFrom: ${r.accountEmail || "Not recorded"}\nCampaign: ${r.campaignName || "Legacy campaign"}\nTemplate: ${r.templateKey || "Not recorded"}\nOutcome: ${r.status}\nConfirmation Evidence: ${r.evidence || "Not confirmed"}\nSubject: ${r.subject}\n\n${r.body || "Message body was not recorded by previous version."}\n\n${r.signature || ""}`;
+    msgEl.textContent = `To: ${r.to}\nFrom: ${r.accountEmail || "Not recorded"}\nCampaign: ${r.campaignName || "Legacy campaign"}\nTemplate: ${r.templateKey || "Not recorded"}\nOutcome: ${r.status}\nTracking ID: ${r.trackingId || "Legacy"}\nSend status: ${r.sendStatus || "Legacy"}\nConfirmation Evidence: ${r.evidence || "Not confirmed"}\nSubject: ${r.subject}\n\n${r.body || "Message body was not recorded by previous version."}\n\n${r.signature || ""}`;
     msgEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
 
@@ -2138,11 +2140,94 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closePreviewDrawer();
 });
 
+let trackingOffset = 0, trackingRecords = [], trackingBusy = false;
+const trackingLabels = { recipients: "Recipients", attempts: "Attempts", webmail_sent: "Webmail confirmed", send_failed: "Send failed", hard_bounced: "Hard bounces", soft_bounced: "Soft bounces", open_detected: "Open signals", delivery_unknown: "Delivery unknown", inbox: "Seed Inbox", spam: "Seed Spam", other: "Seed Other", not_found: "Seed not found", awaiting: "Seeds awaiting" };
+async function loadTracking() {
+  if (trackingBusy || !$('trackingRows') || !state) return;
+  trackingBusy = true;
+  try {
+    const campaign = $('trackingCampaign'), previous = campaign.value;
+    campaign.innerHTML = '<option value="">All campaigns</option>' + state.campaigns.map((c) => `<option value="${escape(c.id)}">${escape(c.name)}</option>`).join('');
+    campaign.value = previous;
+    const params = new URLSearchParams({ q: $('trackingSearch').value, campaign: campaign.value,
+      status: $('trackingStatus').value, from: $('trackingFrom').value, until: $('trackingUntil').value, offset: String(trackingOffset) });
+    const data = await api('/api/tracking?' + params);
+    trackingRecords = data.records;
+    $('trackingMetrics').innerHTML = Object.entries(trackingLabels).map(([key, label]) => `<div><span>${label}</span><strong>${data.summary[key] || 0}</strong></div>`).join('');
+    const bounced = data.summary.hard_bounced + data.summary.soft_bounced;
+    $('trackingRate').textContent = `Observed bounce rate: ${data.summary.attempts ? (100 * bounced / data.summary.attempts).toFixed(1) + '%' : 'No attempts'}. Definition: unique messages with a DSN failure / attempted messages in this filtered view. Incomplete mailbox monitoring can undercount failures.`;
+    $('trackingRows').innerHTML = data.records.length ? data.records.map((r, i) => `<tr><td><strong>${escape(r.recipient)}</strong><small>${escape(r.subject)}</small></td><td>${escape(r.sendStatus)}<small>${escape(r.attemptedAt || r.createdAt)}</small></td><td>${escape(r.bounceStatus || 'None observed')}<small>${escape(r.bounceReason || '')}</small></td><td>${escape(r.firstOpenAt ? 'Image request detected' : 'No image request detected')}<small>${escape(r.placement?.status || (r.seedId ? 'Awaiting test' : ''))}</small></td><td><button class="secondary" data-track="${i}">Details</button>${r.seedId && r.sendStatus === 'pending' && !r.preparationStartedAt ? `<button data-seed-send="${escape(r.id)}">Send seed</button>` : ''}</td></tr>`).join('') : '<tr><td colspan="5">No tracking records match your filters.</td></tr>';
+    $('trackingPageInfo').textContent = data.total ? `${trackingOffset + 1}–${Math.min(trackingOffset + 50, data.total)} of ${data.total}` : 'No messages recorded';
+    $('trackingPrev').disabled = trackingOffset === 0;
+    $('trackingNext').disabled = trackingOffset + 50 >= data.total;
+    $('trackingConfig').textContent = `IMAP monitor: ${data.monitorEnabled ? 'enabled' : 'disabled (set FC_MONITOR_ENABLED=1)'}. Open tracking: ${data.opensEnabled ? 'enabled by configuration' : 'disabled'}. Keep the app running for monitoring.`;
+    $('trackingWorker').textContent = Object.keys(data.worker).length ? JSON.stringify(data.worker, null, 2) : 'No mailbox checks recorded.';
+    $('trackingReview').textContent = data.review.length ? JSON.stringify(data.review, null, 2) : 'No unmatched notifications.';
+    $('trackingSeeds').textContent = data.seeds.length ? data.seeds.map((s) => `${s.id}: ${s.email} (${s.automated ? 'IMAP configured; see monitor status' : 'manual inspection'})`).join(' · ') : 'No seed recipients configured. See TRACKING.md.';
+    const sample = $('seedSample'), selectedSample = sample.value;
+    sample.innerHTML = rows.map((r) => `<option value="${escape(r.id)}">${escape(r.company)} · ${escape(r.email)}</option>`).join('');
+    if (rows.some((r) => r.id === selectedSample)) sample.value = selectedSample;
+    else if (rows.some((r) => r.id === previewId)) sample.value = previewId;
+    if (!$('healthDomain').value) $('healthDomain').value = state.profiles.find((p) => p.id === state.activeProfile)?.email.split('@')[1] || '';
+  } finally { trackingBusy = false; }
+}
+$('trackingRefresh').onclick = (e) => action(e.currentTarget, loadTracking);
+for (const id of ['trackingSearch', 'trackingCampaign', 'trackingStatus', 'trackingFrom', 'trackingUntil']) {
+  $(id).onchange = () => { trackingOffset = 0; loadTracking().catch((e) => notice(e.message)); };
+}
+$('trackingPrev').onclick = () => { trackingOffset = Math.max(0, trackingOffset - 50); loadTracking().catch((e) => notice(e.message)); };
+$('trackingNext').onclick = () => { trackingOffset += 50; loadTracking().catch((e) => notice(e.message)); };
+$('trackingRows').onclick = (e) => {
+  const button = e.target.closest('button');
+  if (!button) return;
+  if (button.dataset.seedSend) return action(button, async () => {
+    await api('/api/tracking/seed-send', { trackingId: button.dataset.seedSend });
+    await loadTracking();
+  });
+  const r = trackingRecords[Number(button.dataset.track)];
+  if (!r) return;
+  $('trackingDetail').hidden = false;
+  $('trackingDetail').textContent = JSON.stringify(r, null, 2);
+  $('placementForm').hidden = !r.seedId || !r.attemptedAt;
+  $('placementId').value = r.id;
+  $('placementEvidence').value = '';
+};
+$('placementForm').onsubmit = (e) => {
+  e.preventDefault();
+  action(e.submitter, async () => {
+    await api('/api/tracking/manual-placement', { trackingId: $('placementId').value, status: $('placementStatus').value, evidence: $('placementEvidence').value });
+    await loadTracking();
+    $('placementForm').hidden = true;
+    $('trackingDetail').hidden = true;
+  });
+};
+$('seedPlanForm').onsubmit = (e) => {
+  e.preventDefault();
+  action(e.submitter, async () => {
+    const result = await api('/api/tracking/seed-plan', { testKey: $('seedTestKey').value, leadId: $('seedSample').value, key: $('template').value });
+    $('seedPlanResult').textContent = `Plan ${result.testKey}: ${result.ids.length} dedicated test recipients. Use Send seed in the table for each message; the same test key reuses this plan.`;
+    trackingOffset = 0;
+    await loadTracking();
+  });
+};
+$('domainForm').onsubmit = (e) => {
+  e.preventDefault();
+  $('domainResult').textContent = 'Checking public DNS records…';
+  action(e.submitter, async () => {
+    const result = await api('/api/tracking/domain?' + new URLSearchParams({ domain: $('healthDomain').value, selectors: $('healthSelectors').value }));
+    $('domainResult').textContent = JSON.stringify(result, null, 2);
+  });
+};
+setInterval(() => {
+  if (!pending && location.hash === '#tracking') loadTracking().catch((e) => notice(e.message));
+}, 10000);
+
 // Initial boot
 navigate(location.hash.replace("#", ""));
 await refresh();
 await loadLeads();
 await loadHistory();
+if (location.hash === "#tracking") await loadTracking();
 
 // Background polling loop
 setInterval(async () => {

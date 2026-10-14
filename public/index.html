@@ -101,6 +101,10 @@
               </svg>
               <span>Send History & Audit</span>
             </a>
+            <a class="nav-link" href="#tracking" data-view="tracking">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 4 3 6-8"></path></svg>
+              <span>Email Tracking</span>
+            </a>
             <a class="nav-link" href="#suppression" data-view="suppression">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -148,7 +152,7 @@
               <div>
                 <p class="page-eyebrow">MISSION CONTROL</p>
                 <h1 class="page-title">Operational Desk</h1>
-                <p class="page-subtitle">Real-time delivery status, queue pacing, and continuous outreach.</p>
+                <p class="page-subtitle">Webmail submission status, queue pacing, and continuous outreach.</p>
               </div>
               <div class="header-actions">
                 <button id="start">
@@ -1261,6 +1265,64 @@
           <!-- ========================================== -->
           <!-- VIEW 7: SUPPRESSION (DO NOT CONTACT)       -->
           <!-- ========================================== -->
+          <section class="view-page" id="view-tracking">
+            <div class="page-header">
+              <div><p class="page-eyebrow">EVIDENCE & MONITORING</p><h1 class="page-title">Email Tracking</h1>
+                <p class="page-subtitle">Webmail submission, delivery failures, image requests, and controlled seed tests.</p></div>
+              <button id="trackingRefresh" class="secondary">Refresh tracking</button>
+            </div>
+            <p class="tracking-note">Webmail confirmation records submission. Inbox delivery remains unknown. Image requests may be automated and do not prove reading. Seed placement describes only the test mailbox.</p>
+            <div class="panel">
+              <div class="tracking-filters">
+                <label>Recipient or subject<input id="trackingSearch" type="search" placeholder="Search tracking records" /></label>
+                <label>Campaign<select id="trackingCampaign"><option value="">All campaigns</option></select></label>
+                <label>Status<select id="trackingStatus"><option value="">All statuses</option>
+                  <option>pending</option><option>send_attempted</option><option>webmail_sent</option><option>send_failed</option>
+                  <option>hard_bounced</option><option>soft_bounced</option><option>open_detected</option><option>delivery_unknown</option>
+                </select></label>
+                <label>From (UTC)<input id="trackingFrom" type="date" /></label>
+                <label>Until (UTC)<input id="trackingUntil" type="date" /></label>
+              </div>
+              <div id="trackingMetrics" class="tracking-metrics" aria-live="polite"></div>
+              <p id="trackingRate" class="tracking-note"></p>
+              <div class="table-wrap"><table><thead><tr><th>Recipient / Subject</th><th>Send status / Time</th><th>Delivery failure</th><th>Open signal / Placement</th><th>Details</th></tr></thead><tbody id="trackingRows"></tbody></table></div>
+              <div class="table-footer"><span id="trackingPageInfo"></span><div class="pagination-controls"><button id="trackingPrev" class="secondary">Previous</button><button id="trackingNext" class="secondary">Next</button></div></div>
+              <pre id="trackingDetail" class="tracking-output" hidden></pre>
+              <form id="placementForm" class="tracking-filters" hidden>
+                <input id="placementId" type="hidden" />
+                <label>Manual seed placement<select id="placementStatus"><option value="inbox">Inbox</option><option value="spam">Spam / Junk</option><option value="other">Other folder</option><option value="not_found">Not found</option><option value="awaiting">Awaiting arrival</option></select></label>
+                <label>Evidence<input id="placementEvidence" required maxlength="500" placeholder="Folder and time inspected" /></label>
+                <button type="submit">Record manual result</button>
+              </form>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2 class="panel-title">Monitor & unmatched notifications</h2></div>
+              <p id="trackingConfig" class="tracking-note"></p>
+              <pre id="trackingWorker" class="tracking-output"></pre>
+              <details><summary>Notifications needing manual review</summary><pre id="trackingReview" class="tracking-output"></pre></details>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2 class="panel-title">Controlled seed tests</h2></div>
+              <p class="tracking-note">Configure dedicated recipients in FC_SEEDS. Plans use the active campaign, mailbox, selected template, and a sample lead for content. Each test message has a unique subject suffix. Send each planned test once; normal mailbox pacing applies. Use a dedicated mailbox when team coordination is enabled.</p>
+              <p id="trackingSeeds" class="tracking-note"></p>
+              <form id="seedPlanForm" class="tracking-filters">
+                <label>Unique test key<input id="seedTestKey" required pattern="[a-zA-Z0-9_-]{1,80}" maxlength="80" placeholder="campaign-test-001" /></label>
+                <label>Content sample<select id="seedSample" required></select></label>
+                <button type="submit">Create seed plan</button>
+              </form>
+              <p id="seedPlanResult" role="status" class="tracking-note"></p>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2 class="panel-title">Domain authentication checks</h2></div>
+              <form id="domainForm" class="tracking-filters">
+                <label>Sending domain<input id="healthDomain" required placeholder="example.com" /></label>
+                <label>DKIM selectors (comma separated)<input id="healthSelectors" placeholder="selector-from-provider" /></label>
+                <button type="submit">Check DNS records</button>
+              </form>
+              <pre id="domainResult" class="tracking-output" aria-live="polite"></pre>
+            </div>
+          </section>
+
           <section class="view-page" id="view-suppression">
             <div class="page-header">
               <div>
