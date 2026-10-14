@@ -1322,3 +1322,29 @@ td small {
     padding: 6px;
   }
 }
+
+/* Table Row Actions & Badges */
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+button.danger-hover:hover, .button.danger-hover:hover {
+  background: rgba(220, 38, 38, 0.25) !important;
+  border-color: #dc2626 !important;
+  color: #f87171 !important;
+}
+
+.tag-badge {
+  display: inline-block;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-medium);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  margin-right: 4px;
+}
+

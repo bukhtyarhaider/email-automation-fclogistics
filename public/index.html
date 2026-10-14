@@ -314,6 +314,10 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                   Download updated workbook
                 </a>
+                <button id="deleteWorkspace" class="danger" title="Delete current leads workspace">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  Delete workspace
+                </button>
               </div>
             </div>
 
@@ -340,6 +344,10 @@
 
               <div class="toolbar-group">
                 <button id="clearSelection" class="secondary" style="font-size: 11.5px;">Clear selection</button>
+                <button id="deleteSelectedLeads" class="danger" style="font-size: 11.5px;" disabled>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  Delete selected
+                </button>
               </div>
             </div>
 
@@ -384,6 +392,7 @@
                 <p class="page-subtitle">Configure campaign scopes, included worksheets, and spreadsheet column mappings.</p>
               </div>
               <div class="header-actions">
+                <button id="deleteCampaignBtn" class="danger">Delete campaign</button>
                 <button id="saveCampaign">Save campaign settings</button>
               </div>
             </div>
@@ -462,6 +471,15 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   New variant
                 </button>
+                <button id="exportTemplatesBtn" class="secondary" title="Export all templates as JSON">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Export templates
+                </button>
+                <label class="button secondary" for="importTemplatesFile" style="cursor: pointer;" title="Import templates from JSON">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  Import templates
+                </label>
+                <input id="importTemplatesFile" type="file" accept=".json" hidden />
                 <button id="deleteTemplate" class="danger">Delete template</button>
                 <button id="saveTemplate">Save template</button>
               </div>
@@ -548,6 +566,40 @@
                 </div>
               </div>
             </div>
+
+            <!-- Templates Library / Overview List -->
+            <div class="panel" style="margin-top: 20px;">
+              <div class="panel-head">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <h2 class="panel-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                    Template Variants Library
+                  </h2>
+                  <span class="status-pill ready" id="templateCountBadge">0 Variants</span>
+                </div>
+                <div class="toolbar-search" style="min-width: 220px; max-width: 320px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input id="templateSearch" type="search" placeholder="Search template variants…" />
+                </div>
+              </div>
+              <div class="table-container" style="border: none; box-shadow: none;">
+                <div class="table-wrap" style="max-height: 400px; min-height: 200px;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Variant Name</th>
+                        <th>Subject Line</th>
+                        <th style="width: 80px; text-align: center;">Weight</th>
+                        <th style="width: 100px; text-align: center;">Status</th>
+                        <th>Required Fields</th>
+                        <th style="width: 170px; text-align: right;">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="templatesTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </section>
 
           <!-- ========================================== -->
@@ -568,9 +620,39 @@
             <div class="dashboard-grid">
               <!-- Left Column: Mailbox Profile -->
               <div>
+                <!-- Configured Mailbox Profiles List Panel -->
+                <div class="panel" style="margin-bottom: 18px;">
+                  <div class="panel-head">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <h2 class="panel-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        Configured Mailbox Profiles
+                      </h2>
+                      <span class="status-pill ready" id="profilesCountBadge">1 Active</span>
+                    </div>
+                    <button id="newProfileBtn" class="secondary" style="font-size: 11px; padding: 4px 8px;">+ New profile</button>
+                  </div>
+                  <div class="table-container" style="border: none; box-shadow: none;">
+                    <div class="table-wrap" style="max-height: 280px; min-height: 120px;">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Profile Label</th>
+                            <th>Email</th>
+                            <th>Browser</th>
+                            <th style="width: 80px; text-align: center;">Status</th>
+                            <th style="width: 150px; text-align: right;">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody id="profilesTableBody"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="panel">
                   <div class="panel-head">
-                    <h2 class="panel-title">
+                    <h2 class="panel-title" id="profileSetupTitle">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"></circle><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path></svg>
                       Mailbox Profile Setup
                     </h2>
@@ -634,8 +716,9 @@
                     <textarea id="services" rows="2"></textarea>
                   </div>
 
-                  <div class="form-actions">
+                  <div class="form-actions" style="display: flex; gap: 10px;">
                     <button id="saveProfile">Save mailbox profile</button>
+                    <button type="button" id="deleteCurrentProfile" class="danger" style="display: none;">Delete profile</button>
                   </div>
                 </div>
               </div>
@@ -924,10 +1007,17 @@
               <!-- Suppressed Records List -->
               <div class="panel">
                 <div class="panel-head">
-                  <h2 class="panel-title">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                    Suppressed Records
-                  </h2>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                      Suppressed Records
+                    </h2>
+                    <span class="status-pill blocked" id="suppressionCountBadge">0 suppressed</span>
+                  </div>
+                  <div class="toolbar-search" style="min-width: 180px; max-width: 260px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input id="suppressionSearch" type="search" placeholder="Filter suppressed list…" />
+                  </div>
                 </div>
                 <ul id="suppressionList"></ul>
               </div>

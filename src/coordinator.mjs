@@ -91,7 +91,7 @@ const server = http.createServer((req, res) => {
       }
       if (
         req.method !== "POST" ||
-        !/^\/team\/(snapshot|seed|claim|begin|finish|release|suppress)$/.test(
+        !/^\/team\/(snapshot|seed|claim|begin|finish|release|suppress|unsuppress)$/.test(
           req.url,
         )
       ) {

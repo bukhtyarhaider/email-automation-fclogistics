@@ -97,6 +97,17 @@ class WorkbookTests(unittest.TestCase):
         with zipfile.ZipFile(self.path) as z:
             self.assertIn(cell("H2", "3 months"), z.read("xl/worksheets/sheet1.xml").decode())
 
+    def test_delete_leads_removes_rows_and_preserves_workbook(self):
+        lead = workbook.read(self.path)["leads"][0]
+        res = workbook.delete_leads(self.path, [lead["id"]])
+        self.assertEqual(res["deleted"], 1)
+        leads_after = workbook.read(self.path)["leads"]
+        self.assertEqual(len(leads_after), 0)
+        with zipfile.ZipFile(self.path) as z:
+            xml = z.read("xl/worksheets/sheet1.xml").decode()
+            self.assertNotIn('r="2"', xml)
+            self.assertIn('r="1"', xml)
+
 
 if __name__ == "__main__":
     unittest.main()

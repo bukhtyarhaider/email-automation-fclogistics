@@ -817,6 +817,30 @@ const server = http.createServer(async (req, res) => {
           await persist();
           return response(res, { ok: true });
         }
+        if (pathname === "/api/delete-profile") {
+          if (state.automation.enabled || prepared)
+            throw new Error(
+              "Stop outreach and close compose before deleting mailbox profiles.",
+            );
+          if (state.profiles.length <= 1)
+            throw new Error("At least one mailbox profile must be kept.");
+          const pIndex = state.profiles.findIndex((p) => p.id === input.id);
+          if (pIndex === -1) throw new Error("Mailbox profile not found.");
+          const p = state.profiles[pIndex];
+          if (state.activeProfile === p.id) {
+            await mail.close();
+            const nextP = state.profiles.find((x) => x.id !== p.id);
+            state.activeProfile = nextP.id;
+            state.settings.business = nextP.business;
+          }
+          state.profiles.splice(pIndex, 1);
+          event(`Deleted mailbox profile ${p.name || p.email}.`);
+          await persist();
+          return response(res, {
+            ok: true,
+            activeProfile: state.activeProfile,
+          });
+        }
         if (pathname === "/api/settings") {
           if (prepared)
             throw new Error(
@@ -881,6 +905,54 @@ const server = http.createServer(async (req, res) => {
           await persist();
           return response(res, { ok: true });
         }
+        if (pathname === "/api/delete-campaign") {
+          if (state.automation.enabled || prepared)
+            throw new Error(
+              "Stop outreach and close compose before deleting workspaces.",
+            );
+          const targetId = input.id || state.activeCampaign;
+          const cIndex = state.campaigns.findIndex((c) => c.id === targetId);
+          if (cIndex === -1) throw new Error("Campaign workspace not found.");
+          const c = state.campaigns[cIndex];
+          state.campaigns.splice(cIndex, 1);
+          campaignData.delete(targetId);
+          if (state.activeCampaign === targetId) {
+            state.activeCampaign = state.campaigns[0]?.id || null;
+            state.workbook = state.campaigns[0]?.workbook || null;
+          }
+          const stillUsed = state.campaigns.some(
+            (other) => other.workbook?.file === c.workbook?.file,
+          );
+          if (!stillUsed && c.workbook?.file) {
+            try {
+              await fs.unlink(path.join(DATA, c.workbook.file));
+            } catch {}
+          }
+          event(`Deleted workspace ${c.name}.`);
+          await persist();
+          return response(res, {
+            ok: true,
+            activeCampaign: state.activeCampaign,
+          });
+        }
+        if (pathname === "/api/delete-leads") {
+          if (state.automation.enabled || prepared)
+            throw new Error(
+              "Stop outreach and close compose before deleting leads.",
+            );
+          if (!Array.isArray(input.ids) || !input.ids.length)
+            throw new Error("Select at least one lead to delete.");
+          const c = activeCampaign();
+          if (!c) throw new Error("No active campaign workbook found.");
+          await python("delete", path.join(DATA, c.workbook.file), {
+            ids: input.ids,
+            mapping: c.mapping,
+          });
+          await reload(c);
+          event(`Deleted ${input.ids.length} lead(s) from ${c.name}.`);
+          await persist();
+          return response(res, { ok: true, deleted: input.ids.length });
+        }
         if (pathname === "/api/reload") {
           await reload();
           event("Campaign workbook reloaded.");
@@ -939,6 +1011,60 @@ const server = http.createServer(async (req, res) => {
           await persist();
           return response(res, { ok: true });
         }
+        if (pathname === "/api/import-templates") {
+          if (prepared)
+            throw new Error(
+              "Close the prepared message before importing templates.",
+            );
+          const incoming = input.templates || input;
+          let entries = [];
+          if (Array.isArray(incoming)) {
+            entries = incoming.map((t) => [t.key || randomUUID(), t]);
+          } else if (typeof incoming === "object" && incoming !== null) {
+            entries = Object.entries(incoming);
+          }
+          if (!entries.length)
+            throw new Error("Provide valid template definitions to import.");
+          let importedCount = 0;
+          for (const [rawKey, item] of entries) {
+            if (!item || typeof item !== "object") continue;
+            const subject = String(item.subject || "").trim();
+            const body = String(item.body || "").trim();
+            if (!subject || !body) continue;
+            const key = state.templates[rawKey]
+              ? randomUUID()
+              : rawKey || randomUUID();
+            const weight = Number(item.weight ?? 1);
+            const t = {
+              name: String(item.name || "Imported template").slice(0, 100),
+              subject,
+              body,
+              enabled: item.enabled !== false,
+              weight:
+                Number.isInteger(weight) && weight >= 1 && weight <= 100
+                  ? weight
+                  : 1,
+              requiredFields: Array.isArray(item.requiredFields)
+                ? item.requiredFields
+                    .map((field) => String(field).trim().toLowerCase())
+                    .filter(Boolean)
+                : [],
+            };
+            state.templates[key] = t;
+            importedCount++;
+          }
+          if (!importedCount)
+            throw new Error(
+              "No valid templates with subject and body found in imported file.",
+            );
+          event(`Imported ${importedCount} template variant(s).`);
+          await persist();
+          return response(res, {
+            ok: true,
+            count: importedCount,
+            templates: state.templates,
+          });
+        }
         if (pathname === "/api/prepare") {
           if (state.automation.enabled)
             throw new Error(
@@ -996,6 +1122,25 @@ const server = http.createServer(async (req, res) => {
           await team.call("suppress", { email, reason });
           state.suppression[email] = reason;
           event(`Suppressed ${email}.`);
+          await persist();
+          return response(res, { ok: true });
+        }
+        if (pathname === "/api/unsuppress") {
+          const email = String(input.email || "")
+            .trim()
+            .toLowerCase();
+          if (!EMAIL.test(email)) throw new Error("Enter one valid email.");
+          delete state.suppression[email];
+          if (teamSnapshot.suppression?.[email])
+            delete teamSnapshot.suppression[email];
+          if (state.settings.team.enabled) {
+            try {
+              await team.call("unsuppress", { email });
+            } catch (err) {
+              console.error("Team unsuppress error:", err.message);
+            }
+          }
+          event(`Removed ${email} from suppression list.`);
           await persist();
           return response(res, { ok: true });
         }
@@ -1176,6 +1321,23 @@ const server = http.createServer(async (req, res) => {
             records,
             events: state.events,
             suppression: state.suppression,
+          },
+          null,
+          2,
+        ),
+      );
+    }
+    if (pathname === "/api/export-templates") {
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Content-Disposition": 'attachment; filename="outreach-templates.json"',
+        "Cache-Control": "no-store",
+      });
+      return res.end(
+        JSON.stringify(
+          {
+            exportedAt: new Date().toISOString(),
+            templates: state.templates,
           },
           null,
           2,

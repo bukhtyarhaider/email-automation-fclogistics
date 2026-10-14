@@ -146,6 +146,36 @@ def patch(path, changes, mapping=None):
             os.unlink(tmp)
 
 
+def delete_leads(path, ids, mapping=None):
+    current = {x["id"]: x for x in read(path, mapping)["leads"]}
+    target_ids = set(ids)
+    by_part = {}
+    for tid in target_ids:
+        lead = current.get(tid)
+        if lead:
+            by_part.setdefault(lead["part"], set()).add(str(lead["row"]))
+    if not by_part:
+        return {"ok": True, "deleted": 0}
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), suffix=".xlsx")
+    try:
+        with os.fdopen(fd, "wb") as out, zipfile.ZipFile(path) as source, zipfile.ZipFile(out, "w") as dest:
+            for info in source.infolist():
+                content = source.read(info.filename)
+                if info.filename in by_part:
+                    xml = content.decode("utf-8")
+                    for row_number in by_part[info.filename]:
+                        pattern = rf'<row\b[^>]*\br="{row_number}"[^>]*/>|<row\b[^>]*\br="{row_number}"[^>]*>.*?</row>'
+                        xml = re.sub(pattern, "", xml, flags=re.S)
+                    content = xml.encode("utf-8")
+                    ET.fromstring(content)
+                dest.writestr(info, content)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    return {"ok": True, "deleted": sum(len(rows) for rows in by_part.values())}
+
+
 if __name__ == "__main__":
     try:
         command, path = sys.argv[1:3]
@@ -156,6 +186,12 @@ if __name__ == "__main__":
             payload = json.load(sys.stdin)
             patch(path, payload if isinstance(payload, list) else payload["changes"], None if isinstance(payload, list) else payload.get("mapping"))
             print(json.dumps({"ok": True}))
+        elif command == "delete":
+            payload = json.load(sys.stdin)
+            ids = payload if isinstance(payload, list) else payload.get("ids", [])
+            mapping = None if isinstance(payload, list) else payload.get("mapping")
+            res = delete_leads(path, ids, mapping)
+            print(json.dumps(res))
         else:
             raise ValueError("Unknown command")
     except Exception as error:

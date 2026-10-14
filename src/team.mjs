@@ -54,6 +54,10 @@ export class TeamLedger {
       );
       return { ok: true };
     }
+    if (action === "unsuppress") {
+      delete s.suppression[email];
+      return { ok: true };
+    }
     if (action === "claim") {
       if (!EMAIL.test(input.accountEmail || "") || !input.workerId)
         throw new Error("Mailbox and worker required.");
