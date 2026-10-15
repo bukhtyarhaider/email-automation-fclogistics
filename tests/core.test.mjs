@@ -24,6 +24,12 @@ test("template personalizes only available fields and includes opt-out", () => {
   assert.match(m.body, /remove/);
   assert.equal(assess(m).length, 0);
 });
+test("assess does not require opt-out instruction but checks promotional claims", () => {
+  const base = { subject: "Dispatch introduction", body: "Hello carrier, we help with dispatch." };
+  assert.deepEqual(assess(base), []);
+  const promotional = { subject: "Exclusive 100% guarantee", body: "Act now for free money." };
+  assert.deepEqual(assess(promotional), ["Review pricing, guarantees, and promotional claims."]);
+});
 test("absent identity and location use truthful fallbacks", () => {
   const m = render(lead({ fields: {} }), templates.dispatch);
   assert.match(m.body, /Hi there/);

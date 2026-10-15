@@ -614,11 +614,30 @@ function renderTemplatesTable() {
 }
 
 
+function insertOptOutInstruction() {
+  const bodyEl = $("body");
+  if (!bodyEl) return;
+  const optOutText = "\n\nIf you’d prefer no further outreach, reply “remove” and I’ll take you off our list.";
+  const val = bodyEl.value;
+  const legalMatch = val.search(/\{\{legalName\}\}/);
+  if (legalMatch !== -1) {
+    bodyEl.value = val.substring(0, legalMatch).trimEnd() + optOutText + "\n\n" + val.substring(legalMatch).trimStart();
+  } else {
+    bodyEl.value = val.trimEnd() + optOutText;
+  }
+  updateTemplateLivePreview();
+  notice("Opt-out instruction added to template.");
+}
+
 function fillTemplate() {
+  const isNew = $("template")?.value === "";
+  const defaultNewBody = `Hi {{firstName}},\n\nI’m {{senderName}} with {{businessName}}. I wanted to see whether {{company}} could use dispatch support for your equipment.\n\nWe help with {{services}}, based on your equipment, preferred lanes, and availability. You decide which loads you accept.\n\nWould a brief overview of how we work be useful?\n\nIf you’d prefer no further outreach, reply “remove” and I’ll take you off our list.\n\n{{legalName}}\n{{address}}`;
+  const defaultNewSubject = "Dispatch support for {{company}}";
+
   const t = state.templates[$("template")?.value] || {
     name: "New template",
-    subject: "",
-    body: "",
+    subject: isNew ? defaultNewSubject : "",
+    body: isNew ? defaultNewBody : "",
     weight: 1,
     enabled: true,
     requiredFields: [],
@@ -668,8 +687,22 @@ function updateTemplateLivePreview() {
   }
 
   previewBox.textContent = `Subject: ${subject}\n\n${body}`;
+
+  const rawBody = $("body")?.value || "";
+  const words = rawBody.split(/\s+/).filter(Boolean).length;
+  const compStatus = $("templateComplianceStatus");
+  if (compStatus) {
+    if (!rawBody.trim()) {
+      compStatus.textContent = "Draft";
+      compStatus.className = "status-pill";
+    } else {
+      compStatus.textContent = `${words} words`;
+      compStatus.className = "status-pill ready";
+    }
+  }
 }
 
+if ($("insertOptOutChip")) $("insertOptOutChip").onclick = insertOptOutInstruction;
 
 if ($("saveTemplate"))
   $("saveTemplate").onclick = () =>
@@ -690,7 +723,11 @@ if ($("saveTemplate"))
       $("template").value = saved.key;
       fillTemplate();
       if (previewId) await preview(previewId);
-      notice("Template variant saved.");
+      if (saved.warnings && saved.warnings.length) {
+        notice(`Template saved with warning: ${saved.warnings.join(" ")}`);
+      } else {
+        notice("Template variant saved.");
+      }
     });
 
 if ($("template"))

@@ -65,7 +65,13 @@
                 </div>
 
                 <div class="form-group">
-                  <label>Insert Personalization Tokens (Click to insert)</label>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label style="margin-bottom: 0;">Insert Personalization Tokens (Click to insert)</label>
+                    <button type="button" id="insertOptOutChip" class="secondary" style="font-size: 11px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Insert compliant opt-out instruction into message body">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                      + Insert Opt-Out Line
+                    </button>
+                  </div>
                   <div class="token-bar">
                     <button type="button" class="token-chip" data-token="{{firstName}}">{{firstName}}</button>
                     <button type="button" class="token-chip" data-token="{{company}}">{{company}}</button>
@@ -94,7 +100,10 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                     Live Template Preview
                   </h2>
-                  <span class="status-pill ready">Simulated Lead</span>
+                  <div style="display: flex; gap: 6px; align-items: center;">
+                    <span id="templateComplianceStatus" class="status-pill ready">✓ Compliant</span>
+                    <span class="status-pill ready">Simulated Lead</span>
+                  </div>
                 </div>
                 <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
                   <strong>Recipient:</strong> John Doe &lt;johndoe@sampletrucking.com&gt; · Sample Trucking LLC, Dallas, TX

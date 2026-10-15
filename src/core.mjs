@@ -237,8 +237,6 @@ export function assess(message) {
     )
   )
     warnings.push("Review pricing, guarantees, and promotional claims.");
-  if (!/remove|unsubscribe|no further outreach/i.test(message.body))
-    warnings.push("Include a clear opt-out instruction.");
   if (message.body.split(/\s+/).length > 180)
     warnings.push("Consider keeping the introduction under 180 words.");
   return warnings;

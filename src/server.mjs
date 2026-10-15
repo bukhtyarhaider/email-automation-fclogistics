@@ -585,7 +585,10 @@ async function runner() {
           : a.templateKey;
         const message = render(lead, template(key), business());
         const warnings = assess(message);
-        if (warnings.length) throw new Error(warnings.join(" "));
+        if (warnings.length) {
+          const tmplName = state.templates[key]?.name || key;
+          throw new Error(`Template "${tmplName}": ${warnings.join(" ")}`);
+        }
         const proof = await prepareTracked(message, c.id);
         prepared = {
           id: lead.id,
@@ -1117,7 +1120,7 @@ const server = http.createServer(async (req, res) => {
           };
           if (!Number.isInteger(t.weight) || t.weight < 1 || t.weight > 100)
             throw new Error("Template weight must be from 1 to 100.");
-          render(
+          const sampleMsg = render(
             activeData().leads[0] || {
               company: "Example Company",
               email: "person@example.com",
@@ -1126,13 +1129,17 @@ const server = http.createServer(async (req, res) => {
             t,
             business(),
           );
+          const warnings = assess(sampleMsg);
           state.templates[key] = t;
-          event(`Saved template ${t.name}.`, {
-            kind: "template",
-            templateKey: key,
-          });
+          event(
+            `Saved template ${t.name}.${warnings.length ? " Compliance alert: " + warnings.join(" ") : ""}`,
+            {
+              kind: "template",
+              templateKey: key,
+            },
+          );
           await persist();
-          return response(res, { key });
+          return response(res, { key, warnings });
         }
         if (pathname === "/api/delete-template") {
           if (prepared) throw new Error("Close the prepared message first.");
@@ -1211,7 +1218,10 @@ const server = http.createServer(async (req, res) => {
             : input.key;
           const message = render(l, template(key), business()),
             warnings = assess(message);
-          if (warnings.length) throw new Error(warnings.join(" "));
+          if (warnings.length) {
+            const tmplName = state.templates[key]?.name || key;
+            throw new Error(`Template "${tmplName}": ${warnings.join(" ")}`);
+          }
           const proof = await prepareTracked(message, l.campaignId);
           prepared = {
             id: l.id,
