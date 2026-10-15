@@ -4,7 +4,7 @@ import { unlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { MailBrowser } from "./browser.mjs";
 import {
   templates,
@@ -788,11 +788,23 @@ const server = http.createServer(async (req, res) => {
           const ids = seeds.map((seed) => {
             const id = randomUUID();
             const subject = `${message.subject.slice(0, 135)} [FC seed ${id}]`;
-            const { record } = createRecord(state.tracking, { to: seed.email, subject }, {
-              id, sender: profile().email, campaignId, seedId: seed.id, testKey: input.testKey,
-            });
-            record.sampleBody = message.body;
-            return record.id;
+            let result;
+            try {
+              result = createRecord(state.tracking, { to: seed.email, subject }, {
+                id, sender: profile().email, campaignId, seedId: seed.id, testKey: input.testKey,
+              }, {
+                openEnabled: process.env.FC_OPEN_TRACKING_ENABLED === "1",
+                consent: process.env.FC_OPEN_TRACKING_CONSENT === "1",
+                publicUrl: process.env.FC_TRACKING_PUBLIC_URL,
+              });
+            } catch {
+              result = createRecord(state.tracking, { to: seed.email, subject }, {
+                id, sender: profile().email, campaignId, seedId: seed.id, testKey: input.testKey,
+              });
+            }
+            result.record.sampleBody = message.body;
+            if (result.pixelUrl) result.record.pixelUrl = result.pixelUrl;
+            return result.record.id;
           });
           const plan = { testKey: input.testKey, signature, ids, createdAt: new Date().toISOString() };
           state.tracking.seedTests[input.testKey] = plan;
@@ -814,8 +826,20 @@ const server = http.createServer(async (req, res) => {
             throw new Error("Wait for the configured mailbox interval and allowance before the next seed send.");
           if (state.settings.team.enabled) throw new Error("Seed sending is local-only. Use a dedicated mailbox without team coordination for seed tests.");
           record.preparationStartedAt = new Date().toISOString();
+          if (!record.pixelUrl && process.env.FC_OPEN_TRACKING_ENABLED === "1" && process.env.FC_TRACKING_PUBLIC_URL) {
+            try {
+              const base = new URL(process.env.FC_TRACKING_PUBLIC_URL);
+              if (base.protocol === "https:") {
+                const token = randomBytes(32).toString("base64url");
+                record.openTokenHash = hash(token);
+                state.tracking.openIndex ||= {};
+                state.tracking.openIndex[record.openTokenHash] = record.id;
+                record.pixelUrl = `${base.origin}${base.pathname.replace(/\/$/, "")}/o/${token}.gif`;
+              }
+            } catch {}
+          }
           await persist(); // Prevent re-submission even across crashes during composition.
-          const message = { to: record.recipient, subject: record.subject, body: record.sampleBody, trackingId: record.id };
+          const message = { to: record.recipient, subject: record.subject, body: record.sampleBody, trackingId: record.id, pixelUrl: record.pixelUrl };
           try {
             await mail.prepare(message);
             await deliver({ state: { history: state.seedHistory, workbook: { file: "seed-test" } },

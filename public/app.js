@@ -2226,7 +2226,27 @@ async function loadTracking() {
         ? `<div style="display:inline-flex;flex-direction:column;gap:2px;"><span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:700;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:12px;">👁️ Seen${r.opens?.length > 1 ? ` (${r.opens.length}x)` : ''}</span><small style="color:#059669;font-weight:500;">Opened ${new Date(r.firstOpenAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</small></div>`
         : `<span class="status-pill" style="background:#f1f5f9;color:#64748b;font-weight:500;font-size:11.5px;">✉️ Unopened</span>`;
 
-      return `<tr><td><strong>${escape(r.recipient)}</strong><small>${escape(r.subject)}</small></td><td>${sendStatusBadge}<small>${escape(new Date(r.attemptedAt || r.createdAt).toLocaleString())}</small></td><td>${bounceBadge}<small>${escape(r.bounceReason || '')}</small></td><td>${seenBadge}<small>${escape(r.placement?.status || (r.seedId ? 'Awaiting test' : ''))}</small></td><td><button class="secondary" data-track="${i}">Details</button>${r.seedId && r.sendStatus === 'pending' && !r.preparationStartedAt ? `<button data-seed-send="${escape(r.id)}">Send seed</button>` : ''}</td></tr>`;
+      let placementStatusHtml = '';
+      if (r.seedId) {
+        if (r.placement?.status === 'inbox') {
+          placementStatusHtml = `<div style="margin-top:3px;"><span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:700;display:inline-flex;align-items:center;gap:3px;padding:2px 8px;font-size:11px;">📥 Inbox</span></div>`;
+        } else if (r.placement?.status === 'spam') {
+          placementStatusHtml = `<div style="margin-top:3px;"><span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:700;display:inline-flex;align-items:center;gap:3px;padding:2px 8px;font-size:11px;">🚫 Spam</span></div>`;
+        } else if (r.placement?.status && r.placement?.status !== 'awaiting') {
+          placementStatusHtml = `<div style="margin-top:3px;"><span class="status-pill" style="color:var(--text-muted);font-size:11px;">📁 ${escape(r.placement.status)}</span></div>`;
+        } else if (r.attemptedAt) {
+          placementStatusHtml = `
+            <div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;">
+              <button type="button" class="quick-place-btn inbox" data-seed-place="${escape(r.id)}" data-place-status="inbox" title="Mark as confirmed in Inbox">📥 Inbox</button>
+              <button type="button" class="quick-place-btn spam" data-seed-place="${escape(r.id)}" data-place-status="spam" title="Mark as landed in Spam">🚫 Spam</button>
+            </div>
+          `;
+        } else {
+          placementStatusHtml = `<small style="color:var(--text-muted);">Awaiting test</small>`;
+        }
+      }
+
+      return `<tr><td><strong>${escape(r.recipient)}</strong><small>${escape(r.subject)}</small></td><td>${sendStatusBadge}<small>${escape(new Date(r.attemptedAt || r.createdAt).toLocaleString())}</small></td><td>${bounceBadge}<small>${escape(r.bounceReason || '')}</small></td><td>${seenBadge}${placementStatusHtml}</td><td><button class="secondary" data-track="${i}">Details</button>${r.seedId && r.sendStatus === 'pending' && !r.preparationStartedAt ? `<button data-seed-send="${escape(r.id)}">Send seed</button>` : ''}</td></tr>`;
     }).join('') : '<tr><td colspan="5">No tracking records match your filters.</td></tr>';
     $('trackingPageInfo').textContent = data.total ? `${trackingOffset + 1}–${Math.min(trackingOffset + 50, data.total)} of ${data.total}` : 'No messages recorded';
     $('trackingPrev').disabled = trackingOffset === 0;
@@ -2234,14 +2254,131 @@ async function loadTracking() {
     $('trackingConfig').textContent = `IMAP monitor: ${data.monitorEnabled ? 'enabled' : 'disabled (set FC_MONITOR_ENABLED=1)'}. Open tracking: ${data.opensEnabled ? 'enabled by configuration' : 'disabled'}. Keep the app running for monitoring.`;
     $('trackingWorker').textContent = Object.keys(data.worker).length ? JSON.stringify(data.worker, null, 2) : 'No mailbox checks recorded.';
     $('trackingReview').textContent = data.review.length ? JSON.stringify(data.review, null, 2) : 'No unmatched notifications.';
-    $('trackingSeeds').textContent = data.seeds.length ? data.seeds.map((s) => `${s.id}: ${s.email} (${s.automated ? 'IMAP configured; see monitor status' : 'manual inspection'})`).join(' · ') : 'No seed recipients configured. See TRACKING.md.';
-    const sample = $('seedSample'), selectedSample = sample.value;
-    sample.innerHTML = rows.map((r) => `<option value="${escape(r.id)}">${escape(r.company)} · ${escape(r.email)}</option>`).join('');
-    if (rows.some((r) => r.id === selectedSample)) sample.value = selectedSample;
-    else if (rows.some((r) => r.id === previewId)) sample.value = previewId;
+    if ($('trackingSeeds')) {
+      if (data.seeds && data.seeds.length) {
+        $('trackingSeeds').innerHTML = `
+          <div class="seed-targets-deck">
+            ${data.seeds.map((s) => `
+              <div class="seed-target-tile">
+                <div class="seed-target-badge-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                </div>
+                <div>
+                  <div class="seed-target-address"><strong>${escape(s.email)}</strong> <span class="seed-id-tag">${escape(s.id)}</span></div>
+                  <div class="seed-target-sub"><span class="status-dot-pulse"></span> ${s.automated ? 'Automated IMAP Active' : 'Manual Placement Inspection'}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        if ($('seedCountBadge')) {
+          $('seedCountBadge').textContent = `📬 ${data.seeds.length} Active Test Mailbox${data.seeds.length > 1 ? 'es' : ''}`;
+        }
+      } else {
+        $('trackingSeeds').innerHTML = `<div style="font-size: 12px; color: var(--text-muted); padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: 6px;">⚠️ No seed recipients configured. Configure <code>FC_SEEDS</code> in <code>.env</code> to enable controlled inbox testing.</div>`;
+      }
+    }
+    if ($('seedTestKey') && !$('seedTestKey').value) $('seedTestKey').value = generateSeedKey();
+    loadSeedTemplates();
+    await loadSeedSamples($('seedSampleSearch')?.value || '');
     if (!$('healthDomain').value) $('healthDomain').value = state.profiles.find((p) => p.id === state.activeProfile)?.email.split('@')[1] || '';
   } finally { trackingBusy = false; }
 }
+
+function generateSeedKey() {
+  const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
+  const rand = Math.floor(100 + Math.random() * 900);
+  return `seed-${dateStr}-${rand}`;
+}
+
+async function loadSeedSamples(query = '') {
+  const sampleEl = $('seedSample');
+  if (!sampleEl) return;
+  const previous = sampleEl.value;
+  try {
+    const params = new URLSearchParams({ q: query, filter: 'ready', offset: '0' });
+    let result = await api(`/api/leads?${params}`);
+    let leads = result.leads || [];
+    if (!leads.length && !query) {
+      const allResult = await api('/api/leads?offset=0');
+      leads = allResult.leads || [];
+    }
+    if (leads.length) {
+      if ($('sampleCountHint')) $('sampleCountHint').textContent = `${leads.length} lead${leads.length > 1 ? 's' : ''}`;
+      sampleEl.innerHTML = leads.map((l) => {
+        const desc = [l.company, l.fields?.['owner / principal'], l.email].filter(Boolean).join(' · ');
+        return `<option value="${escape(l.id)}">${escape(desc)}</option>`;
+      }).join('');
+      if (leads.some((l) => l.id === previous)) {
+        sampleEl.value = previous;
+      } else if (leads.some((l) => l.id === previewId)) {
+        sampleEl.value = previewId;
+      } else if (leads.length > 0) {
+        sampleEl.selectedIndex = 0;
+      }
+    } else {
+      if ($('sampleCountHint')) $('sampleCountHint').textContent = '0 leads';
+      sampleEl.innerHTML = '<option value="">No campaign leads match</option>';
+    }
+    updateSeedPreview();
+  } catch (err) {
+    console.error('Failed to load dynamic seed samples:', err);
+  }
+}
+
+function loadSeedTemplates() {
+  const tmplEl = $('seedTemplate');
+  if (!tmplEl || !state?.templates) return;
+  const activeKey = $('template')?.value || Object.keys(state.templates)[0];
+  const keys = Object.keys(state.templates);
+  tmplEl.innerHTML = keys.map((k) => `<option value="${escape(k)}">${escape(k)}</option>`).join('');
+  if (keys.includes(activeKey)) tmplEl.value = activeKey;
+}
+
+async function updateSeedPreview() {
+  const leadId = $('seedSample')?.value;
+  const templateKey = $('seedTemplate')?.value || $('template')?.value;
+  const subjEl = $('seedPreviewSubject');
+  const bodyEl = $('seedPreviewBody');
+  const metaEl = $('seedPreviewMeta');
+  const warnEl = $('seedPreviewWarnings');
+
+  if (!leadId || !templateKey) {
+    if (subjEl) subjEl.textContent = 'Select a lead to preview';
+    if (bodyEl) bodyEl.textContent = 'Click any lead on the left under "Content Sample Lead" to render dynamic template variables (company name, owner, city).';
+    if (metaEl) metaEl.textContent = 'Awaiting selection';
+    if (warnEl) warnEl.hidden = true;
+    return;
+  }
+
+  try {
+    const preview = await api(`/api/preview?id=${encodeURIComponent(leadId)}&key=${encodeURIComponent(templateKey)}`);
+    if (!preview || !preview.message) {
+      if (subjEl) subjEl.textContent = '(Template could not render preview)';
+      if (bodyEl) bodyEl.textContent = 'Unable to evaluate template tokens for this lead.';
+      if (metaEl) metaEl.textContent = 'Render error';
+      if (warnEl) warnEl.hidden = true;
+      return;
+    }
+
+    if (subjEl) subjEl.textContent = `${preview.message.subject} [FC seed <id>]`;
+    if (bodyEl) bodyEl.textContent = preview.message.body;
+    if (metaEl) metaEl.textContent = `${preview.lead.company} · ${preview.lead.email || 'sample lead'}`;
+
+    if (warnEl) {
+      if (preview.warnings && preview.warnings.length) {
+        warnEl.innerHTML = `<strong>Note:</strong> ${preview.warnings.map(escape).join(' ')}`;
+        warnEl.hidden = false;
+      } else {
+        warnEl.hidden = true;
+      }
+    }
+  } catch (err) {
+    if (subjEl) subjEl.textContent = 'Unable to load preview';
+    if (bodyEl) bodyEl.textContent = err.message || 'Error communicating with local preview endpoint.';
+  }
+}
+
 $('trackingRefresh').onclick = (e) => action(e.currentTarget, loadTracking);
 for (const id of ['trackingSearch', 'trackingCampaign', 'trackingStatus', 'trackingFrom', 'trackingUntil']) {
   $(id).onchange = () => { trackingOffset = 0; loadTracking().catch((e) => notice(e.message)); };
@@ -2531,12 +2668,25 @@ function renderTrackingDetail(r) {
           </div>
           <div class="lead-detail-item">
             <span class="lead-detail-label">Folder Placement</span>
-            <span class="lead-detail-value"><strong>${escape(r.seedPlacement?.status || 'awaiting')}</strong></span>
+            <span class="lead-detail-value">
+              <strong style="color: ${r.placement?.status === 'inbox' ? '#10b981' : r.placement?.status === 'spam' ? '#ef4444' : '#fff'};">
+                ${r.placement?.status === 'inbox' ? '📥 Inbox (Verified)' : r.placement?.status === 'spam' ? '🚫 Spam / Junk Folder' : escape(r.placement?.status || 'Awaiting verification')}
+              </strong>
+            </span>
           </div>
           <div class="lead-detail-item full-width">
-            <span class="lead-detail-label">Verification Evidence</span>
-            <span class="lead-detail-value">${escape(r.seedPlacement?.evidence || 'No evidence note provided')}</span>
+            <span class="lead-detail-label">Verification Evidence / Note</span>
+            <span class="lead-detail-value">${escape(r.placement?.evidence || (r.attemptedAt ? 'Not yet verified. Select folder below:' : 'Awaiting dispatch'))}</span>
           </div>
+          ${r.attemptedAt ? `
+          <div class="lead-detail-item full-width" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-subtle);">
+            <span class="lead-detail-label">Record Placement Result</span>
+            <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+              <button type="button" class="btn-placement-inbox" data-drawer-place="${escape(r.id)}" data-drawer-status="inbox">📥 Mark as Inbox</button>
+              <button type="button" class="btn-placement-spam" data-drawer-place="${escape(r.id)}" data-drawer-status="spam">🚫 Mark as Spam</button>
+              <button type="button" class="secondary" data-drawer-place="${escape(r.id)}" data-drawer-status="other" style="font-size:11.5px;padding:6px 12px;">📁 Other Folder</button>
+            </div>
+          </div>` : ''}
         </div>
       </div>` : ''}
     </div>
@@ -2581,6 +2731,22 @@ function renderTrackingDetail(r) {
     };
   });
 
+  // Wire drawer placement buttons
+  panel.querySelectorAll('[data-drawer-place]').forEach((btn) => {
+    btn.onclick = () => action(btn, async () => {
+      const trackingId = btn.dataset.drawerPlace;
+      const status = btn.dataset.drawerStatus;
+      await api('/api/tracking/manual-placement', {
+        trackingId,
+        status,
+        evidence: `Manual verification: marked ${status} in Tracking Details Drawer`
+      });
+      await loadTracking();
+      const updated = trackingRecords.find((rec) => rec.id === trackingId);
+      if (updated) renderTrackingDetail(updated);
+    });
+  });
+
   // Wire copy JSON button
   const copyJsonBtn = panel.querySelector('[data-copy-json]');
   if (copyJsonBtn) {
@@ -2600,6 +2766,16 @@ $('trackingRows').onclick = (e) => {
     await api('/api/tracking/seed-send', { trackingId: button.dataset.seedSend });
     await loadTracking();
   });
+  if (button.dataset.seedPlace) return action(button, async () => {
+    const trackingId = button.dataset.seedPlace;
+    const status = button.dataset.placeStatus;
+    await api('/api/tracking/manual-placement', {
+      trackingId,
+      status,
+      evidence: `Manual verification: marked ${status} directly from Tracking dashboard`
+    });
+    await loadTracking();
+  });
   const r = trackingRecords[Number(button.dataset.track)];
   if (!r) return;
   openTrackingDrawer(r);
@@ -2616,11 +2792,31 @@ $('placementForm').onsubmit = (e) => {
     closeTrackingDrawer();
   });
 };
+if ($('seedGenKeyBtn')) {
+  $('seedGenKeyBtn').onclick = () => { $('seedTestKey').value = generateSeedKey(); };
+}
+if ($('seedSample')) {
+  $('seedSample').onchange = () => updateSeedPreview();
+}
+if ($('seedTemplate')) {
+  $('seedTemplate').onchange = () => updateSeedPreview();
+}
+if ($('seedSampleSearch')) {
+  let searchTimer = null;
+  $('seedSampleSearch').oninput = () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      loadSeedSamples($('seedSampleSearch').value);
+    }, 250);
+  };
+}
 $('seedPlanForm').onsubmit = (e) => {
   e.preventDefault();
   action(e.submitter, async () => {
-    const result = await api('/api/tracking/seed-plan', { testKey: $('seedTestKey').value, leadId: $('seedSample').value, key: $('template').value });
-    $('seedPlanResult').textContent = `Plan ${result.testKey}: ${result.ids.length} dedicated test recipients. Use Send seed in the table for each message; the same test key reuses this plan.`;
+    const templateKey = $('seedTemplate')?.value || $('template')?.value;
+    const result = await api('/api/tracking/seed-plan', { testKey: $('seedTestKey').value, leadId: $('seedSample').value, key: templateKey });
+    $('seedPlanResult').innerHTML = `<div class="seed-plan-success-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> <div><strong>Plan ${escape(result.testKey)}:</strong> ${result.ids.length} dedicated test recipient(s) reserved. Use <strong>"Send seed"</strong> in the tracking table above to dispatch; the same test key reuses this plan.</div></div>`;
+    $('seedTestKey').value = generateSeedKey();
     trackingOffset = 0;
     await loadTracking();
   });

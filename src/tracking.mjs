@@ -89,6 +89,9 @@ export function recordOpen(t, token, enabled = true, at = now()) {
   r.firstOpenAt ||= at;
   r.lastOpenAt = at;
   addEvent(r, "open_detected", { signal: "Remote image request; human reading unverified" }, at);
+  if (r.seedId && (!r.placement || r.placement.status === "awaiting")) {
+    recordPlacement(r, "inbox", "Remote open signal received from seed recipient", "open_signal");
+  }
   return true;
 }
 export function correlateBounce(t, dsn, sender) {
