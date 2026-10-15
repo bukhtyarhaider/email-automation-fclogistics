@@ -3121,6 +3121,13 @@ window.addEventListener("hashchange", () => {
   navigate(location.hash.replace("#", ""));
 });
 
+// Ensure mouse click removes focus ring
+document.querySelectorAll(".nav-link").forEach((link) => {
+  link.addEventListener("click", () => {
+    link.blur();
+  });
+});
+
 // Initial boot
 navigate(location.hash.replace("#", ""));
 await refresh();

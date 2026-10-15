@@ -38,7 +38,19 @@ html, body {
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* Accessible focus styling */
+/* Global Links & Focus Resets */
+a {
+  color: inherit;
+  text-decoration: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus {
+  outline: none;
+}
+
+/* Accessible keyboard-only focus styling */
 :focus-visible {
   outline: 2px solid var(--accent-red);
   outline-offset: 2px;

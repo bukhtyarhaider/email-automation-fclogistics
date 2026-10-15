@@ -30,3 +30,10 @@ function navigate(viewName) {
 window.addEventListener("hashchange", () => {
   navigate(location.hash.replace("#", ""));
 });
+
+// Ensure mouse click removes focus ring
+document.querySelectorAll(".nav-link").forEach((link) => {
+  link.addEventListener("click", () => {
+    link.blur();
+  });
+});
