@@ -2282,6 +2282,7 @@ async function loadTracking() {
     loadSeedTemplates();
     await loadSeedSamples($('seedSampleSearch')?.value || '');
     if (!$('healthDomain').value) $('healthDomain').value = state.profiles.find((p) => p.id === state.activeProfile)?.email.split('@')[1] || '';
+    if ($('healthSelectors') && !$('healthSelectors').value) $('healthSelectors').value = 'privateemail';
   } finally { trackingBusy = false; }
 }
 
@@ -2821,12 +2822,213 @@ $('seedPlanForm').onsubmit = (e) => {
     await loadTracking();
   });
 };
+function setDomainPreset(selectors, btn) {
+  if ($('healthSelectors')) $('healthSelectors').value = selectors;
+  document.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+$('presetPrivateEmail')?.addEventListener('click', () => {
+  setDomainPreset('privateemail', $('presetPrivateEmail'));
+});
+$('presetGoogle')?.addEventListener('click', () => {
+  setDomainPreset('google', $('presetGoogle'));
+});
+$('presetM365')?.addEventListener('click', () => {
+  setDomainPreset('selector1, selector2', $('presetM365'));
+});
+
+function renderDomainReport(result) {
+  const reportEl = $('domainHealthReport');
+  if (!reportEl) return;
+  reportEl.style.display = 'block';
+  if ($('domainRawDetails')) $('domainRawDetails').hidden = false;
+
+  const domain = escape(result.domain || '');
+  const spfFound = result.spf?.state === 'found' && (result.spf.records || []).length === 1;
+  const dkimFound = Array.isArray(result.dkim) && result.dkim.some(d => d.state === 'found' && (d.records || []).length > 0);
+  const dmarcFound = result.dmarc?.state === 'found' && (result.dmarc.records || []).length >= 1;
+
+  let passedChecks = 0;
+  if (spfFound) passedChecks++;
+  if (dkimFound) passedChecks++;
+  if (dmarcFound) passedChecks++;
+
+  let bannerClass = 'good';
+  let bannerTitle = 'All Authentication Records Active';
+  let bannerDesc = `Domain <strong>${domain}</strong> meets all modern deliverability standards (SPF, DKIM, and DMARC aligned). Outreach emails will reach primary inboxes.`;
+
+  if (passedChecks === 2) {
+    bannerClass = 'warn';
+    bannerTitle = '2 of 3 Checks Passing — DMARC Action Required';
+    bannerDesc = `SPF and DKIM are validated, but <strong>DMARC is missing</strong>. Google and Yahoo spam filters heavily deprioritize domains without published DMARC policies.`;
+  } else if (passedChecks < 2) {
+    bannerClass = 'bad';
+    bannerTitle = `${passedChecks} of 3 Checks Passing — Deliverability Risk`;
+    bannerDesc = `Key email authentication records are missing or unverified. Emails sent from <strong>${domain}</strong> have high risk of landing in spam or being rejected.`;
+  }
+
+  if ($('domainScoreBadge')) {
+    if (passedChecks === 3) {
+      $('domainScoreBadge').innerHTML = `<span class="status-pill" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 600; padding: 4px 10px; font-size: 11.5px;">✅ 100% Authenticated (3/3)</span>`;
+    } else if (passedChecks === 2) {
+      $('domainScoreBadge').innerHTML = `<span class="status-pill" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); font-weight: 600; padding: 4px 10px; font-size: 11.5px;">⚠️ 67% Healthy (DMARC Missing)</span>`;
+    } else {
+      $('domainScoreBadge').innerHTML = `<span class="status-pill" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 600; padding: 4px 10px; font-size: 11.5px;">❌ ${passedChecks}/3 Checks Passing</span>`;
+    }
+  }
+
+  const activeProfileEmail = state.profiles.find((p) => p.id === state.activeProfile)?.email || `markanthony@${result.domain || 'fclogistics.us'}`;
+  const recommendedDmarcVal = `v=DMARC1; p=none; sp=none; rua=mailto:${activeProfileEmail}`;
+
+  const spfCard = `
+    <div class="domain-health-card ${spfFound ? 'status-pass' : 'status-fail'}">
+      <div>
+        <div class="domain-card-head">
+          <div class="domain-card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${spfFound ? '#10b981' : '#ef4444'}" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle>${spfFound ? '<polyline points="16 9 10 15 7 12"></polyline>' : '<line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>'}</svg>
+            SPF Record
+          </div>
+          <span class="status-pill" style="background: ${spfFound ? 'rgba(16, 185, 129, 0.12); color: #34d399;' : 'rgba(239, 68, 68, 0.12); color: #f87171;'} font-weight: 700; font-size: 11px;">
+            ${spfFound ? 'PASS' : 'FAIL'}
+          </span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin: 6px 0 10px 0;">Specifies mail servers authorized to send on behalf of <code>${domain}</code>.</p>
+        <div class="domain-record-box">
+          ${(result.spf?.records && result.spf.records.length > 0) ? escape(result.spf.records.join('\n')) : '<span style="color: #ef4444;">No valid SPF TXT record detected.</span>'}
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: ${spfFound ? '#34d399' : '#f87171'}; display: flex; align-items: center; gap: 6px;">
+        ${spfFound ? '✓ PrivateEmail mail server authorized' : '⚠ Outreach may bounce or fail authentication'}
+      </div>
+    </div>
+  `;
+
+  const dkimResults = result.dkim || [];
+  const dkimCard = `
+    <div class="domain-health-card ${dkimFound ? 'status-pass' : 'status-fail'}">
+      <div>
+        <div class="domain-card-head">
+          <div class="domain-card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${dkimFound ? '#10b981' : '#ef4444'}" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+            DKIM Signatures
+          </div>
+          <span class="status-pill" style="background: ${dkimFound ? 'rgba(16, 185, 129, 0.12); color: #34d399;' : 'rgba(239, 68, 68, 0.12); color: #f87171;'} font-weight: 700; font-size: 11px;">
+            ${dkimFound ? 'PASS' : 'FAIL'}
+          </span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin: 6px 0 10px 0;">Cryptographic signature verifying mail has not been tampered in transit.</p>
+        <div class="domain-record-box">
+          ${dkimResults.length > 0 ? dkimResults.map(d => `<strong>Selector:</strong> <code>${escape(d.selector)}</code> — ${d.state === 'found' ? '<span style="color: #34d399;">Valid RSA Key</span><br>' + escape(d.records.join('\n')) : '<span style="color: #f87171;">Key missing</span>'}`).join('<hr style="border:0;border-top:1px solid #1f2533;margin:6px 0;">') : '<span style="color: #94a3b8;">No DKIM selectors queried.</span>'}
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: ${dkimFound ? '#34d399' : '#f87171'}; display: flex; align-items: center; gap: 6px;">
+        ${dkimFound ? '✓ Valid DKIM key found on selector: ' + escape(dkimResults.filter(d=>d.state==='found').map(d=>d.selector).join(', ')) : '⚠ No valid DKIM keys located'}
+      </div>
+    </div>
+  `;
+
+  const dmarcCard = `
+    <div class="domain-health-card ${dmarcFound ? 'status-pass' : 'status-fail'}">
+      <div>
+        <div class="domain-card-head">
+          <div class="domain-card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${dmarcFound ? '#10b981' : '#f59e0b'}" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            DMARC Policy
+          </div>
+          <span class="status-pill" style="background: ${dmarcFound ? 'rgba(16, 185, 129, 0.12); color: #34d399;' : 'rgba(245, 158, 11, 0.15); color: #fbbf24;'} font-weight: 700; font-size: 11px;">
+            ${dmarcFound ? 'PASS' : 'MISSING'}
+          </span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin: 6px 0 10px 0;">Instructs Gmail & Outlook how to handle messages failing SPF/DKIM.</p>
+        <div class="domain-record-box">
+          ${(result.dmarc?.records && result.dmarc.records.length > 0) ? escape(result.dmarc.records.join('\n')) : '<span style="color: #fbbf24;">No record at <code>_dmarc.' + domain + '</code>.</span>'}
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: ${dmarcFound ? '#34d399' : '#fbbf24'}; display: flex; align-items: center; gap: 6px;">
+        ${dmarcFound ? '✓ DMARC policy active' : '⚠ Required by 2024+ Gmail & Yahoo sender rules'}
+      </div>
+    </div>
+  `;
+
+  let dmarcGuide = '';
+  if (!dmarcFound) {
+    dmarcGuide = `
+      <div class="dmarc-alert-box">
+        <div style="font-size: 24px; line-height: 1;">🛡️</div>
+        <div style="flex: 1;">
+          <div style="font-size: 13.5px; font-weight: 700; color: #fde68a;">
+            Action Required: Add Recommended DMARC TXT Record to Namecheap DNS
+          </div>
+          <p style="font-size: 12.5px; color: #e2e8f0; margin: 6px 0 10px 0; line-height: 1.5;">
+            Without DMARC, Gmail and Yahoo mark outreach emails as unauthenticated or throttle delivery to Spam. Add this single TXT record in your <strong>Namecheap Advanced DNS</strong> management console:
+          </p>
+          <div style="background: #0f1219; border: 1px solid #283044; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+            <table class="dmarc-rec-table">
+              <tr><td>Type:</td><td><strong style="color: #38bdf8;">TXT Record</strong></td></tr>
+              <tr><td>Host:</td><td><code>_dmarc</code></td></tr>
+              <tr><td>Value / Target:</td><td><code id="dmarcRecordText" style="color: #a7f3d0; word-break: break-all;">${escape(recommendedDmarcVal)}</code></td></tr>
+              <tr><td>TTL:</td><td><code>Automatic</code> (or <code>30 min</code>)</td></tr>
+            </table>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="copy-btn-action" id="copyDmarcBtn" style="padding: 7px 14px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; cursor: pointer;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copy DMARC TXT Record Value
+            </button>
+            <span style="font-size: 11.5px; color: var(--text-muted);">
+              Policy <code>p=none</code> is safe monitoring mode (no legitimate mail will ever be dropped).
+            </span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  reportEl.innerHTML = `
+    <div class="domain-score-banner ${bannerClass}">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: ${passedChecks === 3 ? 'rgba(16, 185, 129, 0.2)' : passedChecks === 2 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; font-size: 20px;">
+          ${passedChecks === 3 ? '🛡️' : passedChecks === 2 ? '⚠️' : '🚨'}
+        </div>
+        <div>
+          <div style="font-size: 15px; font-weight: 700; color: #fff;">${bannerTitle}</div>
+          <div style="font-size: 12.5px; color: #cbd5e1; margin-top: 2px;">${bannerDesc}</div>
+        </div>
+      </div>
+      <div style="font-size: 12px; color: var(--text-muted); text-align: right;">
+        Audited at: <code>${new Date(result.checkedAt).toLocaleTimeString()}</code>
+      </div>
+    </div>
+    <div class="domain-cards-grid">
+      ${spfCard}
+      ${dkimCard}
+      ${dmarcCard}
+    </div>
+    ${dmarcGuide}
+  `;
+
+  const copyBtn = $('copyDmarcBtn');
+  if (copyBtn) {
+    copyBtn.onclick = () => {
+      navigator.clipboard?.writeText(recommendedDmarcVal).then(() => {
+        notice('Copied recommended DMARC record to clipboard!');
+        copyBtn.textContent = '✓ Copied!';
+        setTimeout(() => {
+          copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy DMARC TXT Record Value`;
+        }, 2000);
+      });
+    };
+  }
+}
+
 $('domainForm').onsubmit = (e) => {
   e.preventDefault();
   $('domainResult').textContent = 'Checking public DNS records…';
   action(e.submitter, async () => {
     const result = await api('/api/tracking/domain?' + new URLSearchParams({ domain: $('healthDomain').value, selectors: $('healthSelectors').value }));
     $('domainResult').textContent = JSON.stringify(result, null, 2);
+    renderDomainReport(result);
   });
 };
 setInterval(() => {

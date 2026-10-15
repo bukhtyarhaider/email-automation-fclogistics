@@ -1413,14 +1413,61 @@
                 </div>
               </div>
             </div>
-            <div class="panel">
-              <div class="panel-head"><h2 class="panel-title">Domain authentication checks</h2></div>
-              <form id="domainForm" class="tracking-filters">
-                <label>Sending domain<input id="healthDomain" required placeholder="example.com" /></label>
-                <label>DKIM selectors (comma separated)<input id="healthSelectors" placeholder="selector-from-provider" /></label>
-                <button type="submit">Check DNS records</button>
+            <!-- Domain Health & DNS Authentication Inspector -->
+            <div class="panel domain-health-panel">
+              <div class="panel-head" style="align-items: flex-start; flex-wrap: wrap; gap: 14px;">
+                <div style="flex: 1; min-width: 280px;">
+                  <span class="page-eyebrow" style="font-size: 10px; color: #a78bfa;">SENDER REPUTATION & AUTHENTICATION</span>
+                  <h2 class="panel-title" style="margin-top: 3px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    Domain Health & DNS Authentication Inspector
+                  </h2>
+                  <p style="font-size: 12.5px; color: var(--text-secondary); margin: 4px 0 0 0;">
+                    Verify SPF, DKIM, and DMARC alignment required by Gmail, Yahoo, and Outlook to ensure cold outreach bypasses spam filters.
+                  </p>
+                </div>
+                <div id="domainScoreBadge">
+                  <span class="status-pill" style="background: rgba(167, 139, 250, 0.15); color: #c4b5fd; border: 1px solid rgba(167, 139, 250, 0.3); font-weight: 600; padding: 4px 10px; font-size: 11.5px;">
+                    🛡️ Authentication Auditor
+                  </span>
+                </div>
+              </div>
+
+              <!-- Quick Provider Preset Pills -->
+              <div class="domain-preset-bar" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+                <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Provider Presets:</span>
+                <button type="button" class="preset-pill active" id="presetPrivateEmail" title="Autofill for Namecheap PrivateEmail">Namecheap PrivateEmail</button>
+                <button type="button" class="preset-pill" id="presetGoogle" title="Autofill for Google Workspace">Google Workspace</button>
+                <button type="button" class="preset-pill" id="presetM365" title="Autofill for Microsoft 365">Microsoft 365</button>
+              </div>
+
+              <form id="domainForm" class="domain-check-form">
+                <div class="form-grid-row" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                  <div style="flex: 1 1 200px;">
+                    <label for="healthDomain" style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Sending Domain</label>
+                    <input id="healthDomain" required placeholder="fclogistics.us" style="width: 100%;" />
+                  </div>
+                  <div style="flex: 1 1 240px;">
+                    <label for="healthSelectors" style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">DKIM Selectors (comma-separated)</label>
+                    <input id="healthSelectors" placeholder="privateemail, default" style="width: 100%;" />
+                  </div>
+                  <div>
+                    <button type="submit" id="domainSubmitBtn" class="primary-btn" style="padding: 10px 18px; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px;">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                      Inspect DNS Records
+                    </button>
+                  </div>
+                </div>
               </form>
-              <pre id="domainResult" class="tracking-output" aria-live="polite"></pre>
+
+              <!-- Dynamic Visual Report Container -->
+              <div id="domainHealthReport" style="margin-top: 20px; display: none;"></div>
+
+              <!-- Raw fallback / collapsible JSON -->
+              <details id="domainRawDetails" style="margin-top: 16px;" hidden>
+                <summary style="font-size: 12px; color: var(--text-muted); cursor: pointer; padding: 4px 0;">View raw DNS response JSON</summary>
+                <pre id="domainResult" class="tracking-output" aria-live="polite" style="margin-top: 8px;"></pre>
+              </details>
             </div>
           </section>
 

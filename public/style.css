@@ -3010,6 +3010,171 @@ button[data-seed-send]:hover {
   color: #fff;
 }
 
+/* ======================================================== */
+/* DOMAIN HEALTH & DNS AUTHENTICATION INSPECTOR              */
+/* ======================================================== */
+.domain-health-panel {
+  background: linear-gradient(180deg, #181628 0%, #11101c 100%) !important;
+  border: 1px solid rgba(167, 139, 250, 0.25) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+  border-radius: 14px !important;
+  padding: 24px !important;
+  margin-bottom: 28px !important;
+}
+
+.preset-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--bg-surface-elevated, #1a1e27);
+  border: 1px solid var(--border-medium, #2e364a);
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.preset-pill:hover,
+.preset-pill.active {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: #a78bfa;
+  color: #c4b5fd;
+}
+
+.domain-score-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.domain-score-banner.good {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.08) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.domain-score-banner.warn {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.08) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.domain-score-banner.bad {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.08) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.domain-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.domain-health-card {
+  background: var(--bg-surface-elevated, #141720);
+  border: 1px solid var(--border-subtle, #232838);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.domain-health-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-medium, #2e364a);
+}
+.domain-health-card.status-pass {
+  border-top: 3px solid #10b981;
+}
+.domain-health-card.status-warn {
+  border-top: 3px solid #f59e0b;
+}
+.domain-health-card.status-fail {
+  border-top: 3px solid #ef4444;
+}
+
+.domain-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.domain-card-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.domain-record-box {
+  background: #090b10;
+  border: 1px solid #1f2533;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #cbd5e1;
+  word-break: break-all;
+  line-height: 1.5;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.dmarc-alert-box {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-top: 18px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.dmarc-rec-table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+}
+.dmarc-rec-table td {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.dmarc-rec-table td:first-child {
+  color: #94a3b8;
+  width: 110px;
+  font-weight: 600;
+}
+.dmarc-rec-table td:last-child {
+  font-family: var(--font-mono);
+  color: #f1f5f9;
+}
+
+.copy-btn-action {
+  background: #1e2433;
+  border: 1px solid #333d54;
+  color: #93c5fd;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.copy-btn-action:hover {
+  background: #252e42;
+  border-color: #60a5fa;
+  color: #fff;
+}
+
 /* Tracking Drawer overrides & enhancements matching Lead Details */
 #trackingDrawer.drawer-backdrop {
   pointer-events: none;
