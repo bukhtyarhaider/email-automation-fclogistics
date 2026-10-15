@@ -1,66 +1,360 @@
 let trackingOffset = 0, trackingRecords = [], trackingBusy = false;
-const trackingLabels = { recipients: "Recipients", attempts: "Attempts", webmail_sent: "Webmail confirmed", send_failed: "Send failed", hard_bounced: "Hard bounces", soft_bounced: "Soft bounces", open_detected: "Open signals", delivery_unknown: "Delivery unknown", inbox: "Seed Inbox", spam: "Seed Spam", other: "Seed Other", not_found: "Seed not found", awaiting: "Seeds awaiting" };
+let trackingSearchDebounce = null;
+const trackingLabels = {
+  recipients: "Recipients",
+  attempts: "Attempts",
+  webmail_sent: "Webmail confirmed",
+  send_failed: "Send failed",
+  hard_bounced: "Hard bounces",
+  soft_bounced: "Soft bounces",
+  open_detected: "Open signals",
+  delivery_unknown: "Delivery unknown",
+  inbox: "Seed Inbox",
+  spam: "Seed Spam",
+  other: "Seed Other",
+  not_found: "Seed not found",
+  awaiting: "Seeds awaiting",
+};
+
 async function loadTracking() {
   if (trackingBusy || !$('trackingRows') || !state) return;
   trackingBusy = true;
   try {
-    const campaign = $('trackingCampaign'), previous = campaign.value;
-    campaign.innerHTML = '<option value="">All campaigns</option>' + state.campaigns.map((c) => `<option value="${escape(c.id)}">${escape(c.name)}</option>`).join('');
-    campaign.value = previous;
-    const params = new URLSearchParams({ q: $('trackingSearch').value, campaign: campaign.value,
-      status: $('trackingStatus').value, from: $('trackingFrom').value, until: $('trackingUntil').value, offset: String(trackingOffset) });
+    const campaign = $('trackingCampaign');
+    if (campaign) {
+      const previous = campaign.value;
+      campaign.innerHTML =
+        '<option value="">All campaigns</option>' +
+        state.campaigns.map((c) => `<option value="${escape(c.id)}">${escape(c.name)}</option>`).join('');
+      campaign.value = previous;
+    }
+
+    const qVal = $('trackingSearch')?.value || '';
+    const campVal = $('trackingCampaign')?.value || '';
+    const statusVal = $('trackingStatus')?.value || '';
+    const fromVal = $('trackingFrom')?.value || '';
+    const untilVal = $('trackingUntil')?.value || '';
+
+    const params = new URLSearchParams({
+      q: qVal,
+      campaign: campVal,
+      status: statusVal,
+      from: fromVal,
+      until: untilVal,
+      offset: String(trackingOffset),
+    });
+
     const data = await api('/api/tracking?' + params);
-    trackingRecords = data.records;
-    $('trackingMetrics').innerHTML = Object.entries(trackingLabels).map(([key, label]) => `<div><span>${label}</span><strong>${data.summary[key] || 0}</strong></div>`).join('');
-    const bounced = data.summary.hard_bounced + data.summary.soft_bounced;
-    $('trackingRate').textContent = `Observed bounce rate: ${data.summary.attempts ? (100 * bounced / data.summary.attempts).toFixed(1) + '%' : 'No attempts'}. Definition: unique messages with a DSN failure / attempted messages in this filtered view. Incomplete mailbox monitoring can undercount failures.`;
-    $('trackingRows').innerHTML = data.records.length ? data.records.map((r, i) => {
-      const sendStatusBadge = r.sendStatus === 'webmail_sent'
-        ? `<span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid rgba(16,185,129,0.3);font-weight:600;">✓ Delivered</span>`
-        : r.sendStatus === 'send_failed'
-          ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:600;">✕ Failed</span>`
-          : r.sendStatus === 'send_attempted'
-            ? `<span class="status-pill" style="background:#eff6ff;color:#1d4ed8;font-weight:600;">⏳ Sending...</span>`
-            : `<span class="status-pill" style="color:var(--text-muted);">${escape(r.sendStatus)}</span>`;
+    trackingRecords = data.records || [];
+    const summary = data.summary || {};
+    const total = data.total || 0;
 
-      const bounceBadge = r.bounceStatus === 'hard_bounced'
-        ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:700;">⛔ Hard Bounce <small style="display:inline;color:inherit;font-size:10px;">(hard_bounced)</small></span>`
-        : r.bounceStatus === 'soft_bounced'
-          ? `<span class="status-pill" style="background:#fffbeb;color:#b45309;border:1px solid rgba(245,158,11,0.3);font-weight:600;">⚠️ Soft Bounce <small style="display:inline;color:inherit;font-size:10px;">(soft_bounced)</small></span>`
-          : `<span style="color:#059669;font-size:12px;font-weight:500;">✓ Clean</span>`;
+    // Calculate core deliverability KPIs
+    const attempts = summary.attempts || 0;
+    const sent = summary.webmail_sent || 0;
+    const deliveryRate = attempts ? Math.round((sent / attempts) * 100) : (total ? 100 : 0);
+    const opens = summary.open_detected || 0;
+    const openRate = attempts ? Math.round((opens / attempts) * 100) : 0;
+    const hardBounced = summary.hard_bounced || 0;
+    const softBounced = summary.soft_bounced || 0;
+    const bounced = hardBounced + softBounced;
+    const bounceRate = attempts ? ((100 * bounced) / attempts).toFixed(1) + '%' : '0.0%';
 
-      const seenBadge = r.firstOpenAt
-        ? `<div style="display:inline-flex;flex-direction:column;gap:2px;"><span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:700;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:12px;">👁️ Seen${r.opens?.length > 1 ? ` (${r.opens.length}x)` : ''}</span><small style="color:#059669;font-weight:500;">Opened ${new Date(r.firstOpenAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</small></div>`
-        : `<span class="status-pill" style="background:#f1f5f9;color:#64748b;font-weight:500;font-size:11.5px;">✉️ Unopened</span>`;
+    const seedsTotal = (summary.inbox || 0) + (summary.spam || 0) + (summary.other || 0) + (summary.not_found || 0);
+    const inboxRate = seedsTotal ? Math.round(((summary.inbox || 0) / seedsTotal) * 100) : (summary.inbox ? 100 : 0);
 
-      let placementStatusHtml = '';
-      if (r.seedId) {
-        if (r.placement?.status === 'inbox') {
-          placementStatusHtml = `<div style="margin-top:3px;"><span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:700;display:inline-flex;align-items:center;gap:3px;padding:2px 8px;font-size:11px;">📥 Inbox</span></div>`;
-        } else if (r.placement?.status === 'spam') {
-          placementStatusHtml = `<div style="margin-top:3px;"><span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:700;display:inline-flex;align-items:center;gap:3px;padding:2px 8px;font-size:11px;">🚫 Spam</span></div>`;
-        } else if (r.placement?.status && r.placement?.status !== 'awaiting') {
-          placementStatusHtml = `<div style="margin-top:3px;"><span class="status-pill" style="color:var(--text-muted);font-size:11px;">📁 ${escape(r.placement.status)}</span></div>`;
-        } else if (r.attemptedAt) {
-          placementStatusHtml = `
-            <div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;">
-              <button type="button" class="quick-place-btn inbox" data-seed-place="${escape(r.id)}" data-place-status="inbox" title="Mark as confirmed in Inbox">📥 Inbox</button>
-              <button type="button" class="quick-place-btn spam" data-seed-place="${escape(r.id)}" data-place-status="spam" title="Mark as landed in Spam">🚫 Spam</button>
+    // Update active records badge
+    if ($('trackingRecordCountBadge')) {
+      $('trackingRecordCountBadge').textContent = `${total} recorded message${total === 1 ? '' : 's'}`;
+    }
+
+    // Render High-Impact Deliverability Telemetry Deck into #trackingMetrics
+    if ($('trackingMetrics')) {
+      $('trackingMetrics').innerHTML = `
+        <!-- Tier 1: 4 Executive Cyber KPI Cards -->
+        <div class="tracking-kpi-grid">
+          <!-- Card 1: Dispatched / Confirmed -->
+          <div class="tracking-kpi-card kpi-sent">
+            <div class="kpi-top">
+              <span class="kpi-title">Dispatched (Sent)</span>
+              <div class="kpi-icon-wrap icon-emerald">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </div>
             </div>
-          `;
-        } else {
-          placementStatusHtml = `<small style="color:var(--text-muted);">Awaiting test</small>`;
-        }
-      }
+            <div class="kpi-val-row">
+              <span class="kpi-value">${sent}</span>
+              <span class="kpi-rate-badge badge-green">${deliveryRate}%</span>
+            </div>
+            <div class="kpi-progress-bar">
+              <div class="kpi-progress-fill fill-green" style="width: ${Math.min(100, deliveryRate)}%;"></div>
+            </div>
+            <div class="kpi-subtext">of ${attempts} attempted sends confirmed by webmail</div>
+          </div>
 
-      return `<tr><td><strong>${escape(r.recipient)}</strong><small>${escape(r.subject)}</small></td><td>${sendStatusBadge}<small>${escape(new Date(r.attemptedAt || r.createdAt).toLocaleString())}</small></td><td>${bounceBadge}<small>${escape(r.bounceReason || '')}</small></td><td>${seenBadge}${placementStatusHtml}</td><td><button class="secondary" data-track="${i}">Details</button>${r.seedId && r.sendStatus === 'pending' && !r.preparationStartedAt ? `<button data-seed-send="${escape(r.id)}">Send seed</button>` : ''}</td></tr>`;
-    }).join('') : '<tr><td colspan="5">No tracking records match your filters.</td></tr>';
-    $('trackingPageInfo').textContent = data.total ? `${trackingOffset + 1}–${Math.min(trackingOffset + 50, data.total)} of ${data.total}` : 'No messages recorded';
-    $('trackingPrev').disabled = trackingOffset === 0;
-    $('trackingNext').disabled = trackingOffset + 50 >= data.total;
-    $('trackingConfig').textContent = `IMAP monitor: ${data.monitorEnabled ? 'enabled' : 'disabled (set FC_MONITOR_ENABLED=1)'}. Open tracking: ${data.opensEnabled ? 'enabled by configuration' : 'disabled'}. Keep the app running for monitoring.`;
-    $('trackingWorker').textContent = Object.keys(data.worker).length ? JSON.stringify(data.worker, null, 2) : 'No mailbox checks recorded.';
-    $('trackingReview').textContent = data.review.length ? JSON.stringify(data.review, null, 2) : 'No unmatched notifications.';
+          <!-- Card 2: Open Signals Telemetry -->
+          <div class="tracking-kpi-card kpi-opens">
+            <div class="kpi-top">
+              <span class="kpi-title">Open Signals</span>
+              <div class="kpi-icon-wrap icon-blue">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </div>
+            </div>
+            <div class="kpi-val-row">
+              <span class="kpi-value">${opens}</span>
+              <span class="kpi-rate-badge badge-blue">${openRate}%</span>
+            </div>
+            <div class="kpi-progress-bar">
+              <div class="kpi-progress-fill fill-blue" style="width: ${Math.min(100, openRate)}%;"></div>
+            </div>
+            <div class="kpi-subtext">1×1 pixel requests captured by proxy</div>
+          </div>
+
+          <!-- Card 3: Seed Inbox Placement -->
+          <div class="tracking-kpi-card kpi-seeds">
+            <div class="kpi-top">
+              <span class="kpi-title">Seed Inbox Rate</span>
+              <div class="kpi-icon-wrap icon-purple">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              </div>
+            </div>
+            <div class="kpi-val-row">
+              <span class="kpi-value">${seedsTotal ? `${inboxRate}%` : (summary.inbox ? '100%' : '—')}</span>
+              <span class="kpi-rate-badge badge-purple">${summary.inbox || 0} Inbox</span>
+            </div>
+            <div class="kpi-progress-bar">
+              <div class="kpi-progress-fill fill-purple" style="width: ${Math.min(100, inboxRate)}%;"></div>
+            </div>
+            <div class="kpi-subtext">${summary.spam || 0} landed in spam · ${summary.awaiting || 0} awaiting</div>
+          </div>
+
+          <!-- Card 4: DSN Health & Bounce Rate -->
+          <div class="tracking-kpi-card ${bounced > 0 ? 'kpi-warn' : 'kpi-clean'}">
+            <div class="kpi-top">
+              <span class="kpi-title">Deliverability Health</span>
+              <div class="kpi-icon-wrap ${bounced > 0 ? 'icon-amber' : 'icon-emerald'}">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              </div>
+            </div>
+            <div class="kpi-val-row">
+              <span class="kpi-value">${bounced === 0 ? 'Clean' : bounceRate}</span>
+              <span class="kpi-rate-badge ${bounced > 0 ? 'badge-amber' : 'badge-green'}">${bounced === 0 ? '0 DSN' : `${bounced} Bounces`}</span>
+            </div>
+            <div class="kpi-progress-bar">
+              <div class="kpi-progress-fill ${bounced > 0 ? 'fill-amber' : 'fill-green'}" style="width: ${bounced === 0 ? '100' : Math.max(10, 100 - parseFloat(bounceRate))}%;"></div>
+            </div>
+            <div class="kpi-subtext">${hardBounced} hard bounces · ${softBounced} soft bounces</div>
+          </div>
+        </div>
+
+        <!-- Tier 2: Telemetry Data-Chip Ribbon -->
+        <div class="tracking-chips-ribbon">
+          <div class="telemetry-chip">
+            <span class="chip-label">Total Outreaches</span>
+            <strong class="chip-val">${total}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Unique Recipients</span>
+            <strong class="chip-val">${summary.recipients || 0}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Send Attempts</span>
+            <strong class="chip-val">${attempts}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Confirmed Dispatched</span>
+            <strong class="chip-val" style="color: #34d399;">${sent}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Failed Submissions</span>
+            <strong class="chip-val" style="color: ${summary.send_failed ? '#f87171' : 'inherit'};">${summary.send_failed || 0}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Hard Bounces</span>
+            <strong class="chip-val" style="color: ${hardBounced ? '#f87171' : 'inherit'};">${hardBounced}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Soft Bounces</span>
+            <strong class="chip-val" style="color: ${softBounced ? '#fbbf24' : 'inherit'};">${softBounced}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Open Signals</span>
+            <strong class="chip-val" style="color: #60a5fa;">${opens}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Seed Inbox</span>
+            <strong class="chip-val" style="color: #34d399;">${summary.inbox || 0}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Seed Spam</span>
+            <strong class="chip-val" style="color: ${summary.spam ? '#f87171' : 'inherit'};">${summary.spam || 0}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Seed Awaiting</span>
+            <strong class="chip-val">${summary.awaiting || 0}</strong>
+          </div>
+          <div class="telemetry-chip">
+            <span class="chip-label">Delivery Unknown</span>
+            <strong class="chip-val">${summary.delivery_unknown || 0}</strong>
+          </div>
+        </div>
+      `;
+    }
+
+    // Render Deliverability Guidance Note
+    if ($('trackingRate')) {
+      $('trackingRate').innerHTML = `
+        <div class="rate-callout-card">
+          <div class="rate-callout-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          </div>
+          <div class="rate-callout-content">
+            <div class="rate-callout-title">
+              <span>Observed DSN Bounce Rate: <strong>${attempts ? (100 * bounced / attempts).toFixed(1) + '%' : 'No attempts'}</strong></span>
+              <span class="rate-status-tag ${bounced === 0 ? 'good' : 'warn'}">${bounced === 0 ? '✓ Healthy Sender Score' : '⚠️ Failure Monitored'}</span>
+            </div>
+            <div class="rate-callout-desc">
+              Formula: Unique messages with an IMAP DSN failure (${bounced}) divided by attempted messages (${attempts}) in this filtered view. Incomplete mailbox monitoring or delayed remote mail exchangers can undercount failures.
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Render Data Table Rows
+    if ($('trackingRows')) {
+      $('trackingRows').innerHTML = trackingRecords.length
+        ? trackingRecords.map((r, i) => {
+            const sendStatusBadge =
+              r.sendStatus === 'webmail_sent'
+                ? `<span class="status-pill good"><span class="badge-dot dot-green"></span>✓ Delivered</span>`
+                : r.sendStatus === 'send_failed'
+                  ? `<span class="status-pill blocked"><span class="badge-dot dot-red"></span>✕ Failed</span>`
+                  : r.sendStatus === 'send_attempted'
+                    ? `<span class="status-pill sent"><span class="badge-dot dot-blue"></span>⏳ Sending...</span>`
+                    : `<span class="status-pill"><span class="badge-dot dot-muted"></span>${escape(r.sendStatus || 'pending')}</span>`;
+
+            // Required for unit tests: Must include '(hard_bounced)' or '(soft_bounced)'
+            const bounceBadge =
+              r.bounceStatus === 'hard_bounced'
+                ? `<div class="bounce-status-block"><span class="status-pill blocked"><span class="badge-dot dot-red"></span>⛔ Hard Bounce <small class="test-token">(hard_bounced)</small></span></div>`
+                : r.bounceStatus === 'soft_bounced'
+                  ? `<div class="bounce-status-block"><span class="status-pill warn"><span class="badge-dot dot-amber"></span>⚠️ Soft Bounce <small class="test-token">(soft_bounced)</small></span></div>`
+                  : `<div class="clean-delivery-chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> <span>✓ Clean Delivery</span></div>`;
+
+            const seenBadge = r.firstOpenAt
+              ? `<div class="seen-indicator-stack">
+                   <span class="status-pill good seen-pill">
+                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                     Seen${r.opens?.length > 1 ? ` (${r.opens.length}x)` : ''}
+                   </span>
+                   <small class="seen-time-hint">Opened ${new Date(r.firstOpenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
+                 </div>`
+              : `<span class="status-pill unopened-pill">
+                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                   Unopened
+                 </span>`;
+
+            let placementStatusHtml = '';
+            if (r.seedId) {
+              if (r.placement?.status === 'inbox') {
+                placementStatusHtml = `<div class="placement-result-tag"><span class="status-pill good" style="font-weight: 700; padding: 2px 8px; font-size: 11px;">📥 Inbox</span></div>`;
+              } else if (r.placement?.status === 'spam') {
+                placementStatusHtml = `<div class="placement-result-tag"><span class="status-pill blocked" style="font-weight: 700; padding: 2px 8px; font-size: 11px;">🚫 Spam</span></div>`;
+              } else if (r.placement?.status && r.placement?.status !== 'awaiting') {
+                placementStatusHtml = `<div class="placement-result-tag"><span class="status-pill" style="font-size: 11px;">📁 ${escape(r.placement.status)}</span></div>`;
+              } else if (r.attemptedAt) {
+                placementStatusHtml = `
+                  <div class="quick-placement-actions">
+                    <button type="button" class="quick-place-btn inbox" data-seed-place="${escape(r.id)}" data-place-status="inbox" title="Confirm email reached Inbox">📥 Inbox</button>
+                    <button type="button" class="quick-place-btn spam" data-seed-place="${escape(r.id)}" data-place-status="spam" title="Email landed in Spam folder">🚫 Spam</button>
+                  </div>
+                `;
+              } else {
+                placementStatusHtml = `<small class="awaiting-seed-note">Awaiting dispatch</small>`;
+              }
+            }
+
+            const sendTimeStr = new Date(r.attemptedAt || r.createdAt).toLocaleString([], {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+
+            return `
+              <tr class="tracking-table-row">
+                <td>
+                  <div class="recipient-cell-content">
+                    <div class="recipient-meta-line">
+                      <strong class="recipient-address" title="${escape(r.recipient)}">${escape(r.recipient)}</strong>
+                      ${r.seedId ? `<span class="badge-seed-tag">🌱 Seed</span>` : ''}
+                      ${r.campaignId ? `<span class="badge-campaign-tag">${escape(r.campaignId)}</span>` : ''}
+                    </div>
+                    <div class="recipient-subject-line" title="${escape(r.subject || '')}">
+                      ${escape(r.subject || '(No subject)')}
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="send-status-cell">
+                    ${sendStatusBadge}
+                    <small class="timestamp-sub">${escape(sendTimeStr)}</small>
+                  </div>
+                </td>
+                <td>
+                  <div class="bounce-cell-content">
+                    ${bounceBadge}
+                    ${r.bounceReason ? `<small class="bounce-reason-text" title="${escape(r.bounceReason)}">${escape(r.bounceReason)}</small>` : ''}
+                  </div>
+                </td>
+                <td>
+                  <div class="engagement-cell-content">
+                    ${seenBadge}
+                    ${placementStatusHtml}
+                  </div>
+                </td>
+                <td style="text-align: right;">
+                  <div class="row-actions-group">
+                    <button class="secondary action-inspect-btn" data-track="${i}" title="Inspect complete delivery timeline & technical specs">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                      Details
+                    </button>
+                    ${r.seedId && r.sendStatus === 'pending' && !r.preparationStartedAt
+                      ? `<button class="primary-btn seed-dispatch-btn" data-seed-send="${escape(r.id)}" title="Send seed test email">
+                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                           Send seed
+                         </button>`
+                      : ''}
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('')
+        : '<tr><td colspan="5" class="empty-table-state"><div class="empty-message">No tracking records match your current filters.</div></td></tr>';
+    }
+
+    if ($('trackingPageInfo')) {
+      $('trackingPageInfo').textContent = total
+        ? `${trackingOffset + 1}–${Math.min(trackingOffset + 50, total)} of ${total} records`
+        : 'No messages recorded';
+    }
+    if ($('trackingPrev')) $('trackingPrev').disabled = trackingOffset === 0;
+    if ($('trackingNext')) $('trackingNext').disabled = trackingOffset + 50 >= total;
+
+    if ($('trackingConfig')) {
+      $('trackingConfig').textContent = `IMAP monitor: ${data.monitorEnabled ? 'enabled' : 'disabled (set FC_MONITOR_ENABLED=1)'}. Open tracking: ${data.opensEnabled ? 'enabled by configuration' : 'disabled'}. Keep the app running for monitoring.`;
+    }
+    if ($('trackingWorker')) {
+      $('trackingWorker').textContent = Object.keys(data.worker || {}).length
+        ? JSON.stringify(data.worker, null, 2)
+        : 'No mailbox checks recorded.';
+    }
+    if ($('trackingReview')) {
+      $('trackingReview').textContent = data.review && data.review.length
+        ? JSON.stringify(data.review, null, 2)
+        : 'No unmatched notifications.';
+    }
+
     if ($('trackingSeeds')) {
       if (data.seeds && data.seeds.length) {
         $('trackingSeeds').innerHTML = `
@@ -82,15 +376,22 @@ async function loadTracking() {
           $('seedCountBadge').textContent = `📬 ${data.seeds.length} Active Test Mailbox${data.seeds.length > 1 ? 'es' : ''}`;
         }
       } else {
-        $('trackingSeeds').innerHTML = `<div style="font-size: 12px; color: var(--text-muted); padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: 6px;">⚠️ No seed recipients configured. Configure <code>FC_SEEDS</code> in <code>.env</code> to enable controlled inbox testing.</div>`;
+        $('trackingSeeds').innerHTML = `<div class="seed-empty-alert">⚠️ No seed recipients configured. Configure <code>FC_SEEDS</code> in <code>.env</code> to enable controlled inbox testing.</div>`;
       }
     }
+
     if ($('seedTestKey') && !$('seedTestKey').value) $('seedTestKey').value = generateSeedKey();
     loadSeedTemplates();
     await loadSeedSamples($('seedSampleSearch')?.value || '');
-    if (!$('healthDomain').value) $('healthDomain').value = state.profiles.find((p) => p.id === state.activeProfile)?.email.split('@')[1] || '';
+
+    if (!$('healthDomain').value) {
+      $('healthDomain').value =
+        state.profiles.find((p) => p.id === state.activeProfile)?.email.split('@')[1] || '';
+    }
     if ($('healthSelectors') && !$('healthSelectors').value) $('healthSelectors').value = 'privateemail';
-  } finally { trackingBusy = false; }
+  } finally {
+    trackingBusy = false;
+  }
 }
 
 function generateSeedKey() {
@@ -113,10 +414,12 @@ async function loadSeedSamples(query = '') {
     }
     if (leads.length) {
       if ($('sampleCountHint')) $('sampleCountHint').textContent = `${leads.length} lead${leads.length > 1 ? 's' : ''}`;
-      sampleEl.innerHTML = leads.map((l) => {
-        const desc = [l.company, l.fields?.['owner / principal'], l.email].filter(Boolean).join(' · ');
-        return `<option value="${escape(l.id)}">${escape(desc)}</option>`;
-      }).join('');
+      sampleEl.innerHTML = leads
+        .map((l) => {
+          const desc = [l.company, l.fields?.['owner / principal'], l.email].filter(Boolean).join(' · ');
+          return `<option value="${escape(l.id)}">${escape(desc)}</option>`;
+        })
+        .join('');
       if (leads.some((l) => l.id === previous)) {
         sampleEl.value = previous;
       } else if (leads.some((l) => l.id === previewId)) {
@@ -187,12 +490,88 @@ async function updateSeedPreview() {
   }
 }
 
-$('trackingRefresh').onclick = (e) => action(e.currentTarget, loadTracking);
-for (const id of ['trackingSearch', 'trackingCampaign', 'trackingStatus', 'trackingFrom', 'trackingUntil']) {
-  $(id).onchange = () => { trackingOffset = 0; loadTracking().catch((e) => notice(e.message)); };
+// Refresh Button Action
+if ($('trackingRefresh')) {
+  $('trackingRefresh').onclick = (e) => action(e.currentTarget, loadTracking);
 }
-$('trackingPrev').onclick = () => { trackingOffset = Math.max(0, trackingOffset - 50); loadTracking().catch((e) => notice(e.message)); };
-$('trackingNext').onclick = () => { trackingOffset += 50; loadTracking().catch((e) => notice(e.message)); };
+
+// Wire Change & Input Listeners
+for (const id of ['trackingCampaign', 'trackingStatus', 'trackingFrom', 'trackingUntil']) {
+  if ($(id)) {
+    $(id).onchange = () => {
+      trackingOffset = 0;
+      loadTracking().catch((e) => notice(e.message));
+    };
+  }
+}
+
+if ($('trackingSearch')) {
+  $('trackingSearch').oninput = () => {
+    clearTimeout(trackingSearchDebounce);
+    trackingSearchDebounce = setTimeout(() => {
+      trackingOffset = 0;
+      loadTracking().catch((e) => notice(e.message));
+    }, 280);
+  };
+  $('trackingSearch').onchange = () => {
+    trackingOffset = 0;
+    loadTracking().catch((e) => notice(e.message));
+  };
+}
+
+// Quick Filter Segmented Pills
+if ($('trackingQuickPills')) {
+  $('trackingQuickPills').querySelectorAll('[data-pill-status]').forEach((pill) => {
+    pill.onclick = () => {
+      $('trackingQuickPills').querySelectorAll('[data-pill-status]').forEach((p) => p.classList.remove('active'));
+      pill.classList.add('active');
+      const targetStatus = pill.dataset.pillStatus;
+
+      if (targetStatus === 'seeds') {
+        if ($('trackingStatus')) $('trackingStatus').value = '';
+        if ($('trackingSearch')) $('trackingSearch').value = 'seed';
+      } else {
+        if ($('trackingStatus')) $('trackingStatus').value = targetStatus;
+      }
+
+      trackingOffset = 0;
+      loadTracking().catch((e) => notice(e.message));
+    };
+  });
+}
+
+// Reset Filters Action Button
+if ($('trackingResetFilters')) {
+  $('trackingResetFilters').onclick = () => {
+    if ($('trackingSearch')) $('trackingSearch').value = '';
+    if ($('trackingCampaign')) $('trackingCampaign').value = '';
+    if ($('trackingStatus')) $('trackingStatus').value = '';
+    if ($('trackingFrom')) $('trackingFrom').value = '';
+    if ($('trackingUntil')) $('trackingUntil').value = '';
+    if ($('trackingQuickPills')) {
+      $('trackingQuickPills').querySelectorAll('[data-pill-status]').forEach((p, idx) => {
+        p.classList.toggle('active', idx === 0);
+      });
+    }
+    trackingOffset = 0;
+    loadTracking().catch((e) => notice(e.message));
+    notice('All tracking filters reset.');
+  };
+}
+
+if ($('trackingPrev')) {
+  $('trackingPrev').onclick = () => {
+    trackingOffset = Math.max(0, trackingOffset - 50);
+    loadTracking().catch((e) => notice(e.message));
+  };
+}
+if ($('trackingNext')) {
+  $('trackingNext').onclick = () => {
+    trackingOffset += 50;
+    loadTracking().catch((e) => notice(e.message));
+  };
+}
+
 function renderTrackingDetail(r) {
   const panel = $('trackingDetail');
   if (!panel) return;
@@ -208,23 +587,23 @@ function renderTrackingDetail(r) {
   // Badges matching lead details system
   const sendBadge =
     r.sendStatus === 'webmail_sent'
-      ? `<span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:600;">✓ Dispatched</span>`
+      ? `<span class="status-pill good"><span class="badge-dot dot-green"></span>✓ Dispatched</span>`
       : r.sendStatus === 'send_failed'
-        ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:600;">✕ Failed</span>`
+        ? `<span class="status-pill blocked"><span class="badge-dot dot-red"></span>✕ Failed</span>`
         : r.sendStatus === 'send_attempted'
-          ? `<span class="status-pill" style="background:#eff6ff;color:#1d4ed8;font-weight:600;">⏳ Sending...</span>`
-          : `<span class="status-pill" style="color:var(--text-muted);">${escape(r.sendStatus || 'Pending')}</span>`;
+          ? `<span class="status-pill sent"><span class="badge-dot dot-blue"></span>⏳ Sending...</span>`
+          : `<span class="status-pill"><span class="badge-dot dot-muted"></span>${escape(r.sendStatus || 'Pending')}</span>`;
 
   const seenBadge = r.firstOpenAt
-    ? `<span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:700;">👁️ Seen${r.opens?.length > 1 ? ` (${r.opens.length}x)` : ''}</span>`
-    : `<span class="status-pill" style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;font-weight:500;">✉️ Unopened</span>`;
+    ? `<span class="status-pill good">👁️ Seen${r.opens?.length > 1 ? ` (${r.opens.length}x)` : ''}</span>`
+    : `<span class="status-pill unopened-pill">✉️ Unopened</span>`;
 
   const bounceBadge =
     r.bounceStatus === 'hard_bounced'
-      ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:700;">⛔ Hard Bounce</span>`
+      ? `<span class="status-pill blocked">⛔ Hard Bounce</span>`
       : r.bounceStatus === 'soft_bounced'
-        ? `<span class="status-pill" style="background:#fffbeb;color:#b45309;border:1px solid rgba(245,158,11,0.3);font-weight:600;">⚠️ Soft Bounce</span>`
-        : `<span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid rgba(16,185,129,0.3);font-weight:500;">✓ Clean Delivery</span>`;
+        ? `<span class="status-pill warn">⚠️ Soft Bounce</span>`
+        : `<span class="status-pill good">✓ Clean Delivery</span>`;
 
   // Relative timing calculation
   let openRelative = '';
@@ -358,7 +737,7 @@ function renderTrackingDetail(r) {
       <div class="lead-details-card">
         <h4 class="lead-details-title">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Delivery & Engagement Metrics
+          Delivery &amp; Engagement Metrics
         </h4>
         <div class="lead-details-grid">
           <div class="lead-detail-item">
@@ -409,7 +788,7 @@ function renderTrackingDetail(r) {
       <div class="lead-details-card">
         <h4 class="lead-details-title">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          Message Identifiers & Routing
+          Message Identifiers &amp; Routing
         </h4>
         <div class="lead-details-grid">
           <div class="lead-detail-item">
@@ -440,7 +819,7 @@ function renderTrackingDetail(r) {
       <div class="lead-details-card">
         <h4 class="lead-details-title">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-          Transmission & Interaction Timestamps
+          Transmission &amp; Interaction Timestamps
         </h4>
         <div class="lead-details-grid">
           <div class="lead-detail-item">
@@ -581,39 +960,52 @@ function renderTrackingDetail(r) {
   }
 }
 
-$('trackingRows').onclick = (e) => {
-  const button = e.target.closest('button');
-  if (!button) return;
-  if (button.dataset.seedSend) return action(button, async () => {
-    await api('/api/tracking/seed-send', { trackingId: button.dataset.seedSend });
-    await loadTracking();
-  });
-  if (button.dataset.seedPlace) return action(button, async () => {
-    const trackingId = button.dataset.seedPlace;
-    const status = button.dataset.placeStatus;
-    await api('/api/tracking/manual-placement', {
-      trackingId,
-      status,
-      evidence: `Manual verification: marked ${status} directly from Tracking dashboard`
+// Table click delegation
+if ($('trackingRows')) {
+  $('trackingRows').onclick = (e) => {
+    const button = e.target.closest('button');
+    if (!button) return;
+    if (button.dataset.seedSend) return action(button, async () => {
+      await api('/api/tracking/seed-send', { trackingId: button.dataset.seedSend });
+      await loadTracking();
     });
-    await loadTracking();
-  });
-  const r = trackingRecords[Number(button.dataset.track)];
-  if (!r) return;
-  openTrackingDrawer(r);
-  $('placementForm').hidden = !r.seedId || !r.attemptedAt;
-  $('placementId').value = r.id;
-  $('placementEvidence').value = '';
-};
-$('placementForm').onsubmit = (e) => {
-  e.preventDefault();
-  action(e.submitter, async () => {
-    await api('/api/tracking/manual-placement', { trackingId: $('placementId').value, status: $('placementStatus').value, evidence: $('placementEvidence').value });
-    await loadTracking();
-    $('placementForm').hidden = true;
-    closeTrackingDrawer();
-  });
-};
+    if (button.dataset.seedPlace) return action(button, async () => {
+      const trackingId = button.dataset.seedPlace;
+      const status = button.dataset.placeStatus;
+      await api('/api/tracking/manual-placement', {
+        trackingId,
+        status,
+        evidence: `Manual verification: marked ${status} directly from Tracking dashboard`
+      });
+      await loadTracking();
+    });
+    const r = trackingRecords[Number(button.dataset.track)];
+    if (!r) return;
+    openTrackingDrawer(r);
+    if ($('placementForm')) {
+      $('placementForm').hidden = !r.seedId || !r.attemptedAt;
+      $('placementId').value = r.id;
+      $('placementEvidence').value = '';
+    }
+  };
+}
+
+if ($('placementForm')) {
+  $('placementForm').onsubmit = (e) => {
+    e.preventDefault();
+    action(e.submitter, async () => {
+      await api('/api/tracking/manual-placement', {
+        trackingId: $('placementId').value,
+        status: $('placementStatus').value,
+        evidence: $('placementEvidence').value,
+      });
+      await loadTracking();
+      $('placementForm').hidden = true;
+      closeTrackingDrawer();
+    });
+  };
+}
+
 if ($('seedGenKeyBtn')) {
   $('seedGenKeyBtn').onclick = () => { $('seedTestKey').value = generateSeedKey(); };
 }
@@ -632,17 +1024,21 @@ if ($('seedSampleSearch')) {
     }, 250);
   };
 }
-$('seedPlanForm').onsubmit = (e) => {
-  e.preventDefault();
-  action(e.submitter, async () => {
-    const templateKey = $('seedTemplate')?.value || $('template')?.value;
-    const result = await api('/api/tracking/seed-plan', { testKey: $('seedTestKey').value, leadId: $('seedSample').value, key: templateKey });
-    $('seedPlanResult').innerHTML = `<div class="seed-plan-success-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> <div><strong>Plan ${escape(result.testKey)}:</strong> ${result.ids.length} dedicated test recipient(s) reserved. Use <strong>"Send seed"</strong> in the tracking table above to dispatch; the same test key reuses this plan.</div></div>`;
-    $('seedTestKey').value = generateSeedKey();
-    trackingOffset = 0;
-    await loadTracking();
-  });
-};
+
+if ($('seedPlanForm')) {
+  $('seedPlanForm').onsubmit = (e) => {
+    e.preventDefault();
+    action(e.submitter, async () => {
+      const templateKey = $('seedTemplate')?.value || $('template')?.value;
+      const result = await api('/api/tracking/seed-plan', { testKey: $('seedTestKey').value, leadId: $('seedSample').value, key: templateKey });
+      $('seedPlanResult').innerHTML = `<div class="seed-plan-success-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> <div><strong>Plan ${escape(result.testKey)}:</strong> ${result.ids.length} dedicated test recipient(s) reserved. Use <strong>"Send seed"</strong> in the tracking table above to dispatch; the same test key reuses this plan.</div></div>`;
+      $('seedTestKey').value = generateSeedKey();
+      trackingOffset = 0;
+      await loadTracking();
+    });
+  };
+}
+
 function setDomainPreset(selectors, btn) {
   if ($('healthSelectors')) $('healthSelectors').value = selectors;
   document.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('active'));
@@ -844,15 +1240,18 @@ function renderDomainReport(result) {
   }
 }
 
-$('domainForm').onsubmit = (e) => {
-  e.preventDefault();
-  $('domainResult').textContent = 'Checking public DNS records…';
-  action(e.submitter, async () => {
-    const result = await api('/api/tracking/domain?' + new URLSearchParams({ domain: $('healthDomain').value, selectors: $('healthSelectors').value }));
-    $('domainResult').textContent = JSON.stringify(result, null, 2);
-    renderDomainReport(result);
-  });
-};
+if ($('domainForm')) {
+  $('domainForm').onsubmit = (e) => {
+    e.preventDefault();
+    $('domainResult').textContent = 'Checking public DNS records…';
+    action(e.submitter, async () => {
+      const result = await api('/api/tracking/domain?' + new URLSearchParams({ domain: $('healthDomain').value, selectors: $('healthSelectors').value }));
+      $('domainResult').textContent = JSON.stringify(result, null, 2);
+      renderDomainReport(result);
+    });
+  };
+}
+
 setInterval(() => {
   if (!pending && location.hash === '#tracking') loadTracking().catch((e) => notice(e.message));
 }, 10000);
