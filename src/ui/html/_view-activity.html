@@ -1,0 +1,80 @@
+          <!-- ========================================== -->
+          <!-- VIEW 6B: SEND HISTORY & AUDIT              -->
+          <!-- ========================================== -->
+          <section class="view-page" id="view-activity">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">AUDIT & RECONCILIATION</p>
+                <h1 class="page-title">Send History & Audit</h1>
+                <p class="page-subtitle">Complete durable send log, verified webmail submission history, and recovery action center.</p>
+              </div>
+              <div class="header-actions">
+                <a class="button secondary" href="/api/export-history">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Export full history (JSON)
+                </a>
+              </div>
+            </div>
+
+            <!-- Recovery & Reconciliation Center -->
+            <div id="recovery"></div>
+
+            <!-- Send History Section -->
+            <div class="panel">
+              <div class="panel-head">
+                <h2 class="panel-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  Recorded Send Attempts
+                </h2>
+              </div>
+
+              <!-- History Filters -->
+              <div class="toolbar" style="margin-bottom: 12px; background: var(--bg-surface-elevated);">
+                <div class="toolbar-group">
+                  <div class="toolbar-search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input id="historySearch" type="search" placeholder="Search recipient, mailbox, or subject…" />
+                  </div>
+                  <div style="min-width: 170px;">
+                    <select id="historyStatus" aria-label="Outcome filter">
+                      <option value="">All outcomes</option>
+                      <option>Sent</option>
+                      <option>Uncertain</option>
+                      <option>Sending</option>
+                      <option>Not sent — manual review</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- History Data Table -->
+              <div class="table-container">
+                <div class="table-wrap" style="max-height: 420px; min-height: 250px;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Time / Recipient</th>
+                        <th>Mailbox / Template</th>
+                        <th>Subject</th>
+                        <th>Outcome</th>
+                        <th style="text-align: right;">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody id="historyRows"></tbody>
+                  </table>
+                </div>
+
+                <div class="table-footer">
+                  <span id="historyPageInfo">Loading attempts…</span>
+                  <div class="pagination-controls">
+                    <button id="historyPrev" class="secondary">Previous</button>
+                    <button id="historyNext" class="secondary">Next</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Inspector Viewer for selected message -->
+              <div id="historyMessage" class="history-inspector" hidden></div>
+            </div>
+          </section>
+

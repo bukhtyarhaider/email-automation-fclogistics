@@ -1,0 +1,146 @@
+          <!-- ========================================== -->
+          <!-- VIEW 4: TEMPLATES STUDIO                   -->
+          <!-- ========================================== -->
+          <section class="view-page" id="view-templates">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">MESSAGE PERSONALIZATION</p>
+                <h1 class="page-title">Templates Studio</h1>
+                <p class="page-subtitle">Craft deterministic, personalized outreach introductions with lead token interpolation.</p>
+              </div>
+              <div class="header-actions">
+                <button id="newTemplate" class="secondary">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  New variant
+                </button>
+                <button id="exportTemplatesBtn" class="secondary" title="Export all templates as JSON">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Export templates
+                </button>
+                <label class="button secondary" for="importTemplatesFile" style="cursor: pointer;" title="Import templates from JSON">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  Import templates
+                </label>
+                <input id="importTemplatesFile" type="file" accept=".json" hidden />
+                <button id="deleteTemplate" class="danger">Delete template</button>
+                <button id="saveTemplate">Save template</button>
+              </div>
+            </div>
+
+            <div class="dashboard-grid">
+              <!-- Left: Template Editor -->
+              <div class="panel">
+                <div class="form-group">
+                  <label for="template">Select Template Variant</label>
+                  <select id="template"></select>
+                </div>
+
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="templateName">Template Variant Name</label>
+                    <input id="templateName" />
+                  </div>
+                  <div class="form-group">
+                    <label for="templateWeight">Selection Weight</label>
+                    <input id="templateWeight" type="number" min="1" max="100" value="1" />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="check">
+                    <input id="templateEnabled" type="checkbox" checked />
+                    Enabled for random weighted selection
+                  </label>
+                </div>
+
+                <div class="form-group">
+                  <label for="requiredFields">Required Lead Fields (comma separated)</label>
+                  <input id="requiredFields" placeholder="e.g. city, state" />
+                  <p class="hint">Variants will be skipped if the lead is missing any required field.</p>
+                </div>
+
+                <div class="form-group">
+                  <label for="subject">Email Subject Line</label>
+                  <input id="subject" placeholder="e.g. Quick question regarding {{company}}" />
+                </div>
+
+                <div class="form-group">
+                  <label>Insert Personalization Tokens (Click to insert)</label>
+                  <div class="token-bar">
+                    <button type="button" class="token-chip" data-token="{{firstName}}">{{firstName}}</button>
+                    <button type="button" class="token-chip" data-token="{{company}}">{{company}}</button>
+                    <button type="button" class="token-chip" data-token="{{city}}">{{city}}</button>
+                    <button type="button" class="token-chip" data-token="{{state}}">{{state}}</button>
+                    <button type="button" class="token-chip" data-token="{{locationPhrase}}">{{locationPhrase}}</button>
+                    <button type="button" class="token-chip" data-token="{{senderName}}">{{senderName}}</button>
+                    <button type="button" class="token-chip" data-token="{{businessName}}">{{businessName}}</button>
+                    <button type="button" class="token-chip" data-token="{{services}}">{{services}}</button>
+                    <button type="button" class="token-chip" data-token="{{legalName}}">{{legalName}}</button>
+                    <button type="button" class="token-chip" data-token="{{address}}">{{address}}</button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="body">Message Body</label>
+                  <textarea id="body" rows="11" style="font-family: var(--font-sans); line-height: 1.6;"></textarea>
+                  <p class="hint">The existing webmail signature is preserved automatically by Private Email.</p>
+                </div>
+              </div>
+
+              <!-- Right: Live Sample Preview -->
+              <div class="panel">
+                <div class="panel-head">
+                  <h2 class="panel-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    Live Template Preview
+                  </h2>
+                  <span class="status-pill ready">Simulated Lead</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+                  <strong>Recipient:</strong> John Doe &lt;johndoe@sampletrucking.com&gt; · Sample Trucking LLC, Dallas, TX
+                </div>
+                <div class="message-preview-box" id="templateLivePreview">
+                  Select a template to view the live preview.
+                </div>
+                <div class="signature-box">
+                  <strong>Attached Signature (from Webmail):</strong><br />
+                  <span>Mark Anthony | Fleet Core Logistics LLC | Dispatch & Carrier Services</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Templates Library / Overview List -->
+            <div class="panel" style="margin-top: 20px;">
+              <div class="panel-head">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <h2 class="panel-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                    Template Variants Library
+                  </h2>
+                  <span class="status-pill ready" id="templateCountBadge">0 Variants</span>
+                </div>
+                <div class="toolbar-search" style="min-width: 220px; max-width: 320px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input id="templateSearch" type="search" placeholder="Search template variants…" />
+                </div>
+              </div>
+              <div class="table-container" style="border: none; box-shadow: none;">
+                <div class="table-wrap" style="max-height: 400px; min-height: 200px;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Variant Name</th>
+                        <th>Subject Line</th>
+                        <th style="width: 80px; text-align: center;">Weight</th>
+                        <th style="width: 100px; text-align: center;">Status</th>
+                        <th>Required Fields</th>
+                        <th style="width: 170px; text-align: right;">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="templatesTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+

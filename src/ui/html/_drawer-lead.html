@@ -1,0 +1,61 @@
+    <!-- Slide-over Drawer for Lead Details Inspection & Direct Dispatch -->
+    <div class="drawer-backdrop" id="leadPreviewDrawer">
+      <div class="drawer-panel">
+        <div class="drawer-header">
+          <div>
+            <span class="page-eyebrow" style="font-size: 9px;" id="leadDrawerEyebrow">LEAD DETAILS INSPECTOR</span>
+            <h3 class="drawer-title" id="previewTitle">Lead Details</h3>
+          </div>
+          <button type="button" class="drawer-close" id="closePreviewDrawer" aria-label="Close drawer">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+
+        <!-- Segmented Tab Switcher -->
+        <div class="drawer-tabs">
+          <button type="button" class="drawer-tab active" id="tabLeadDetails">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            Lead Details
+          </button>
+          <button type="button" class="drawer-tab" id="tabEmailDraft">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+            Email Preview
+          </button>
+        </div>
+
+        <div class="drawer-body">
+          <!-- SECTION 1: LEAD DETAILS (DEFAULT ACTIVE) -->
+          <div id="leadDetailsSection" class="drawer-tab-pane active">
+            <div id="leadDetailsContainer">
+              <p style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 30px;">Loading lead details...</p>
+            </div>
+          </div>
+
+          <!-- SECTION 2: EMAIL DRAFT (SECONDARY) -->
+          <div id="emailDraftSection" class="drawer-tab-pane" style="display: none;">
+            <p id="previewTo" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500;"></p>
+            <div id="warnings" class="warning-callout" hidden></div>
+            <div id="previewBody" class="message-preview-box">
+              A personalized message will appear here.
+            </div>
+            <div class="signature-box">
+              <span id="signatureText">Your existing webmail signature will appear below the message.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="drawer-footer">
+          <button id="prepare" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            Fill webmail compose
+          </button>
+          <button id="sendOne" class="success" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            Send prepared message
+          </button>
+          <button id="release" class="secondary" disabled>Close compose</button>
+          <button type="button" class="secondary" id="closeDrawerBtn" style="margin-left: auto;">Close</button>
+        </div>
+      </div>
+    </div>
+
