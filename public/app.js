@@ -582,6 +582,34 @@ function switchDrawerTab(tabName) {
   }
 }
 
+function openTrackingDrawer(r) {
+  const drawer = $("trackingDrawer");
+  if (drawer) drawer.classList.add("open");
+  if (r) renderTrackingDetail(r);
+}
+
+function closeTrackingDrawer() {
+  const drawer = $("trackingDrawer");
+  if (drawer) drawer.classList.remove("open");
+}
+
+function switchTrackingDrawerTab(tabName) {
+  const tabOverview = $("tabTrackingOverview");
+  const tabSpecs = $("tabTrackingSpecs");
+  const tabRaw = $("tabTrackingRaw");
+  const secOverview = $("trackingSecOverview");
+  const secSpecs = $("trackingSecSpecs");
+  const secRaw = $("trackingSecRaw");
+
+  if (tabOverview) tabOverview.classList.toggle("active", tabName === "overview");
+  if (tabSpecs) tabSpecs.classList.toggle("active", tabName === "specs");
+  if (tabRaw) tabRaw.classList.toggle("active", tabName === "raw");
+
+  if (secOverview) secOverview.style.display = tabName === "overview" ? "block" : "none";
+  if (secSpecs) secSpecs.style.display = tabName === "specs" ? "block" : "none";
+  if (secRaw) secRaw.style.display = tabName === "raw" ? "block" : "none";
+}
+
 function renderLeadDetails(lead, message, warnings) {
   const container = $("leadDetailsContainer");
   if (!container) return;
@@ -2136,8 +2164,31 @@ if ($("leadPreviewDrawer")) {
     if (e.target === $("leadPreviewDrawer")) closePreviewDrawer();
   };
 }
+if ($("tabTrackingOverview")) {
+  $("tabTrackingOverview").onclick = () => switchTrackingDrawerTab("overview");
+}
+if ($("tabTrackingSpecs")) {
+  $("tabTrackingSpecs").onclick = () => switchTrackingDrawerTab("specs");
+}
+if ($("tabTrackingRaw")) {
+  $("tabTrackingRaw").onclick = () => switchTrackingDrawerTab("raw");
+}
+if ($("closeTrackingDrawerBtn")) {
+  $("closeTrackingDrawerBtn").onclick = closeTrackingDrawer;
+}
+if ($("closeTrackingDrawer")) {
+  $("closeTrackingDrawer").onclick = closeTrackingDrawer;
+}
+if ($("trackingDrawer")) {
+  $("trackingDrawer").onclick = (e) => {
+    if (e.target === $("trackingDrawer")) closeTrackingDrawer();
+  };
+}
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closePreviewDrawer();
+  if (e.key === "Escape") {
+    closePreviewDrawer();
+    closeTrackingDrawer();
+  }
 });
 
 let trackingOffset = 0, trackingRecords = [], trackingBusy = false;
@@ -2166,9 +2217,9 @@ async function loadTracking() {
             : `<span class="status-pill" style="color:var(--text-muted);">${escape(r.sendStatus)}</span>`;
 
       const bounceBadge = r.bounceStatus === 'hard_bounced'
-        ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:700;">⛔ Hard Bounce</span>`
+        ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:700;">⛔ Hard Bounce <small style="display:inline;color:inherit;font-size:10px;">(hard_bounced)</small></span>`
         : r.bounceStatus === 'soft_bounced'
-          ? `<span class="status-pill" style="background:#fffbeb;color:#b45309;border:1px solid rgba(245,158,11,0.3);font-weight:600;">⚠️ Soft Bounce</span>`
+          ? `<span class="status-pill" style="background:#fffbeb;color:#b45309;border:1px solid rgba(245,158,11,0.3);font-weight:600;">⚠️ Soft Bounce <small style="display:inline;color:inherit;font-size:10px;">(soft_bounced)</small></span>`
           : `<span style="color:#059669;font-size:12px;font-weight:500;">✓ Clean</span>`;
 
       const seenBadge = r.firstOpenAt
@@ -2197,6 +2248,351 @@ for (const id of ['trackingSearch', 'trackingCampaign', 'trackingStatus', 'track
 }
 $('trackingPrev').onclick = () => { trackingOffset = Math.max(0, trackingOffset - 50); loadTracking().catch((e) => notice(e.message)); };
 $('trackingNext').onclick = () => { trackingOffset += 50; loadTracking().catch((e) => notice(e.message)); };
+function renderTrackingDetail(r) {
+  const panel = $('trackingDetail');
+  if (!panel) return;
+
+  if ($('trackingDrawerTitle')) {
+    $('trackingDrawerTitle').textContent = r.recipient ? `Tracking: ${r.recipient}` : 'Tracking Details';
+  }
+
+  const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
+  const fmtTime = (iso) =>
+    iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+
+  // Badges matching lead details system
+  const sendBadge =
+    r.sendStatus === 'webmail_sent'
+      ? `<span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:600;">✓ Dispatched</span>`
+      : r.sendStatus === 'send_failed'
+        ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:600;">✕ Failed</span>`
+        : r.sendStatus === 'send_attempted'
+          ? `<span class="status-pill" style="background:#eff6ff;color:#1d4ed8;font-weight:600;">⏳ Sending...</span>`
+          : `<span class="status-pill" style="color:var(--text-muted);">${escape(r.sendStatus || 'Pending')}</span>`;
+
+  const seenBadge = r.firstOpenAt
+    ? `<span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:700;">👁️ Seen${r.opens?.length > 1 ? ` (${r.opens.length}x)` : ''}</span>`
+    : `<span class="status-pill" style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;font-weight:500;">✉️ Unopened</span>`;
+
+  const bounceBadge =
+    r.bounceStatus === 'hard_bounced'
+      ? `<span class="status-pill blocked" style="background:#fef2f2;color:#b91c1c;border:1px solid rgba(239,68,68,0.3);font-weight:700;">⛔ Hard Bounce</span>`
+      : r.bounceStatus === 'soft_bounced'
+        ? `<span class="status-pill" style="background:#fffbeb;color:#b45309;border:1px solid rgba(245,158,11,0.3);font-weight:600;">⚠️ Soft Bounce</span>`
+        : `<span class="status-pill good" style="background:#ecfdf5;color:#047857;border:1px solid rgba(16,185,129,0.3);font-weight:500;">✓ Clean Delivery</span>`;
+
+  // Relative timing calculation
+  let openRelative = '';
+  if (r.attemptedAt && r.firstOpenAt) {
+    const diffSec = Math.round((new Date(r.firstOpenAt) - new Date(r.attemptedAt)) / 1000);
+    if (diffSec < 60) openRelative = `+${Math.max(0, diffSec)}s after send`;
+    else if (diffSec < 3600) openRelative = `+${Math.round(diffSec / 60)}m after send`;
+    else openRelative = `+${(diffSec / 3600).toFixed(1)}h after send`;
+  }
+
+  // Build Timeline Items
+  const timelineEvents = [];
+  if (r.events && r.events.length) {
+    for (const ev of r.events) {
+      if (ev.type === 'pending') {
+        timelineEvents.push({
+          time: ev.at,
+          title: 'Queued for Outreach',
+          desc: 'Message created and queued in campaign.',
+          color: 'blue',
+          icon: '⏱️',
+        });
+      } else if (ev.type === 'send_attempted') {
+        timelineEvents.push({
+          time: ev.at,
+          title: 'Webmail Send Initiated',
+          desc: 'Playwright initialized browser compose window and inserted content.',
+          color: 'blue',
+          icon: '🚀',
+        });
+      } else if (ev.type === 'webmail_sent') {
+        timelineEvents.push({
+          time: ev.at,
+          title: 'Webmail Confirmed Dispatched',
+          desc: 'Namecheap mail server verified message was sent.',
+          color: 'green',
+          icon: '✓',
+        });
+      } else if (ev.type === 'sent_message_id') {
+        timelineEvents.push({
+          time: ev.at,
+          title: 'Message-ID Recorded',
+          desc: `Mail server assigned identifier: <code>${escape(ev.messageId)}</code>`,
+          color: 'blue',
+          icon: '🆔',
+        });
+      } else if (ev.type === 'open_detected') {
+        timelineEvents.push({
+          time: ev.at,
+          title: 'Recipient Opened Email (Open Signal)',
+          desc: `${escape(ev.signal || 'Remote 1x1 image request received from mail client.')} ${openRelative ? `<strong style="color:#10b981;">(${openRelative})</strong>` : ''}`,
+          color: 'emerald',
+          icon: '👁️',
+        });
+      } else if (ev.type === 'hard_bounced') {
+        timelineEvents.push({
+          time: ev.at,
+          title: 'Hard Bounce Reported (Permanent DSN)',
+          desc: `${escape(ev.diagnostic || ev.status || r.bounceReason || 'Mailbox unavailable.')}`,
+          color: 'red',
+          icon: '⛔',
+        });
+      } else if (ev.type === 'soft_bounced') {
+        timelineEvents.push({
+          time: ev.at,
+          title: 'Soft Bounce Reported (Temporary Delay)',
+          desc: `${escape(ev.diagnostic || ev.status || r.bounceReason || 'Temporary delivery delay.')}`,
+          color: 'amber',
+          icon: '⚠️',
+        });
+      } else if (ev.type === 'seed_placement') {
+        timelineEvents.push({
+          time: ev.at,
+          title: 'Seed Placement Verified',
+          desc: `Folder: <strong>${escape(ev.status || '')}</strong> · Evidence: ${escape(ev.evidence || '')}`,
+          color: 'green',
+          icon: '🎯',
+        });
+      } else {
+        timelineEvents.push({
+          time: ev.at,
+          title: escape(ev.type),
+          desc: escape(JSON.stringify(ev)),
+          color: 'blue',
+          icon: '•',
+        });
+      }
+    }
+  } else {
+    if (r.createdAt) timelineEvents.push({ time: r.createdAt, title: 'Message Initialized', desc: 'Added to tracking index.', color: 'blue', icon: '⏱️' });
+    if (r.attemptedAt) timelineEvents.push({ time: r.attemptedAt, title: 'Send Attempted', desc: 'Webmail compose window prepared.', color: 'blue', icon: '🚀' });
+    if (r.confirmedAt) timelineEvents.push({ time: r.confirmedAt, title: 'Webmail Send Confirmed', desc: 'Message sent successfully.', color: 'green', icon: '✓' });
+    if (r.firstOpenAt) timelineEvents.push({ time: r.firstOpenAt, title: 'Recipient Opened Email', desc: 'Tracking pixel loaded.', color: 'emerald', icon: '👁️' });
+    if (r.bounceStatus) timelineEvents.push({ time: r.lastEventAt || r.confirmedAt, title: `${r.bounceStatus} Notification`, desc: r.bounceReason || 'Delivery failure notice.', color: 'red', icon: '⛔' });
+  }
+
+  const timelineHtml = timelineEvents
+    .map(
+      (ev) => `
+      <div class="timeline-item">
+        <div class="timeline-node node-${ev.color}">${ev.icon}</div>
+        <div class="timeline-content">
+          <div class="timeline-header">
+            <span class="timeline-title">${ev.title}</span>
+            <span class="timeline-time">${fmt(ev.time)}</span>
+          </div>
+          <div class="timeline-desc">${ev.desc}</div>
+        </div>
+      </div>`,
+    )
+    .join('');
+
+  panel.innerHTML = `
+    <!-- Top Hero Card (Consistent with Lead Details Inspector) -->
+    <div class="lead-details-hero">
+      <h2 class="lead-hero-company" style="font-size: 17px; word-break: break-all;">${escape(r.recipient)}</h2>
+      <div class="lead-hero-subtitle">
+        <span><strong>${escape(r.subject || '(No Subject)')}</strong></span>
+        ${r.sender ? `<span>• From: ${escape(r.sender)}</span>` : ''}
+      </div>
+      <div class="lead-badges-row">
+        ${sendBadge}
+        ${seenBadge}
+        ${bounceBadge}
+      </div>
+    </div>
+
+    <!-- SECTION 1: OVERVIEW & TIMELINE -->
+    <div id="trackingSecOverview" class="drawer-tab-pane active">
+      <!-- Delivery & Engagement Metrics Card -->
+      <div class="lead-details-card">
+        <h4 class="lead-details-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Delivery & Engagement Metrics
+        </h4>
+        <div class="lead-details-grid">
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Send Status</span>
+            <span class="lead-detail-value">${r.sendStatus === 'webmail_sent' ? 'Confirmed' : escape(r.sendStatus || 'Pending')} <small style="color:var(--text-muted);font-weight:normal;">(${r.confirmedAt ? fmtTime(r.confirmedAt) : (r.attemptedAt ? fmtTime(r.attemptedAt) : '—')})</small></span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Read Engagement</span>
+            <span class="lead-detail-value" style="color: ${r.firstOpenAt ? '#10b981' : 'var(--text-muted)'};">${r.firstOpenAt ? `Seen (${r.opens?.length || 1}x)` : 'Unopened'} <small style="font-weight:normal;">(${r.firstOpenAt ? (openRelative || fmtTime(r.firstOpenAt)) : 'No read detected'})</small></span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Deliverability Health</span>
+            <span class="lead-detail-value" style="color: ${r.bounceStatus ? '#ef4444' : '#10b981'};">${r.bounceStatus ? `${escape(r.bounceStatus)}` : 'Clean (No DSN)'}</span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Sender Account</span>
+            <span class="lead-detail-value">${escape(r.sender || 'Not recorded')}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bounce Diagnostic Card (Shown when failure / bounce detected) -->
+      ${r.bounceReason || r.bounceStatus ? `
+      <div class="lead-details-card" style="border-left: 3px solid #ef4444;">
+        <h4 class="lead-details-title" style="color: #f87171;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          Delivery Failure Diagnostic (${escape(r.bounceStatus || 'bounced')})
+        </h4>
+        <div style="font-size: 13px; font-weight: 600; color: #fca5a5; font-family: ui-monospace, SFMono-Regular, monospace; margin-bottom: 6px; word-break: break-all;">${escape(r.bounceReason || 'smtp; 550 mailbox unavailable')}</div>
+        <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">Recipient reported a permanent delivery failure via IMAP DSN notification. This recipient has been automatically excluded from future outreach.</div>
+      </div>` : ''}
+
+      <!-- Lifecycle Event Timeline Card -->
+      <div class="lead-details-card">
+        <h4 class="lead-details-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Lifecycle Event Timeline
+        </h4>
+        <div class="tracking-timeline">
+          ${timelineHtml || '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">No timeline events recorded.</div>'}
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 2: TECHNICAL SPECS -->
+    <div id="trackingSecSpecs" class="drawer-tab-pane" style="display: none;">
+      <!-- Identifiers & Routing Card -->
+      <div class="lead-details-card">
+        <h4 class="lead-details-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          Message Identifiers & Routing
+        </h4>
+        <div class="lead-details-grid">
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Recipient</span>
+            <span class="lead-detail-value"><a href="mailto:${escape(r.recipient)}">${escape(r.recipient)}</a><button type="button" class="copy-mini-btn" data-copy="${escape(r.recipient)}" title="Copy recipient"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Sender Account</span>
+            <span class="lead-detail-value">${escape(r.sender || 'Not recorded')}</span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Campaign ID</span>
+            <span class="lead-detail-value">${escape(r.campaignId || 'Direct Outreach')}</span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Tracking UUID</span>
+            <span class="lead-detail-value"><code>${escape(r.id)}</code><button type="button" class="copy-mini-btn" data-copy="${escape(r.id)}" title="Copy UUID"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></span>
+          </div>
+          ${r.messageIds?.length ? `
+          <div class="lead-detail-item full-width">
+            <span class="lead-detail-label">Recorded Message-ID</span>
+            <span class="lead-detail-value"><code>${escape(r.messageIds[0])}</code><button type="button" class="copy-mini-btn" data-copy="${escape(r.messageIds[0])}" title="Copy Message-ID"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></span>
+          </div>` : ''}
+        </div>
+      </div>
+
+      <!-- Transmission & Interaction Timestamps Card -->
+      <div class="lead-details-card">
+        <h4 class="lead-details-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          Transmission & Interaction Timestamps
+        </h4>
+        <div class="lead-details-grid">
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Created At</span>
+            <span class="lead-detail-value">${fmt(r.createdAt)}</span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Webmail Confirmed At</span>
+            <span class="lead-detail-value">${fmt(r.confirmedAt || r.attemptedAt)}</span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">First Read Detected</span>
+            <span class="lead-detail-value">${r.firstOpenAt ? `<span style="color:#10b981;font-weight:600;">${fmt(r.firstOpenAt)} ${openRelative ? `<small>(${openRelative})</small>` : ''}</span>` : '<span style="color:var(--text-muted);">Unopened</span>'}</span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Total Read Sessions</span>
+            <span class="lead-detail-value"><strong>${r.opens?.length || (r.firstOpenAt ? 1 : 0)} recorded interaction(s)</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seed Placement Card (if applicable) -->
+      ${r.seedId ? `
+      <div class="lead-details-card">
+        <h4 class="lead-details-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+          Seed Inbox Placement Verification
+        </h4>
+        <div class="lead-details-grid">
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Seed ID</span>
+            <span class="lead-detail-value">${escape(r.seedId)}</span>
+          </div>
+          <div class="lead-detail-item">
+            <span class="lead-detail-label">Folder Placement</span>
+            <span class="lead-detail-value"><strong>${escape(r.seedPlacement?.status || 'awaiting')}</strong></span>
+          </div>
+          <div class="lead-detail-item full-width">
+            <span class="lead-detail-label">Verification Evidence</span>
+            <span class="lead-detail-value">${escape(r.seedPlacement?.evidence || 'No evidence note provided')}</span>
+          </div>
+        </div>
+      </div>` : ''}
+    </div>
+
+    <!-- SECTION 3: RAW JSON -->
+    <div id="trackingSecRaw" class="drawer-tab-pane" style="display: none;">
+      <div class="lead-details-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h4 class="lead-details-title" style="margin:0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            Complete Tracking Record (JSON)
+          </h4>
+          <button type="button" class="secondary" data-copy-json style="font-size:11px;padding:4px 10px;">Copy JSON</button>
+        </div>
+        <pre class="message-preview-box" style="max-height: 440px; overflow: auto; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11.5px; line-height: 1.5; color: #cbd5e1; background: var(--bg-surface-elevated, #1a1e26); border-radius: var(--radius-sm); padding: 12px; margin: 0;">${escape(JSON.stringify(r, null, 2))}</pre>
+      </div>
+    </div>
+  `;
+
+  panel.hidden = false;
+  switchTrackingDrawerTab('overview');
+
+  // Wire footer Copy Summary button
+  const copySummaryBtn = $('trackingCopyBtn');
+  if (copySummaryBtn) {
+    copySummaryBtn.onclick = () => {
+      const summaryText = `Recipient: ${r.recipient}\nSubject: ${r.subject || '(No Subject)'}\nSend Status: ${r.sendStatus}\nDelivery: ${r.confirmedAt ? 'Confirmed' : 'Pending'}\nFirst Open: ${r.firstOpenAt || 'Unopened'}\nDeliverability: ${r.bounceStatus || 'Clean'}\nTracking ID: ${r.id}`;
+      navigator.clipboard?.writeText(summaryText);
+      const orig = copySummaryBtn.innerHTML;
+      copySummaryBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
+      setTimeout(() => { copySummaryBtn.innerHTML = orig; }, 1500);
+    };
+  }
+
+  // Wire mini copy buttons
+  panel.querySelectorAll('[data-copy]').forEach((btn) => {
+    btn.onclick = () => {
+      navigator.clipboard?.writeText(btn.dataset.copy);
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+      setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    };
+  });
+
+  // Wire copy JSON button
+  const copyJsonBtn = panel.querySelector('[data-copy-json]');
+  if (copyJsonBtn) {
+    copyJsonBtn.onclick = () => {
+      navigator.clipboard?.writeText(JSON.stringify(r, null, 2));
+      const orig = copyJsonBtn.textContent;
+      copyJsonBtn.textContent = '✓ Copied!';
+      setTimeout(() => { copyJsonBtn.textContent = orig; }, 1500);
+    };
+  }
+}
+
 $('trackingRows').onclick = (e) => {
   const button = e.target.closest('button');
   if (!button) return;
@@ -2206,8 +2602,7 @@ $('trackingRows').onclick = (e) => {
   });
   const r = trackingRecords[Number(button.dataset.track)];
   if (!r) return;
-  $('trackingDetail').hidden = false;
-  $('trackingDetail').textContent = JSON.stringify(r, null, 2);
+  openTrackingDrawer(r);
   $('placementForm').hidden = !r.seedId || !r.attemptedAt;
   $('placementId').value = r.id;
   $('placementEvidence').value = '';
@@ -2218,7 +2613,7 @@ $('placementForm').onsubmit = (e) => {
     await api('/api/tracking/manual-placement', { trackingId: $('placementId').value, status: $('placementStatus').value, evidence: $('placementEvidence').value });
     await loadTracking();
     $('placementForm').hidden = true;
-    $('trackingDetail').hidden = true;
+    closeTrackingDrawer();
   });
 };
 $('seedPlanForm').onsubmit = (e) => {
