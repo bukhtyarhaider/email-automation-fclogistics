@@ -30,6 +30,36 @@ const mail = new MailBrowser();
 await fs.mkdir(DATA, { recursive: true, mode: 0o700 });
 await fs.chmod(DATA, 0o700);
 const lockPath = path.join(DATA, "app.lock");
+async function stopProcessGracefully(pid) {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return;
+  }
+  try {
+    if (process.platform === "win32") {
+      try {
+        process.kill(pid);
+      } catch {}
+    } else {
+      process.kill(pid, "SIGTERM");
+    }
+  } catch (e) {
+    if (e.code === "ESRCH") return;
+  }
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {}
+}
+
 async function lock() {
   try {
     const h = await fs.open(lockPath, "wx", 0o600);
@@ -37,18 +67,46 @@ async function lock() {
     await h.close();
   } catch (e) {
     if (e.code !== "EEXIST") throw e;
-    const pid = Number(await fs.readFile(lockPath, "utf8"));
+    let pid;
+    try {
+      pid = Number(await fs.readFile(lockPath, "utf8"));
+    } catch {
+      await fs.unlink(lockPath).catch(() => {});
+      return lock();
+    }
     try {
       process.kill(pid, 0);
-      throw new Error("Another instance is using this data folder.");
+      if (
+        process.env.FC_RESTART === "1" ||
+        process.argv.includes("--restart") ||
+        process.argv.includes("--force")
+      ) {
+        console.log(`[Outreach Desk] Stopping previous instance (PID ${pid})...`);
+        await stopProcessGracefully(pid);
+        await fs.unlink(lockPath).catch(() => {});
+        return lock();
+      }
+      throw new Error(`Another instance is using this data folder (PID: ${pid}).`);
     } catch (error) {
       if (error.code !== "ESRCH") throw error;
-      await fs.unlink(lockPath);
+      await fs.unlink(lockPath).catch(() => {});
       return lock();
     }
   }
 }
-await lock();
+try {
+  await lock();
+} catch (e) {
+  if (e.message?.includes("is using this data folder")) {
+    console.error(`\n[Outreach Desk] ${e.message}`);
+    console.error(`An active instance is already running at http://127.0.0.1:${PORT}/`);
+    console.error(`  - To open in your browser: open http://127.0.0.1:${PORT}/`);
+    console.error(`  - To restart and replace it: node src/server.mjs --restart (or FC_RESTART=1)`);
+    console.error(`  - Or launch with options: npm run launch (or ./Start-Mac.command)\n`);
+    process.exit(1);
+  }
+  throw e;
+}
 process.once("exit", () => {
   try {
     unlinkSync(lockPath);
@@ -1674,4 +1732,5 @@ for (const signal of ["SIGINT", "SIGTERM"])
     while (busy || monitor.running) await new Promise((r) => setTimeout(r, 100));
     await mail.close();
     await persist();
+    process.exit(0);
   });
