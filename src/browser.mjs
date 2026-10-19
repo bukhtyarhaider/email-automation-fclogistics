@@ -30,6 +30,7 @@ export class MailBrowser {
       headless: false,
     });
     const context = await this.browser.newContext(); // Ephemeral: no saved auth state or password.
+    await context.route(/\/o\/[\w-]+\.gif/, (route) => route.abort());
     this.page = await context.newPage();
     this.page.setDefaultTimeout(15000);
     await this.page.goto(account.url, { waitUntil: "domcontentloaded" });
@@ -145,6 +146,20 @@ export class MailBrowser {
       el.prepend(wrapper);
       el.dispatchEvent(new Event("input", { bubbles: true }));
     }, message.body);
+    if (message.trackingId) {
+      await editor.locator("[data-fc-outreach]").evaluate((el, tracking) => {
+        el.dataset.fcTracking = tracking.id;
+        if (tracking.pixelUrl) {
+          const image = el.ownerDocument.createElement("img");
+          image.src = tracking.pixelUrl;
+          image.width = 1; image.height = 1; image.alt = "";
+          image.style.border = "0";
+          image.dataset.fcPixel = "true";
+          el.appendChild(image);
+        }
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }, { id: message.trackingId, pixelUrl: message.pixelUrl });
+    }
     if (
       (await editor
         .locator(".spm-signature-block")
@@ -189,6 +204,8 @@ export class MailBrowser {
         .evaluate((el) => el.outerHTML)) !== p.signature
     )
       throw new Error("Signature changed. Sending blocked.");
+    if (p.message.trackingId && (await p.editor.locator("[data-fc-outreach]").getAttribute("data-fc-tracking")) !== p.message.trackingId)
+      throw new Error("Tracking marker changed. Prepare the message again.");
     const text = await p.composer.innerText();
     if (
       !text.includes(this.account.email) ||
@@ -211,16 +228,18 @@ export class MailBrowser {
       throw new Error("Unexpected recipient list. Sending blocked.");
   }
   async send() {
-    await this.validate();
+    try { await this.validate(); }
+    catch (error) { error.sendNotAttempted = true; throw error; }
     const { composer } = this.prepared;
     // A fresh visible success notice is required. Window closure alone is not proof.
     const confirmation = this.page.getByText(
       /^(message|email)( was)? sent( successfully)?[.!]?$/i,
     );
-    if (await confirmation.isVisible().catch(() => false))
-      throw new Error(
-        "A previous send notice is still visible. Wait before continuing.",
-      );
+    if (await confirmation.isVisible().catch(() => false)) {
+      const error = new Error("A previous send notice is still visible. Wait before continuing.");
+      error.sendNotAttempted = true;
+      throw error;
+    }
     await composer.getByRole("button", { name: "Send", exact: true }).click();
     await confirmation.waitFor({ state: "visible", timeout: 20000 });
     const evidence = await confirmation.innerText();

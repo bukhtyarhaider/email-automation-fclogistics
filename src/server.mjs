@@ -4,7 +4,7 @@ import { unlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { MailBrowser } from "./browser.mjs";
 import {
   templates,
@@ -18,6 +18,10 @@ import { deliver } from "./delivery.mjs";
 import { upgrade, validateSettings, DEFAULTS } from "./config.mjs";
 import { quota, nextPause } from "./pacing.mjs";
 import { TeamClient } from "./team.mjs";
+import { initTracking, createRecord, syncRecord, addEvent, report, safeRecord, seedConfig, recordPlacement, hash } from "./tracking.mjs";
+import { MailboxMonitor } from "./mailbox-monitor.mjs";
+import { startPixelServer } from "./pixel-server.mjs";
+import { domainHealth } from "./domain-health.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = path.resolve(process.env.FC_DATA_DIR || path.join(ROOT, "data"));
@@ -26,6 +30,36 @@ const mail = new MailBrowser();
 await fs.mkdir(DATA, { recursive: true, mode: 0o700 });
 await fs.chmod(DATA, 0o700);
 const lockPath = path.join(DATA, "app.lock");
+async function stopProcessGracefully(pid) {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return;
+  }
+  try {
+    if (process.platform === "win32") {
+      try {
+        process.kill(pid);
+      } catch {}
+    } else {
+      process.kill(pid, "SIGTERM");
+    }
+  } catch (e) {
+    if (e.code === "ESRCH") return;
+  }
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+  }
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {}
+}
+
 async function lock() {
   try {
     const h = await fs.open(lockPath, "wx", 0o600);
@@ -33,18 +67,46 @@ async function lock() {
     await h.close();
   } catch (e) {
     if (e.code !== "EEXIST") throw e;
-    const pid = Number(await fs.readFile(lockPath, "utf8"));
+    let pid;
+    try {
+      pid = Number(await fs.readFile(lockPath, "utf8"));
+    } catch {
+      await fs.unlink(lockPath).catch(() => {});
+      return lock();
+    }
     try {
       process.kill(pid, 0);
-      throw new Error("Another instance is using this data folder.");
+      if (
+        process.env.FC_RESTART === "1" ||
+        process.argv.includes("--restart") ||
+        process.argv.includes("--force")
+      ) {
+        console.log(`[Outreach Desk] Stopping previous instance (PID ${pid})...`);
+        await stopProcessGracefully(pid);
+        await fs.unlink(lockPath).catch(() => {});
+        return lock();
+      }
+      throw new Error(`Another instance is using this data folder (PID: ${pid}).`);
     } catch (error) {
       if (error.code !== "ESRCH") throw error;
-      await fs.unlink(lockPath);
+      await fs.unlink(lockPath).catch(() => {});
       return lock();
     }
   }
 }
-await lock();
+try {
+  await lock();
+} catch (e) {
+  if (e.message?.includes("is using this data folder")) {
+    console.error(`\n[Outreach Desk] ${e.message}`);
+    console.error(`An active instance is already running at http://127.0.0.1:${PORT}/`);
+    console.error(`  - To open in your browser: open http://127.0.0.1:${PORT}/`);
+    console.error(`  - To restart and replace it: node src/server.mjs --restart (or FC_RESTART=1)`);
+    console.error(`  - Or launch with options: npm run launch (or ./Start-Mac.command)\n`);
+    process.exit(1);
+  }
+  throw e;
+}
 process.once("exit", () => {
   try {
     unlinkSync(lockPath);
@@ -61,6 +123,7 @@ try {
 }
 const oldVersion = state.version;
 upgrade(state);
+initTracking(state);
 // Keep existing edited templates. New installations contain no customer-specific data.
 state.templates = !state.templates
   ? structuredClone(templates)
@@ -119,6 +182,37 @@ function persist() {
   };
   persistTail = persistTail.then(run, run);
   return persistTail;
+}
+const monitor = new MailboxMonitor({ state, persist });
+function track(item) {
+  let record = state.tracking.records[item.trackingId];
+  if (!record) record = createRecord(state.tracking, { to: item.recipient, subject: item.subject }, {
+    id: item.trackingId, sender: item.accountEmail, campaignId: item.campaignId,
+  }).record;
+  syncRecord(record, item);
+}
+async function prepareTracked(message, campaignId) {
+  let result;
+  try {
+    result = createRecord(state.tracking, message, { sender: profile().email, campaignId }, {
+      openEnabled: process.env.FC_OPEN_TRACKING_ENABLED === "1",
+      consent: process.env.FC_OPEN_TRACKING_CONSENT === "1", publicUrl: process.env.FC_TRACKING_PUBLIC_URL,
+    });
+  } catch {
+    result = createRecord(state.tracking, message, { sender: profile().email, campaignId });
+    state.tracking.worker.pixel = { status: "Needs configuration", message: "Open tracking skipped: configure a public HTTPS URL" };
+  }
+  message.trackingId = result.record.id;
+  if (result.pixelUrl) message.pixelUrl = result.pixelUrl;
+  await persist();
+  try { return await mail.prepare(message); }
+  catch (error) {
+    result.record.sendStatus = "send_failed";
+    result.record.error = "Composer preparation failed before submission";
+    addEvent(result.record, "send_failed");
+    await persist();
+    throw error;
+  }
 }
 function event(message, details = {}) {
   state.events.push({ at: new Date().toISOString(), message, ...details });
@@ -285,7 +379,7 @@ function template(key) {
   return state.templates[key];
 }
 function currentQuota() {
-  return quota(state.history, profile()?.email, state.settings.pacing);
+  return quota({ ...state.history, ...Object.fromEntries(Object.entries(state.seedHistory).map(([id, h]) => [`seed:${id}`, h])) }, profile()?.email, state.settings.pacing);
 }
 function checkBusiness() {
   for (const key of [
@@ -367,7 +461,10 @@ async function sendPrepared() {
         prepared = null;
       },
       sentStatus: state.settings.eligibility.sentStatus,
+      tracking: track,
       metadata: {
+        trackingId: p.message.trackingId,
+        recipient: lead.email,
         accountEmail: account.email,
         profileId: account.id,
         campaignId: c.id,
@@ -439,7 +536,7 @@ async function runner() {
         busy = true;
         await syncTeam();
         checkBusiness();
-        const lastLocal = Object.values(state.history)
+        const lastLocal = [...Object.values(state.history), ...Object.values(state.seedHistory)]
           .filter((h) => !h.accountEmail || h.accountEmail === profile().email)
           .reduce(
             (n, h) => Math.max(n, Date.parse(h.confirmedAt || h.at) || 0),
@@ -546,8 +643,11 @@ async function runner() {
           : a.templateKey;
         const message = render(lead, template(key), business());
         const warnings = assess(message);
-        if (warnings.length) throw new Error(warnings.join(" "));
-        const proof = await mail.prepare(message);
+        if (warnings.length) {
+          const tmplName = state.templates[key]?.name || key;
+          throw new Error(`Template "${tmplName}": ${warnings.join(" ")}`);
+        }
+        const proof = await prepareTracked(message, c.id);
         prepared = {
           id: lead.id,
           campaignId: c.id,
@@ -723,6 +823,96 @@ const server = http.createServer(async (req, res) => {
           return response(res, { ok: true });
         }
         const input = await body(req);
+        if (pathname === "/api/tracking/manual-placement") {
+          const record = state.tracking.records[input.trackingId];
+          if (!record?.attemptedAt) throw new Error("Choose an attempted seed send.");
+          recordPlacement(record, input.status, input.evidence);
+          await persist();
+          return response(res, { ok: true });
+        }
+        if (pathname === "/api/tracking/seed-plan") {
+          if (state.automation.enabled || prepared) throw new Error("Stop outreach and close compose before seed tests.");
+          checkBusiness();
+          if (!/^[a-zA-Z0-9_-]{1,80}$/.test(input.testKey || "")) throw new Error("Use a unique test key (letters, digits, dash or underscore; max 80).");
+          const seeds = seedConfig();
+          if (!seeds.length) throw new Error("Configure FC_SEEDS with your authorized test mailbox recipients.");
+          const lead = activeData().leads.find((l) => l.id === input.leadId);
+          if (!lead) throw new Error("Choose a lead from the active campaign as the content sample.");
+          const message = render(lead, template(input.key), business());
+          const campaignId = state.activeCampaign;
+          const signature = hash(JSON.stringify({ message, campaignId, sender: profile().email, seeds: seeds.map((s) => [s.id, s.email]) }));
+          const existing = state.tracking.seedTests[input.testKey];
+          if (existing) {
+            if (existing.signature !== signature) throw new Error("This test key already belongs to a different seed plan.");
+            return response(res, existing);
+          }
+          const ids = seeds.map((seed) => {
+            const id = randomUUID();
+            const subject = `${message.subject.slice(0, 135)} [FC seed ${id}]`;
+            let result;
+            try {
+              result = createRecord(state.tracking, { to: seed.email, subject }, {
+                id, sender: profile().email, campaignId, seedId: seed.id, testKey: input.testKey,
+              }, {
+                openEnabled: process.env.FC_OPEN_TRACKING_ENABLED === "1",
+                consent: process.env.FC_OPEN_TRACKING_CONSENT === "1",
+                publicUrl: process.env.FC_TRACKING_PUBLIC_URL,
+              });
+            } catch {
+              result = createRecord(state.tracking, { to: seed.email, subject }, {
+                id, sender: profile().email, campaignId, seedId: seed.id, testKey: input.testKey,
+              });
+            }
+            result.record.sampleBody = message.body;
+            if (result.pixelUrl) result.record.pixelUrl = result.pixelUrl;
+            return result.record.id;
+          });
+          const plan = { testKey: input.testKey, signature, ids, createdAt: new Date().toISOString() };
+          state.tracking.seedTests[input.testKey] = plan;
+          await persist();
+          return response(res, plan);
+        }
+        if (pathname === "/api/tracking/seed-send") {
+          if (state.automation.enabled || prepared || mail.prepared) throw new Error("Stop outreach and close compose before seed tests.");
+          if (!(await mail.isConnected())) throw new Error("Connect the mailbox first.");
+          checkBusiness();
+          const record = state.tracking.records[input.trackingId];
+          const seed = seedConfig().find((s) => s.id === record?.seedId && s.email === record?.recipient);
+          if (!seed || record.sender !== profile().email) throw new Error("Seed mailbox or sending profile mismatch.");
+          if (record.sendStatus !== "pending" || record.preparationStartedAt || record.attemptedAt)
+            throw new Error("This seed is reserved or attempted already. Inspect webmail; create a new test key only for an intentional new test.");
+          const last = Object.values({ ...state.history, ...state.seedHistory }).filter((h) => h.accountEmail === profile().email)
+            .reduce((n, h) => Math.max(n, Date.parse(h.at) || 0), 0);
+          if (currentQuota().waitMs || last + state.settings.pacing.minSeconds * 1000 > Date.now())
+            throw new Error("Wait for the configured mailbox interval and allowance before the next seed send.");
+          if (state.settings.team.enabled) throw new Error("Seed sending is local-only. Use a dedicated mailbox without team coordination for seed tests.");
+          record.preparationStartedAt = new Date().toISOString();
+          if (!record.pixelUrl && process.env.FC_OPEN_TRACKING_ENABLED === "1" && process.env.FC_TRACKING_PUBLIC_URL) {
+            try {
+              const base = new URL(process.env.FC_TRACKING_PUBLIC_URL);
+              if (base.protocol === "https:") {
+                const token = randomBytes(32).toString("base64url");
+                record.openTokenHash = hash(token);
+                state.tracking.openIndex ||= {};
+                state.tracking.openIndex[record.openTokenHash] = record.id;
+                record.pixelUrl = `${base.origin}${base.pathname.replace(/\/$/, "")}/o/${token}.gif`;
+              }
+            } catch {}
+          }
+          await persist(); // Prevent re-submission even across crashes during composition.
+          const message = { to: record.recipient, subject: record.subject, body: record.sampleBody, trackingId: record.id, pixelUrl: record.pixelUrl };
+          try {
+            await mail.prepare(message);
+            await deliver({ state: { history: state.seedHistory, workbook: { file: "seed-test" } },
+              historyKey: record.id, lead: { id: record.id, email: record.recipient, company: seed.id }, message,
+              persist, send: () => mail.send(), syncStatus: async () => {}, event, tracking: track,
+              metadata: { trackingId: record.id, recipient: record.recipient, accountEmail: record.sender, campaignId: record.campaignId } });
+          } catch (error) {
+            if (!record.attemptedAt) { record.sendStatus = "send_failed"; addEvent(record, "send_failed", { reason: "Seed preparation failed" }); await persist(); }
+            throw error;
+          }
+          return response(res, { ok: true, record: safeRecord(record) });
+        }
         if (pathname === "/api/import") {
           await importWorkbook(input.path);
           return response(res, { ok: true });
@@ -988,7 +1178,7 @@ const server = http.createServer(async (req, res) => {
           };
           if (!Number.isInteger(t.weight) || t.weight < 1 || t.weight > 100)
             throw new Error("Template weight must be from 1 to 100.");
-          render(
+          const sampleMsg = render(
             activeData().leads[0] || {
               company: "Example Company",
               email: "person@example.com",
@@ -997,13 +1187,17 @@ const server = http.createServer(async (req, res) => {
             t,
             business(),
           );
+          const warnings = assess(sampleMsg);
           state.templates[key] = t;
-          event(`Saved template ${t.name}.`, {
-            kind: "template",
-            templateKey: key,
-          });
+          event(
+            `Saved template ${t.name}.${warnings.length ? " Compliance alert: " + warnings.join(" ") : ""}`,
+            {
+              kind: "template",
+              templateKey: key,
+            },
+          );
           await persist();
-          return response(res, { key });
+          return response(res, { key, warnings });
         }
         if (pathname === "/api/delete-template") {
           if (prepared) throw new Error("Close the prepared message first.");
@@ -1082,8 +1276,11 @@ const server = http.createServer(async (req, res) => {
             : input.key;
           const message = render(l, template(key), business()),
             warnings = assess(message);
-          if (warnings.length) throw new Error(warnings.join(" "));
-          const proof = await mail.prepare(message);
+          if (warnings.length) {
+            const tmplName = state.templates[key]?.name || key;
+            throw new Error(`Template "${tmplName}": ${warnings.join(" ")}`);
+          }
+          const proof = await prepareTracked(message, l.campaignId);
           prepared = {
             id: l.id,
             campaignId: l.campaignId,
@@ -1094,6 +1291,9 @@ const server = http.createServer(async (req, res) => {
           return response(res, { ...proof, message, key });
         }
         if (pathname === "/api/release") {
+          const record = state.tracking.records[prepared?.message.trackingId];
+          if (record) { record.cancelledAt = new Date().toISOString(); addEvent(record, "compose_released"); }
+          await persist();
           await mail.release();
           prepared = null;
           return response(res, { ok: true });
@@ -1154,6 +1354,8 @@ const server = http.createServer(async (req, res) => {
           if (item.status === "Uncertain" && input.outcome === "sent") {
             item.status = "Sent";
             item.evidence = "Manually verified in Sent folder";
+            item.confirmedAt ||= new Date().toISOString();
+            item.confirmationSource = "manual_sent_folder";
             item.syncNeeded = true;
           }
           if (item.status === "Uncertain" && input.outcome === "not-sent")
@@ -1184,6 +1386,8 @@ const server = http.createServer(async (req, res) => {
             await syncStatus(lead, state.settings.eligibility.sentStatus, c.id);
             item.syncNeeded = false;
           }
+          item.sendStatus = item.status === "Sent" ? "webmail_sent" : item.status === "Not sent — manual review" ? "send_failed" : item.sendStatus;
+          track(item);
           event(`Reviewed ${input.email}: ${item.status}.`, { kind: "system" });
           await persist();
           return response(res, { ok: true });
@@ -1201,6 +1405,16 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method !== "GET")
       return response(res, { error: "Method not allowed" }, 405);
+    if (pathname === "/api/tracking") {
+      return response(res, { ...report(state.tracking, url.searchParams),
+        monitorEnabled: process.env.FC_MONITOR_ENABLED === "1",
+        opensEnabled: process.env.FC_OPEN_TRACKING_ENABLED === "1" && process.env.FC_OPEN_TRACKING_CONSENT === "1",
+        seeds: seedConfig().map(({ id, email, provider, host }) => ({ id, email, provider, automated: !!host })) });
+    }
+    if (pathname === "/api/tracking/domain") {
+      const result = await domainHealth(url.searchParams.get("domain"), (url.searchParams.get("selectors") || "").split(",").map((s) => s.trim()).filter(Boolean));
+      return response(res, result);
+    }
     if (pathname === "/api/state") {
       const leads = candidates();
       const counts = {
@@ -1360,7 +1574,16 @@ const server = http.createServer(async (req, res) => {
       const query = (url.searchParams.get("q") || "").toLowerCase(),
         status = url.searchParams.get("status");
       let records = Object.entries(state.history)
-        .map(([to, { teamToken, ...h }]) => ({ to, ...h }))
+        .map(([to, { teamToken, ...h }]) => {
+          const tRecord = h.trackingId ? state.tracking?.records?.[h.trackingId] : null;
+          return {
+            to,
+            ...h,
+            firstOpenAt: tRecord?.firstOpenAt || null,
+            opensCount: tRecord?.opens?.length || 0,
+            bounceStatus: tRecord?.bounceStatus || null,
+          };
+        })
         .sort((a, b) => b.at.localeCompare(a.at));
       if (query)
         records = records.filter((r) =>
@@ -1423,6 +1646,9 @@ const server = http.createServer(async (req, res) => {
           {
             exportedAt: new Date().toISOString(),
             records,
+            tracking: Object.values(state.tracking.records).map(safeRecord),
+            unmatchedBounces: state.tracking.review,
+            seedTests: state.tracking.seedTests,
             events: state.events,
             suppression: state.suppression,
           },
@@ -1474,13 +1700,37 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, "127.0.0.1", () =>
   console.log(`Outreach Desk: http://127.0.0.1:${PORT}`),
 );
+const pixelServer = startPixelServer({ tracking: state.tracking, persist,
+  enabled: () => process.env.FC_OPEN_TRACKING_ENABLED === "1" && process.env.FC_OPEN_TRACKING_CONSENT === "1" });
+let pixelWriteActive = false;
+const monitorTimer = setInterval(() => {
+  if (state.tracking.pixelWriteNeeded && !pixelWriteActive) {
+    pixelWriteActive = true;
+    void persist().then(() => {
+      state.tracking.pixelWriteNeeded = false;
+      delete state.tracking.worker.pixelStorage;
+    }).catch(() => {}).finally(() => { pixelWriteActive = false; });
+  }
+  for (const item of [...Object.values(state.history), ...Object.values(state.seedHistory)]) {
+    if (item.trackingSyncNeeded) {
+      try { track(item); item.trackingSyncNeeded = false; void persist().catch(() => {}); } catch {}
+    }
+  }
+  void monitor.run().catch(() => { state.tracking.worker.storage = { status: "Needs attention", message: "Monitoring state could not be saved" }; });
+}, 15000);
+monitorTimer.unref();
+if (process.env.FC_MONITOR_ENABLED === "1") void monitor.run().catch(() => {});
 if (state.automation.enabled) void runner();
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, async () => {
     if (shuttingDown) return;
     shuttingDown = true;
     server.close();
-    while (busy) await new Promise((r) => setTimeout(r, 100));
+    pixelServer?.close();
+    clearInterval(monitorTimer);
+    monitor.stop();
+    while (busy || monitor.running) await new Promise((r) => setTimeout(r, 100));
     await mail.close();
     await persist();
+    process.exit(0);
   });

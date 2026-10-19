@@ -47,7 +47,7 @@ Each message uses one recipient and keeps the existing webmail signature unchang
 
 History stores the recipient, account, campaign, template, subject, rendered body, signature text, timestamps, confirmation evidence, uncertainty, and workbook repair state. **Live System Activity** provides a dedicated real-time telemetry console with visual and raw terminal feeds, pacing countdowns, event category filters, freeze/pause stream controls, and log export (.json / .log). **Send History & Audit** includes a searchable, paginated send history with full-message details, inspector drawer, and recovery action center; **Export full history** includes all saved attempts and events. Old attempts from version 1 contain only the information recorded by that version. Downloads export the selected campaign’s updated workbook. Original files remain unchanged.
 
-Uncertain sends never retry automatically. Check the Sent folder and record the outcome in Activity. Workbook updates can be repaired without another send. Add opt-outs and permanent bounces to **Do not contact**; automatic inbox reply/bounce reading is not implemented. These rules and conservative pacing do not guarantee inbox placement or bypass provider controls.
+Uncertain sends never retry automatically. Check the Sent folder and record the outcome in Activity. Workbook updates can be repaired without another send. Add opt-outs to **Do not contact**. Optional IMAP monitoring now records confidently correlated DSN bounces and suppresses permanent failures; automatic opt-out reply interpretation is not implemented. These rules and conservative pacing do not guarantee inbox placement or bypass provider controls.
 
 ## Shared team server
 
@@ -101,3 +101,9 @@ npm run bundle
 ```
 
 Tests use synthetic workbook records and a fake mail adapter, with no real sending. They cover continuous queue exhaustion, adding a campaign, stop/restart persistence, uncertain outcomes, team reservations and quotas, random pacing, template matching, legacy migration, and surgical workbook writes. Windows launcher files are provided but need a real Windows installation check; functional tests were run on macOS.
+
+## Email tracking and mailbox monitoring
+
+Open **Email Tracking** for independent submission/bounce/open-signal dimensions, campaign/date/status filters, unmatched notifications, seed Inbox/Spam results, and read-only domain authentication checks. The existing Playwright sender and durable JSON store remain in place. IMAP monitoring and open tracking default to disabled; no real test emails or DNS changes are made automatically.
+
+See [TRACKING.md](TRACKING.md) for the architecture, exact file manifest, additive migration, `.env.example`, Namecheap IMAP setup, authorized seed/OAuth configuration, HTTPS pixel deployment, worker operation, test commands, and live verification limits. Restart the app after installing the updated locked dependencies.

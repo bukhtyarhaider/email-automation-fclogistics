@@ -1,4 +1,8 @@
 @echo off
 cd /d "%~dp0"
-node scripts\launch.mjs
+if exist .env (
+  node --env-file=.env scripts\launch.mjs %*
+) else (
+  node scripts\launch.mjs %*
+)
 pause

@@ -10,9 +10,12 @@
     "doctor": "node scripts/doctor.mjs",
     "team": "node src/coordinator.mjs",
     "test": "node scripts/test.mjs",
-    "bundle": "python3 scripts/bundle.py"
+    "bundle": "python3 scripts/bundle.py",
+    "build:ui": "node src/ui/build.mjs"
   },
   "dependencies": {
+    "imapflow": "^2.4.2",
+    "mailparser": "^3.9.39",
     "playwright": "^1.58.0"
   },
   "engines": {

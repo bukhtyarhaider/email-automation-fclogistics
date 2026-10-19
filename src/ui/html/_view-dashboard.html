@@ -1,0 +1,158 @@
+          <!-- ========================================== -->
+          <!-- VIEW 1: DASHBOARD (MISSION CONTROL)       -->
+          <!-- ========================================== -->
+          <section class="view-page active" id="view-dashboard">
+            <div class="page-header">
+              <div>
+                <p class="page-eyebrow">MISSION CONTROL</p>
+                <h1 class="page-title">Operational Desk</h1>
+                <p class="page-subtitle">Webmail submission status, queue pacing, and continuous outreach.</p>
+              </div>
+              <div class="header-actions">
+                <button id="start">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                  Start continuous outreach
+                </button>
+                <button id="stop" class="danger" hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12"></rect></svg>
+                  Stop outreach
+                </button>
+              </div>
+            </div>
+
+            <!-- KPI Summary Cards -->
+            <div class="stats-grid" aria-label="Campaign summary">
+              <div class="stat-card total">
+                <div class="stat-label">
+                  Total Leads
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                </div>
+                <div class="stat-value" id="total">0</div>
+                <div class="stat-hint">In active campaign workbook</div>
+              </div>
+              <div class="stat-card ready">
+                <div class="stat-label">
+                  Ready For Outreach
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+                <div class="stat-value" id="ready">0</div>
+                <div class="stat-hint">Active, verified & eligible</div>
+              </div>
+              <div class="stat-card excluded">
+                <div class="stat-label">
+                  Excluded From Sending
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                </div>
+                <div class="stat-value" id="excluded">0</div>
+                <div class="stat-hint">Duplicates, bounces or inactive</div>
+              </div>
+              <div class="stat-card sent">
+                <div class="stat-label">
+                  Sent By This Tool
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </div>
+                <div class="stat-value" id="sent">0</div>
+                <div class="stat-hint">Confirmed webmail submissions</div>
+              </div>
+            </div>
+
+            <!-- Dashboard Operations Grid -->
+            <div class="dashboard-grid">
+              <!-- Left Column: Runner Status & Pacing -->
+              <div>
+                <!-- Runner Control Panel -->
+                <div class="runner-card">
+                  <div class="runner-header">
+                    <div class="runner-status-group">
+                      <span class="status-badge" id="jobStatus">Idle</span>
+                      <strong style="color: #fff; font-size: 14px;">Outreach Runner</strong>
+                    </div>
+                    <span id="nextSend" style="font-size: 12px; color: var(--accent-amber); font-weight: 500;"></span>
+                  </div>
+
+                  <p class="runner-message" id="jobMessage">Ready to initiate dispatch queue.</p>
+                  <progress id="progress" value="0" max="1"></progress>
+
+                  <div class="quota-banner">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span id="quota">Checking rolling hour and daily allowances…</span>
+                  </div>
+
+                  <div class="runner-meta">
+                    <span>Single recipient per message</span>
+                    <span>Direct webmail injection via Playwright</span>
+                  </div>
+                </div>
+
+                <!-- Batch / Manual Action Widget -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                      Manual Batch Dispatch
+                    </h2>
+                    <span class="status-pill ready" id="selectedCount">0 selected</span>
+                  </div>
+                  <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px;">
+                    Select leads from the <a href="#leads" style="color: var(--accent-red); text-decoration: underline;">Leads Workspace</a>, then dispatch them here with human-paced intervals.
+                  </p>
+                  <div class="form-group">
+                    <label class="check">
+                      <input id="randomTemplates" type="checkbox" checked />
+                      Randomly select from enabled, matching templates
+                    </label>
+                  </div>
+                  <div class="form-actions">
+                    <button id="batch" class="secondary">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                      Send selected leads
+                    </button>
+                    <a href="#leads" class="button secondary">Browse leads table</a>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column: Quick Mailbox Session & Events Stream -->
+              <div>
+                <!-- Mailbox Session Box -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                      Mailbox Connection
+                    </h2>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="profileSelect">Active Mailbox Profile</label>
+                    <select id="profileSelect"></select>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="password">Session Password</label>
+                    <input id="password" type="password" autocomplete="off" placeholder="Enter password to authenticate" />
+                  </div>
+
+                  <div class="form-actions">
+                    <button id="connect">Connect mailbox</button>
+                    <button id="resume" class="secondary" hidden>Continue sign-in</button>
+                    <button id="disconnect" class="danger" hidden>Disconnect</button>
+                  </div>
+                  <p class="hint">Passwords stay in memory only and are never saved or sent to any server.</p>
+                </div>
+
+                <!-- Recent Events Stream -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                      Live System Activity
+                    </h2>
+                    <a href="#live-activity" class="button secondary" style="font-size: 11px; padding: 4px 8px;">Open live page →</a>
+                  </div>
+                  <ol id="events" class="events-stream"></ol>
+                </div>
+              </div>
+            </div>
+          </section>
+
