@@ -6,6 +6,7 @@ async function refresh() {
   }
 
   const conn = $("connection");
+  if ($("browserSessionStatus")) $("browserSessionStatus").textContent = state.browserSession?.message || "Connect your mailbox.";
   if (conn) {
     conn.textContent = state.connected
       ? "Mailbox connected"

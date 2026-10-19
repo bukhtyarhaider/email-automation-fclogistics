@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { randomUUID, randomBytes } from "node:crypto";
 import { MailBrowser } from "./browser.mjs";
+import { connectionSettings, discoverBrowsers, debuggingGuide } from "./browser-session.mjs";
 import {
   templates,
   render,
@@ -26,7 +27,7 @@ import { domainHealth } from "./domain-health.mjs";
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = path.resolve(process.env.FC_DATA_DIR || path.join(ROOT, "data"));
 const PORT = Number(process.env.PORT || 4317);
-const mail = new MailBrowser();
+const mail = new MailBrowser({ dataDirectory: DATA });
 await fs.mkdir(DATA, { recursive: true, mode: 0o700 });
 await fs.chmod(DATA, 0o700);
 const lockPath = path.join(DATA, "app.lock");
@@ -211,6 +212,11 @@ async function prepareTracked(message, campaignId) {
     result.record.error = "Composer preparation failed before submission";
     addEvent(result.record, "send_failed");
     await persist();
+    if (mail.page && !(await mail.isConnected())) {
+      error.authenticationRequired = true;
+      error.sendNotAttempted = true;
+      error.message = mail.session.message;
+    }
     throw error;
   }
 }
@@ -672,6 +678,13 @@ async function runner() {
         });
         await waitFor(delay.seconds, delay.kind, "Next send scheduled.");
       } catch (e) {
+        if (e.authenticationRequired) {
+          a.status = "Waiting for mailbox";
+          a.message = mail.session.message;
+          a.nextAt = null;
+          await persist();
+          continue;
+        }
         if (e.deferSeconds) {
           await mail.release();
           prepared = null;
@@ -918,8 +931,9 @@ const server = http.createServer(async (req, res) => {
           return response(res, { ok: true });
         }
         if (pathname === "/api/connect") {
-          if (typeof input.password !== "string" || !input.password)
-            throw new Error("Enter the mailbox password.");
+          if (prepared) throw new Error("Close the prepared message before reconnecting.");
+          if (input.password !== undefined && typeof input.password !== "string")
+            throw new Error("Invalid mailbox password.");
           const account = profile();
           if (!EMAIL.test(account.email))
             throw new Error("Save a valid mailbox email first.");
@@ -932,7 +946,7 @@ const server = http.createServer(async (req, res) => {
               Date.parse(state.automation.nextAt) <= Date.now()
             )
               state.automation.nextAt = null;
-            event(`Connected ${account.email}.`, { kind: "system" });
+            event(result.connected ? `Connected ${account.email}.` : result.message, { kind: "system" });
             await persist();
             return response(res, result);
           } finally {
@@ -948,6 +962,9 @@ const server = http.createServer(async (req, res) => {
           )
             state.automation.nextAt = null;
           return response(res, result);
+        }
+        if (pathname === "/api/browser-discover") {
+          return response(res, { browsers: await discoverBrowsers(input.endpoint || profile()?.cdpEndpoint) });
         }
         if (pathname === "/api/disconnect") {
           await mail.close();
@@ -986,6 +1003,7 @@ const server = http.createServer(async (req, res) => {
             browserChannel: ["chrome", "msedge"].includes(input.browserChannel)
               ? input.browserChannel
               : "chrome",
+            ...connectionSettings({ ...old, ...input }),
             business: b,
           };
           await mail.close();
@@ -1438,6 +1456,9 @@ const server = http.createServer(async (req, res) => {
         workerId: state.workerId,
         connected: await mail.isConnected(),
         signInOpen: !!mail.page && !mail.page.isClosed(),
+        browserSession: mail.session,
+        browserGuide: debuggingGuide(DATA, profile()?.browserChannel),
+        browserGuides: { chrome: debuggingGuide(DATA, "chrome"), msedge: debuggingGuide(DATA, "msedge") },
         busy,
         job: job(),
         prepared,
@@ -1720,6 +1741,20 @@ const monitorTimer = setInterval(() => {
 }, 15000);
 monitorTimer.unref();
 if (process.env.FC_MONITOR_ENABLED === "1") void monitor.run().catch(() => {});
+async function restoreMailbox() {
+  const account = profile();
+  if (!account?.email || account.autoReconnect === false) return;
+  if (connectionSettings(account).connectionMode === "saved" && !(await mail.hasSavedProfile(account))) return;
+  if (busy || shuttingDown) return;
+  busy = true;
+  try {
+    const result = await mail.connect("", account);
+    event(result.message || `Restored ${account.email}.`, { kind: "system" });
+  } catch (error) {
+    event(error.message, { kind: "error" });
+  } finally { busy = false; await persist(); }
+}
+void restoreMailbox().catch(() => {});
 if (state.automation.enabled) void runner();
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, async () => {

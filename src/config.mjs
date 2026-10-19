@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { connectionSettings } from "./browser-session.mjs";
 export const DEFAULTS = {
   business: {
     company: "",
@@ -12,6 +13,9 @@ export const DEFAULTS = {
     email: "",
     provider: "privateemail",
     browserChannel: "chrome",
+    connectionMode: "saved",
+    cdpEndpoint: "http://127.0.0.1:9222",
+    autoReconnect: true,
     url: "https://privateemail.com/spm/mail/INBOX/",
   },
   pacing: {
@@ -76,6 +80,7 @@ export function upgrade(state) {
     },
   ];
   state.activeProfile ||= state.profiles[0].id;
+  for (const p of state.profiles) Object.assign(p, connectionSettings(p));
   state.campaigns ||= state.workbook
     ? [
         {

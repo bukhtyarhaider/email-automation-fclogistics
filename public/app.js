@@ -192,7 +192,7 @@ function updateControls() {
   if (relBtn) relBtn.disabled = pending || state.busy || !!state.prepared;
 
   const connBtn = $("connect");
-  if (connBtn) connBtn.disabled = pending || state.busy;
+  if (connBtn) connBtn.disabled = pending || state.busy || state.connected || state.signInOpen || !!state.prepared;
 
   const resBtn = $("resume");
   if (resBtn) {
@@ -203,7 +203,7 @@ function updateControls() {
   const disBtn = $("disconnect");
   if (disBtn) {
     disBtn.disabled = pending || state.busy;
-    disBtn.hidden = !state.connected;
+    disBtn.hidden = !state.connected && !state.signInOpen;
   }
 
   const selCount = $("selectedCount");
@@ -250,6 +250,7 @@ async function refresh() {
   }
 
   const conn = $("connection");
+  if ($("browserSessionStatus")) $("browserSessionStatus").textContent = state.browserSession?.message || "Connect your mailbox.";
   if (conn) {
     conn.textContent = state.connected
       ? "Mailbox connected"
@@ -1015,8 +1016,8 @@ if ($("connect"))
     action($("connect"), async () => {
       const password = $("password").value;
       $("password").value = "";
-      await api("/api/connect", { password });
-      notice("Mailbox connected successfully.");
+      const result = await api("/api/connect", { password });
+      notice(result.message || (result.connected ? "Mailbox connected successfully." : "Complete sign-in in the browser."));
     });
 
 if ($("disconnect"))
@@ -1024,7 +1025,28 @@ if ($("disconnect"))
     action($("disconnect"), () => api("/api/disconnect", {}));
 
 if ($("resume"))
-  $("resume").onclick = () => action($("resume"), () => api("/api/resume", {}));
+  $("resume").onclick = () => action($("resume"), async () => {
+    const result = await api("/api/resume", {});
+    notice(result.message || "Mailbox connected.");
+  });
+
+function fillBrowserMethod() {
+  if ($("cdpSettings")) $("cdpSettings").hidden = $("connectionMode")?.value !== "cdp";
+  const guide = state?.browserGuides?.[$("browserChannel")?.value] || state?.browserGuide;
+  if ($("browserGuideMessage")) $("browserGuideMessage").textContent = guide?.message || "";
+  if ($("browserDebugCommand")) $("browserDebugCommand").textContent = guide?.command || "";
+}
+if ($("connectionMode")) $("connectionMode").onchange = fillBrowserMethod;
+if ($("browserChannel")) $("browserChannel").onchange = fillBrowserMethod;
+if ($("discoverBrowsers")) $("discoverBrowsers").onclick = () => action($("discoverBrowsers"), async () => {
+  const result = await api("/api/browser-discover", { endpoint: $("cdpEndpoint").value });
+  $("availableBrowsers").innerHTML = '<option value="">Select a debugging browser</option>' + result.browsers.map((b) =>
+    `<option value="${escape(b.endpoint)}">${escape(b.browser)} — ${escape(b.endpoint)}</option>`).join("");
+  notice(result.browsers.length ? "Select a browser, then save the mailbox profile." : "No debugging browser found. Start one using the command below, or use Saved Browser Profile.");
+});
+if ($("availableBrowsers")) $("availableBrowsers").onchange = () => {
+  if ($("availableBrowsers").value) $("cdpEndpoint").value = $("availableBrowsers").value;
+};
 
 
 
@@ -1158,6 +1180,10 @@ function fillProfile(explicitProfile) {
   if ($("provider")) $("provider").value = p?.provider || "privateemail";
   if ($("browserChannel"))
     $("browserChannel").value = p?.browserChannel || "chrome";
+  if ($("connectionMode")) $("connectionMode").value = p?.connectionMode || "saved";
+  if ($("cdpEndpoint")) $("cdpEndpoint").value = p?.cdpEndpoint || "http://127.0.0.1:9222";
+  if ($("autoReconnect")) $("autoReconnect").checked = p?.autoReconnect !== false;
+  fillBrowserMethod();
 
   const b = p?.business || state.settings.business;
   for (const [id, key] of Object.entries({
@@ -1204,6 +1230,9 @@ if ($("saveProfile"))
         url: $("accountUrl").value,
         provider: $("provider").value,
         browserChannel: $("browserChannel").value,
+        connectionMode: $("connectionMode").value,
+        cdpEndpoint: $("cdpEndpoint").value,
+        autoReconnect: $("autoReconnect").checked,
         business: readBusiness(),
       });
       await refresh();

@@ -19,7 +19,7 @@ test('real browser composer retains signature/text, inserts marker/pixel, and re
     };
     </script>`);
   const mail = new MailBrowser();
-  Object.assign(mail, { browser, page, authenticated: true, account: { email: 'sender@example.com' } });
+  Object.assign(mail, { browser, page, authenticated: true, account: { email: 'sender@example.com', url: page.url() } });
   const message = { to: 'controlled@example.com', subject: 'Synthetic test', body: 'Hi there,\n\nA plain text introduction.\nThanks.',
     trackingId: '11111111-1111-4111-8111-111111111111', pixelUrl: `https://tracking.example.invalid/o/${'a'.repeat(43)}.gif` };
   const proof = await mail.prepare(message);

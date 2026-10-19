@@ -278,8 +278,8 @@
                   </div>
 
                   <div class="form-group">
-                    <label for="password">Session Password</label>
-                    <input id="password" type="password" autocomplete="off" placeholder="Enter password to authenticate" />
+                    <label for="password">Password (optional for a saved session)</label>
+                    <input id="password" type="password" autocomplete="off" placeholder="Or sign in directly in the browser" />
                   </div>
 
                   <div class="form-actions">
@@ -287,7 +287,8 @@
                     <button id="resume" class="secondary" hidden>Continue sign-in</button>
                     <button id="disconnect" class="danger" hidden>Disconnect</button>
                   </div>
-                  <p class="hint">Passwords stay in memory only and are never saved or sent to any server.</p>
+                  <p class="hint" id="browserSessionStatus" role="status" aria-live="polite">Connect your mailbox.</p>
+                  <p class="hint">Choose the connection method in Mailbox & Settings. Passwords entered here are passed only to the local tool and the mailbox login form. Browser cookies and login sessions are saved on this device. Disconnect keeps them for later.</p>
                 </div>
 
                 <!-- Recent Events Stream -->
@@ -722,6 +723,30 @@
                     <label for="accountUrl">Webmail Interface URL</label>
                     <input id="accountUrl" type="url" />
                   </div>
+
+                  <div class="form-group">
+                    <label for="connectionMode">Browser Connection Method</label>
+                    <select id="connectionMode">
+                      <option value="saved">Saved Browser Profile</option>
+                      <option value="cdp">Connect to Existing Browser (CDP)</option>
+                    </select>
+                    <p class="hint">Saved profiles keep the login on this device, separately for each mailbox and browser. Passwords entered here are not stored.</p>
+                  </div>
+                  <div id="cdpSettings" hidden>
+                    <div class="form-group">
+                      <label for="cdpEndpoint">Local Browser Debugging Address</label>
+                      <input id="cdpEndpoint" type="url" placeholder="http://127.0.0.1:9222" />
+                    </div>
+                    <button id="discoverBrowsers" type="button" class="secondary">Find local debugging browsers</button>
+                    <div class="form-group">
+                      <label for="availableBrowsers">Available Browsers</label>
+                      <select id="availableBrowsers"><option value="">Run discovery or enter an address above</option></select>
+                    </div>
+                    <p class="hint" id="browserGuideMessage"></p>
+                    <pre id="browserDebugCommand" style="white-space: pre-wrap; overflow-wrap: anywhere; user-select: text;"></pre>
+                    <p class="hint">Run the command in Terminal on macOS or PowerShell on Windows. This starts a separate persistent debug profile. Sign in there once and reuse it. Keep debugging accessible only from this device.</p>
+                  </div>
+                  <label class="hint"><input id="autoReconnect" type="checkbox" checked /> Restore this connection when the application starts</label>
 
                   <div class="form-grid-2">
                     <div class="form-group">
