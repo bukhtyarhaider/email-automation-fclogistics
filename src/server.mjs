@@ -1,6 +1,6 @@
 import http from "node:http";
 import fs from "node:fs/promises";
-import { unlinkSync } from "node:fs";
+import { unlinkSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -271,18 +271,29 @@ function selectCampaign(id) {
   state.workbook = c.workbook;
 }
 async function reload(c = activeCampaign()) {
-  if (!c) return;
-  const parsed = await python(
-    "read",
-    path.join(DATA, c.workbook.file),
-    c.mapping || {},
-  );
-  for (const l of parsed.leads) {
-    l.hidden = parsed.sheets.find((s) => s.part === l.part)?.hidden;
-    l.campaignId = c.id;
+  if (!c || !c.workbook?.file) return;
+  const filePath = path.join(DATA, c.workbook.file);
+  if (!existsSync(filePath)) {
+    console.warn(`[Workbook] File not found for campaign "${c.name || c.id}": ${filePath}`);
+    campaignData.set(c.id, { sheets: [], leads: [] });
+    return;
   }
-  campaignData.set(c.id, parsed);
-  campaignRevision++;
+  try {
+    const parsed = await python(
+      "read",
+      filePath,
+      c.mapping || {},
+    );
+    for (const l of parsed.leads) {
+      l.hidden = parsed.sheets.find((s) => s.part === l.part)?.hidden;
+      l.campaignId = c.id;
+    }
+    campaignData.set(c.id, parsed);
+    campaignRevision++;
+  } catch (err) {
+    console.warn(`[Workbook] Failed to load workbook for campaign "${c.name || c.id}":`, err.message);
+    campaignData.set(c.id, { sheets: [], leads: [] });
+  }
 }
 for (const c of state.campaigns) await reload(c);
 if (state.automation.enabled) {
