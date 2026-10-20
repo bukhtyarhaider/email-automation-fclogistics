@@ -8,7 +8,7 @@ test("FirebaseSync handles unconfigured environment gracefully", async () => {
   initTracking(state);
   const persist = async () => {};
 
-  const sync = new FirebaseSync({ state, persist }, { FC_FIREBASE_DISABLE: "1" });
+  const sync = new FirebaseSync({ state, persist, env: { FC_FIREBASE_DISABLE: "1" } });
   assert.equal(sync.isConfigured(), false);
   assert.equal(state.tracking.worker.firebaseSync.status, "Needs configuration");
 
@@ -58,7 +58,7 @@ test("FirebaseSync syncs open signals from Realtime Database", async () => {
     }),
   };
 
-  const sync = new FirebaseSync({ state, persist }, { FC_FIREBASE_DISABLE: "1", FC_TRACKING_PC_ID: "1" });
+  const sync = new FirebaseSync({ state, persist, env: { FC_FIREBASE_DISABLE: "1", FC_TRACKING_PC_ID: "1" } });
   sync.rtdb = mockRtdb;
   sync.firestore = null;
 
@@ -132,7 +132,7 @@ test("FirebaseSync syncs open signals from Cloud Firestore", async () => {
     },
   };
 
-  const sync = new FirebaseSync({ state, persist }, { FC_FIREBASE_DISABLE: "1", FC_TRACKING_PC_ID: "1" });
+  const sync = new FirebaseSync({ state, persist, env: { FC_FIREBASE_DISABLE: "1", FC_TRACKING_PC_ID: "1" } });
   sync.rtdb = null;
   sync.firestore = mockDb;
 
@@ -158,7 +158,7 @@ test("FirebaseSync respects settings.tracking.syncMode = 'manual'", async () => 
   initTracking(state);
   const persist = async () => {};
 
-  const sync = new FirebaseSync({ state, persist }, { FC_FIREBASE_DISABLE: "1" });
+  const sync = new FirebaseSync({ state, persist, env: { FC_FIREBASE_DISABLE: "1" } });
   sync.rtdb = { ref: () => ({ limitToLast: () => ({ once: async () => ({ val: () => ({}) }) }) }) };
 
   // 1. Background sync (without force: true) should pause

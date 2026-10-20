@@ -56,10 +56,10 @@ function getCredentials(env = process.env) {
 }
 
 export class FirebaseSync {
-  constructor({ state, persist }, env = process.env) {
-    this.state = state;
-    this.persist = persist;
-    this.env = env;
+  constructor(options = {}, secondaryEnv = process.env) {
+    this.state = options.state || {};
+    this.persist = options.persist || (async () => {});
+    this.env = options.env || secondaryEnv || process.env;
     this.app = null;
     this.rtdb = null;
     this.firestore = null;
