@@ -3,19 +3,28 @@ import path from "node:path";
 import admin from "firebase-admin";
 import { recordOpen, hash } from "./tracking.mjs";
 
+const DEFAULT_DATABASE_URL = "https://ea-fclogistics-default-rtdb.asia-southeast1.firebasedatabase.app";
+
 function getCredentials(env = process.env) {
-  // 1. Path to service account file
-  const credPath = env.FC_FIREBASE_CREDENTIALS_PATH || env.GOOGLE_APPLICATION_CREDENTIALS;
-  if (credPath) {
+  if (env.FC_FIREBASE_DISABLE === "1") return null;
+
+  // 1. Candidate paths to service account file (explicit or auto-detected in data/)
+  const candidatePaths = [
+    env.FC_FIREBASE_CREDENTIALS_PATH,
+    env.GOOGLE_APPLICATION_CREDENTIALS,
+    path.join(process.cwd(), "data", "firebase-service-account.json"),
+    path.join(path.dirname(path.dirname(new URL(import.meta.url).pathname)), "data", "firebase-service-account.json"),
+    "./data/firebase-service-account.json",
+  ].filter(Boolean);
+
+  for (const credPath of candidatePaths) {
     try {
       const resolved = path.resolve(credPath);
       if (fs.existsSync(resolved)) {
         const content = fs.readFileSync(resolved, "utf8");
         return JSON.parse(content);
       }
-    } catch (err) {
-      console.warn(`[FirebaseSync] Could not read credentials file at ${credPath}:`, err.message);
-    }
+    } catch {}
   }
 
   // 2. Raw JSON or Base64 string
@@ -52,7 +61,8 @@ export class FirebaseSync {
     this.persist = persist;
     this.env = env;
     this.app = null;
-    this.db = null;
+    this.rtdb = null;
+    this.firestore = null;
     this.running = false;
     this.totalSynced = 0;
     this.lastSyncAt = null;
@@ -68,7 +78,7 @@ export class FirebaseSync {
     if (!creds) {
       this.state.tracking.worker.firebaseSync = {
         status: "Needs configuration",
-        message: "Firebase credentials not found (set FC_FIREBASE_SERVICE_ACCOUNT_KEY or FC_FIREBASE_CREDENTIALS_PATH)",
+        message: "Firebase credentials not found (auto-checks data/firebase-service-account.json)",
       };
       return;
     }
@@ -76,11 +86,36 @@ export class FirebaseSync {
     try {
       const appName = "fcLogisticsFirebaseSync";
       const existing = admin.apps.find((a) => a?.name === appName);
-      this.app = existing || admin.initializeApp({ credential: admin.credential.cert(creds) }, appName);
-      this.db = this.app.firestore();
+      const databaseURL =
+        this.env.FC_FIREBASE_DATABASE_URL ||
+        this.env.FIREBASE_DATABASE_URL ||
+        DEFAULT_DATABASE_URL;
+
+      this.app =
+        existing ||
+        admin.initializeApp(
+          {
+            credential: admin.credential.cert(creds),
+            databaseURL,
+          },
+          appName
+        );
+
+      // Initialize Realtime Database (default active DB)
+      try {
+        this.rtdb = this.app.database();
+      } catch (e) {
+        console.warn("[FirebaseSync] Realtime Database init warning:", e.message);
+      }
+
+      // Initialize Firestore if available
+      try {
+        this.firestore = this.app.firestore();
+      } catch {}
+
       this.state.tracking.worker.firebaseSync = {
         status: "Active",
-        message: "Connected to Firebase Firestore",
+        message: "Connected to Firebase (Realtime Database & Firestore)",
         lastSyncAt: null,
       };
     } catch (err) {
@@ -93,11 +128,11 @@ export class FirebaseSync {
   }
 
   isConfigured() {
-    return Boolean(this.db);
+    return Boolean(this.rtdb || this.firestore);
   }
 
   async sync() {
-    if (!this.db) {
+    if (!this.isConfigured()) {
       return { ok: false, message: "Firebase not configured", synced: 0 };
     }
     if (this.running) {
@@ -111,58 +146,103 @@ export class FirebaseSync {
       const pcId = String(this.env.FC_TRACKING_PC_ID || "1");
       const openIndex = this.state.tracking.openIndex || {};
 
-      // Query unsynced opens, up to 100 at a time
-      const snapshot = await this.db
-        .collection("email_opens")
-        .where("synced", "==", false)
-        .limit(100)
-        .get();
+      // 1. Sync from Realtime Database (Primary)
+      if (this.rtdb) {
+        try {
+          const snapshot = await this.rtdb
+            .ref("email_opens")
+            .limitToLast(100)
+            .once("value");
 
-      if (snapshot.empty) {
-        this.lastSyncAt = new Date().toISOString();
-        this.updateWorkerStatus("Up to date", "All open signals synced");
-        return { ok: true, synced: 0 };
-      }
+          const allOpens = snapshot.val() || {};
+          const updates = {};
 
-      const batch = this.db.batch();
-      let hasBatchWrites = false;
+          for (const [key, item] of Object.entries(allOpens)) {
+            if (!item || item.synced) continue;
 
-      for (const doc of snapshot.docs) {
-        const data = doc.data();
-        const docPcId = String(data.pcId || "1");
-        const token = data.token;
-        const openedAt = data.openedAt || new Date().toISOString();
-        const tokenHash = data.tokenHash || (token ? hash(token) : null);
+            const docPcId = String(item.pcId || "1");
+            const token = item.token;
+            const openedAt = item.openedAt || new Date().toISOString();
+            const tokenHash = item.tokenHash || (token ? hash(token) : null);
 
-        // Correlate: Does this token belong to our sent messages or this PC?
-        const isOurMessage = tokenHash && Boolean(openIndex[tokenHash]);
-        const isOurPc = docPcId === pcId;
+            const isOurMessage = tokenHash && Boolean(openIndex[tokenHash]);
+            const isOurPc = docPcId === pcId;
 
-        if (isOurMessage || isOurPc) {
-          if (token && typeof token === "string") {
-            const recorded = recordOpen(
-              this.state.tracking,
-              token,
-              true,
-              openedAt
-            );
-            if (recorded) {
-              syncedThisRun++;
+            if (isOurMessage || isOurPc) {
+              if (token && typeof token === "string") {
+                const recorded = recordOpen(
+                  this.state.tracking,
+                  token,
+                  true,
+                  openedAt
+                );
+                if (recorded) syncedThisRun++;
+              }
+
+              updates[`email_opens/${key}/synced`] = true;
+              updates[`email_opens/${key}/syncedAt`] = new Date().toISOString();
+              updates[`email_opens/${key}/syncedBy`] = pcId;
             }
           }
 
-          // Mark document synced in Firestore
-          batch.update(doc.ref, {
-            synced: true,
-            syncedAt: new Date().toISOString(),
-            syncedBy: pcId,
-          });
-          hasBatchWrites = true;
+          if (Object.keys(updates).length > 0) {
+            await this.rtdb.ref().update(updates);
+          }
+        } catch (rtdbErr) {
+          console.warn("[FirebaseSync] RTDB sync warning:", rtdbErr.message);
         }
       }
 
-      if (hasBatchWrites) {
-        await batch.commit();
+      // 2. Sync from Firestore (if Firestore database exists and has docs)
+      if (this.firestore) {
+        try {
+          const snapshot = await this.firestore
+            .collection("email_opens")
+            .where("synced", "==", false)
+            .limit(100)
+            .get();
+
+          if (!snapshot.empty) {
+            const batch = this.firestore.batch();
+            let hasBatchWrites = false;
+
+            for (const doc of snapshot.docs) {
+              const data = doc.data();
+              const docPcId = String(data.pcId || "1");
+              const token = data.token;
+              const openedAt = data.openedAt || new Date().toISOString();
+              const tokenHash = data.tokenHash || (token ? hash(token) : null);
+
+              const isOurMessage = tokenHash && Boolean(openIndex[tokenHash]);
+              const isOurPc = docPcId === pcId;
+
+              if (isOurMessage || isOurPc) {
+                if (token && typeof token === "string") {
+                  const recorded = recordOpen(
+                    this.state.tracking,
+                    token,
+                    true,
+                    openedAt
+                  );
+                  if (recorded) syncedThisRun++;
+                }
+
+                batch.update(doc.ref, {
+                  synced: true,
+                  syncedAt: new Date().toISOString(),
+                  syncedBy: pcId,
+                });
+                hasBatchWrites = true;
+              }
+            }
+
+            if (hasBatchWrites) {
+              await batch.commit();
+            }
+          }
+        } catch {
+          // Firestore database not created or unavailable; ignore gracefully
+        }
       }
 
       if (syncedThisRun > 0) {
@@ -174,7 +254,9 @@ export class FirebaseSync {
       this.lastError = null;
       this.updateWorkerStatus(
         "Active",
-        `Synced ${syncedThisRun} open(s) at ${this.lastSyncAt.slice(11, 19)} UTC (Total: ${this.totalSynced})`
+        syncedThisRun > 0
+          ? `Synced ${syncedThisRun} open(s) at ${this.lastSyncAt.slice(11, 19)} UTC (Total: ${this.totalSynced})`
+          : `Up to date (Checked ${this.lastSyncAt.slice(11, 19)} UTC, Total: ${this.totalSynced})`
       );
 
       return { ok: true, synced: syncedThisRun };
