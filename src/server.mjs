@@ -872,7 +872,7 @@ const server = http.createServer(async (req, res) => {
           await persist();
           return response(res, { ok: true });
         }
-        if (pathname === "/api/tracking/sync-firebase") {
+        if (pathname === "/api/tracking/sync-firebase" || pathname === "/tracking/sync-firebase") {
           const result = await firebaseSync.sync({ force: true });
           return response(res, result);
         }

@@ -500,7 +500,7 @@ if ($('trackingFirebaseSync')) {
   $('trackingFirebaseSync').onclick = (e) =>
     action(e.currentTarget, async () => {
       try {
-        const res = await api('tracking/sync-firebase', {});
+        const res = await api('/api/tracking/sync-firebase', {});
         if (res.synced > 0) {
           notice(`Firebase: Synced ${res.synced} new open signal(s)!`, 'success');
         } else if (res.ok) {
