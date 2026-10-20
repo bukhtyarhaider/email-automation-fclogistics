@@ -173,6 +173,11 @@ function updateControls() {
   const stopBtn = $("stop");
   if (stopBtn) stopBtn.hidden = !state.job.enabled;
 
+  const resetWait = $("resetWait");
+  if (resetWait)
+    resetWait.disabled = pending || state.busy || !!state.prepared ||
+      !(state.job.nextAt || state.job.sincePause || state.job.pauseAfter);
+
   const startBtn = $("start");
   if (startBtn)
     startBtn.disabled =
@@ -192,7 +197,7 @@ function updateControls() {
   if (relBtn) relBtn.disabled = pending || state.busy || !!state.prepared;
 
   const connBtn = $("connect");
-  if (connBtn) connBtn.disabled = pending || state.busy;
+  if (connBtn) connBtn.disabled = pending || state.busy || state.connected || state.signInOpen || !!state.prepared;
 
   const resBtn = $("resume");
   if (resBtn) {
@@ -203,7 +208,7 @@ function updateControls() {
   const disBtn = $("disconnect");
   if (disBtn) {
     disBtn.disabled = pending || state.busy;
-    disBtn.hidden = !state.connected;
+    disBtn.hidden = !state.connected && !state.signInOpen;
   }
 
   const selCount = $("selectedCount");
@@ -250,6 +255,7 @@ async function refresh() {
   }
 
   const conn = $("connection");
+  if ($("browserSessionStatus")) $("browserSessionStatus").textContent = state.browserSession?.message || "Connect your mailbox.";
   if (conn) {
     conn.textContent = state.connected
       ? "Mailbox connected"
@@ -334,6 +340,13 @@ async function refresh() {
   }
 
   const nextSendEl = $("nextSend");
+  const waitStatus = $("settingsWaitStatus");
+  if (waitStatus) {
+    const remaining = Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000));
+    waitStatus.textContent = state.job.nextAt
+      ? `${state.job.status} · ${remaining}s until the next queue check.`
+      : `No scheduled wait. ${state.job.sincePause || 0} sends since the last rest.`;
+  }
   if (nextSendEl) {
     nextSendEl.textContent = state.job.nextAt
       ? `Next check: ${new Date(state.job.nextAt).toLocaleTimeString()} (${Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000))}s remaining)`
@@ -388,7 +401,7 @@ async function refresh() {
   }
 
   if (state.prepared && $("signatureText")) {
-    $("signatureText").textContent = state.prepared.signature;
+    $("signatureText").textContent = state.prepared.signature || "No signature configured in this mailbox.";
   }
 
   updateControls();
@@ -1015,8 +1028,8 @@ if ($("connect"))
     action($("connect"), async () => {
       const password = $("password").value;
       $("password").value = "";
-      await api("/api/connect", { password });
-      notice("Mailbox connected successfully.");
+      const result = await api("/api/connect", { password });
+      notice(result.message || (result.connected ? "Mailbox connected successfully." : "Complete sign-in in the browser."));
     });
 
 if ($("disconnect"))
@@ -1024,7 +1037,28 @@ if ($("disconnect"))
     action($("disconnect"), () => api("/api/disconnect", {}));
 
 if ($("resume"))
-  $("resume").onclick = () => action($("resume"), () => api("/api/resume", {}));
+  $("resume").onclick = () => action($("resume"), async () => {
+    const result = await api("/api/resume", {});
+    notice(result.message || "Mailbox connected.");
+  });
+
+function fillBrowserMethod() {
+  if ($("cdpSettings")) $("cdpSettings").hidden = $("connectionMode")?.value !== "cdp";
+  const guide = state?.browserGuides?.[$("browserChannel")?.value] || state?.browserGuide;
+  if ($("browserGuideMessage")) $("browserGuideMessage").textContent = guide?.message || "";
+  if ($("browserDebugCommand")) $("browserDebugCommand").textContent = guide?.command || "";
+}
+if ($("connectionMode")) $("connectionMode").onchange = fillBrowserMethod;
+if ($("browserChannel")) $("browserChannel").onchange = fillBrowserMethod;
+if ($("discoverBrowsers")) $("discoverBrowsers").onclick = () => action($("discoverBrowsers"), async () => {
+  const result = await api("/api/browser-discover", { endpoint: $("cdpEndpoint").value });
+  $("availableBrowsers").innerHTML = '<option value="">Select a debugging browser</option>' + result.browsers.map((b) =>
+    `<option value="${escape(b.endpoint)}">${escape(b.browser)} — ${escape(b.endpoint)}</option>`).join("");
+  notice(result.browsers.length ? "Select a browser, then save the mailbox profile." : "No debugging browser found. Start one using the command below, or use Saved Browser Profile.");
+});
+if ($("availableBrowsers")) $("availableBrowsers").onchange = () => {
+  if ($("availableBrowsers").value) $("cdpEndpoint").value = $("availableBrowsers").value;
+};
 
 
 
@@ -1158,6 +1192,10 @@ function fillProfile(explicitProfile) {
   if ($("provider")) $("provider").value = p?.provider || "privateemail";
   if ($("browserChannel"))
     $("browserChannel").value = p?.browserChannel || "chrome";
+  if ($("connectionMode")) $("connectionMode").value = p?.connectionMode || "saved";
+  if ($("cdpEndpoint")) $("cdpEndpoint").value = p?.cdpEndpoint || "http://127.0.0.1:9222";
+  if ($("autoReconnect")) $("autoReconnect").checked = p?.autoReconnect !== false;
+  fillBrowserMethod();
 
   const b = p?.business || state.settings.business;
   for (const [id, key] of Object.entries({
@@ -1173,8 +1211,19 @@ function fillProfile(explicitProfile) {
   updateControls();
 }
 
+function updateTemplateCheckControls() {
+  $("templateCheckOptions").disabled = !$("templateChecksEnabled").checked;
+}
+if ($("templateChecksEnabled"))
+  $("templateChecksEnabled").onchange = updateTemplateCheckControls;
+
 function fillSettings() {
   const s = state.settings;
+  const checks = s.templateChecks || {};
+  $("templateChecksEnabled").checked = checks.enabled !== false;
+  $("promotionalClaimsCheck").value = checks.promotionalClaims || "warn";
+  $("messageLengthCheck").value = checks.messageLength || "warn";
+  updateTemplateCheckControls();
   for (const key of pacingFields) {
     if ($(key)) $(key).value = s.pacing[key];
   }
@@ -1204,6 +1253,9 @@ if ($("saveProfile"))
         url: $("accountUrl").value,
         provider: $("provider").value,
         browserChannel: $("browserChannel").value,
+        connectionMode: $("connectionMode").value,
+        cdpEndpoint: $("cdpEndpoint").value,
+        autoReconnect: $("autoReconnect").checked,
         business: readBusiness(),
       });
       await refresh();
@@ -1315,6 +1367,11 @@ if ($("saveSettings"))
   $("saveSettings").onclick = () =>
     action($("saveSettings"), async () => {
       const s = structuredClone(state.settings);
+      s.templateChecks = {
+        enabled: $("templateChecksEnabled").checked,
+        promotionalClaims: $("promotionalClaimsCheck").value,
+        messageLength: $("messageLengthCheck").value,
+      };
       s.business = readBusiness();
       for (const key of pacingFields) s.pacing[key] = Number($(key).value);
       for (const key of [
@@ -1336,6 +1393,14 @@ if ($("saveSettings"))
       $("teamToken").value = "";
       await api("/api/settings", { settings: s, teamToken: token });
       notice("Sending settings saved.");
+    });
+
+if ($("resetWait"))
+  $("resetWait").onclick = () =>
+    action($("resetWait"), async () => {
+      const result = await api("/api/reset-wait", {});
+      await refresh();
+      notice(result.message);
     });
 
 // Pacing presets click and input listeners
@@ -1738,10 +1803,14 @@ if ($("prepare"))
         key: $("template").value,
         randomTemplates: $("randomTemplates").checked,
       });
-      if ($("signatureText")) $("signatureText").textContent = r.signature;
+      if ($("signatureText")) $("signatureText").textContent = r.signature || "No signature configured in this mailbox.";
       if ($("previewTitle")) $("previewTitle").textContent = r.message.subject;
       if ($("previewBody")) $("previewBody").textContent = r.message.body;
-      notice("Compose filled in your browser. Review it before sending.");
+      if ($("warnings")) {
+        $("warnings").hidden = !r.warnings?.length;
+        $("warnings").textContent = (r.warnings || []).join(" ");
+      }
+      notice(`Compose filled in your browser. Review it before sending.${r.warnings?.length ? " Review note: " + r.warnings.join(" ") : ""}`);
     });
 
 if ($("release"))

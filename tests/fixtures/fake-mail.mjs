@@ -4,11 +4,13 @@ import fs from "node:fs/promises";
 MailBrowser.prototype.connect = async function (_, account) {
   this.account = account;
   this.authenticated = true;
+  this.setSession('connected', `Connected to ${account.email}.`);
   return { connected: true };
 };
 MailBrowser.prototype.isConnected = async function () {
   return this.authenticated;
 };
+MailBrowser.prototype.hasSavedProfile = async function () { return process.env.TEST_SAVED_PROFILE === '1'; };
 MailBrowser.prototype.prepare = async function (message) {
   this.prepared = { message };
   return { signature: "Existing test signature" };

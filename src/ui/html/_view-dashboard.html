@@ -129,8 +129,8 @@
                   </div>
 
                   <div class="form-group">
-                    <label for="password">Session Password</label>
-                    <input id="password" type="password" autocomplete="off" placeholder="Enter password to authenticate" />
+                    <label for="password">Password (optional for a saved session)</label>
+                    <input id="password" type="password" autocomplete="off" placeholder="Or sign in directly in the browser" />
                   </div>
 
                   <div class="form-actions">
@@ -138,7 +138,8 @@
                     <button id="resume" class="secondary" hidden>Continue sign-in</button>
                     <button id="disconnect" class="danger" hidden>Disconnect</button>
                   </div>
-                  <p class="hint">Passwords stay in memory only and are never saved or sent to any server.</p>
+                  <p class="hint" id="browserSessionStatus" role="status" aria-live="polite">Connect your mailbox.</p>
+                  <p class="hint">Choose the connection method in Mailbox & Settings. Passwords entered here are passed only to the local tool and the mailbox login form. Browser cookies and login sessions are saved on this device. Disconnect keeps them for later.</p>
                 </div>
 
                 <!-- Recent Events Stream -->

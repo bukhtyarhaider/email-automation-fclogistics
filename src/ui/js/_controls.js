@@ -37,6 +37,11 @@ function updateControls() {
   const stopBtn = $("stop");
   if (stopBtn) stopBtn.hidden = !state.job.enabled;
 
+  const resetWait = $("resetWait");
+  if (resetWait)
+    resetWait.disabled = pending || state.busy || !!state.prepared ||
+      !(state.job.nextAt || state.job.sincePause || state.job.pauseAfter);
+
   const startBtn = $("start");
   if (startBtn)
     startBtn.disabled =
@@ -56,7 +61,7 @@ function updateControls() {
   if (relBtn) relBtn.disabled = pending || state.busy || !!state.prepared;
 
   const connBtn = $("connect");
-  if (connBtn) connBtn.disabled = pending || state.busy;
+  if (connBtn) connBtn.disabled = pending || state.busy || state.connected || state.signInOpen || !!state.prepared;
 
   const resBtn = $("resume");
   if (resBtn) {
@@ -67,7 +72,7 @@ function updateControls() {
   const disBtn = $("disconnect");
   if (disBtn) {
     disBtn.disabled = pending || state.busy;
-    disBtn.hidden = !state.connected;
+    disBtn.hidden = !state.connected && !state.signInOpen;
   }
 
   const selCount = $("selectedCount");

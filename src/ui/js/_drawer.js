@@ -293,10 +293,14 @@ if ($("prepare"))
         key: $("template").value,
         randomTemplates: $("randomTemplates").checked,
       });
-      if ($("signatureText")) $("signatureText").textContent = r.signature;
+      if ($("signatureText")) $("signatureText").textContent = r.signature || "No signature configured in this mailbox.";
       if ($("previewTitle")) $("previewTitle").textContent = r.message.subject;
       if ($("previewBody")) $("previewBody").textContent = r.message.body;
-      notice("Compose filled in your browser. Review it before sending.");
+      if ($("warnings")) {
+        $("warnings").hidden = !r.warnings?.length;
+        $("warnings").textContent = (r.warnings || []).join(" ");
+      }
+      notice(`Compose filled in your browser. Review it before sending.${r.warnings?.length ? " Review note: " + r.warnings.join(" ") : ""}`);
     });
 
 if ($("release"))

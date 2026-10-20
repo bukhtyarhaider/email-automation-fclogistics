@@ -6,6 +6,7 @@ async function refresh() {
   }
 
   const conn = $("connection");
+  if ($("browserSessionStatus")) $("browserSessionStatus").textContent = state.browserSession?.message || "Connect your mailbox.";
   if (conn) {
     conn.textContent = state.connected
       ? "Mailbox connected"
@@ -90,6 +91,13 @@ async function refresh() {
   }
 
   const nextSendEl = $("nextSend");
+  const waitStatus = $("settingsWaitStatus");
+  if (waitStatus) {
+    const remaining = Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000));
+    waitStatus.textContent = state.job.nextAt
+      ? `${state.job.status} · ${remaining}s until the next queue check.`
+      : `No scheduled wait. ${state.job.sincePause || 0} sends since the last rest.`;
+  }
   if (nextSendEl) {
     nextSendEl.textContent = state.job.nextAt
       ? `Next check: ${new Date(state.job.nextAt).toLocaleTimeString()} (${Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000))}s remaining)`
@@ -144,7 +152,7 @@ async function refresh() {
   }
 
   if (state.prepared && $("signatureText")) {
-    $("signatureText").textContent = state.prepared.signature;
+    $("signatureText").textContent = state.prepared.signature || "No signature configured in this mailbox.";
   }
 
   updateControls();
