@@ -36,6 +36,11 @@ export const DEFAULTS = {
     readyStatuses: ["", "new", "pending", "not contacted", "ready"],
     sentStatus: "Proposal Sent",
   },
+  templateChecks: {
+    enabled: true,
+    promotionalClaims: "warn",
+    messageLength: "warn",
+  },
   team: { url: "", workerName: "", enabled: false },
 };
 export function upgrade(state) {
@@ -131,6 +136,13 @@ export function validateSettings(input) {
   const s = structuredClone(input);
   if (!s.business || !s.pacing || !s.eligibility || !s.team)
     throw new Error("Incomplete settings.");
+  const checks = { ...DEFAULTS.templateChecks, ...s.templateChecks };
+  if (typeof checks.enabled !== "boolean")
+    throw new Error("Template checks enabled must be true or false.");
+  for (const key of ["promotionalClaims", "messageLength"])
+    if (!["off", "warn", "block"].includes(checks[key]))
+      throw new Error(`Invalid template check ${key}. Use off, warn, or block.`);
+  s.templateChecks = checks;
   for (const key of Object.keys(DEFAULTS.business)) {
     if (typeof s.business[key] !== "string" || s.business[key].length > 1500)
       throw new Error(`Invalid business ${key}.`);

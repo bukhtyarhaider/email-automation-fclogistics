@@ -229,15 +229,26 @@ export function reason(lead, state, seen = new Set()) {
   seen.add(lead.email);
   return "";
 }
-export function assess(message) {
+export function assessChecks(message, checks = {}) {
   const warnings = [];
+  const blockers = [];
+  if (checks.enabled === false) return { warnings, blockers };
+  const add = (key, text) => {
+    const mode = checks[key] ?? "warn";
+    if (mode === "off") return;
+    warnings.push(text);
+    if (mode === "block") blockers.push(text);
+  };
   if (
     /guarantee|guaranteed|\$\d|\d+%|direct shipper|exclusive|urgent|act now|free money/i.test(
       message.subject + " " + message.body,
     )
   )
-    warnings.push("Review pricing, guarantees, and promotional claims.");
+    add("promotionalClaims", "Review pricing, guarantees, and promotional claims.");
   if (message.body.split(/\s+/).length > 180)
-    warnings.push("Consider keeping the introduction under 180 words.");
-  return warnings;
+    add("messageLength", "Consider keeping the introduction under 180 words.");
+  return { warnings, blockers };
+}
+export function assess(message, checks) {
+  return assessChecks(message, checks).warnings;
 }

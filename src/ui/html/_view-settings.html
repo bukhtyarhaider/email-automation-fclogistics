@@ -287,6 +287,41 @@
                   </div>
                 </div>
 
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2 class="panel-title">Template checks</h2>
+                    <span class="status-pill ready">Advisory by default</span>
+                  </div>
+                  <p class="hint">Choose how wording checks behave for all templates in previews, manual sends, selected batches, and continuous outreach. Warn only adds a review note and lets outreach continue.</p>
+                  <div class="form-group">
+                    <label class="check">
+                      <input id="templateChecksEnabled" type="checkbox" checked />
+                      Enable template checks
+                    </label>
+                  </div>
+                  <fieldset id="templateCheckOptions" class="template-check-options">
+                    <div class="form-group">
+                      <label for="promotionalClaimsCheck">Pricing, guarantees & promotional claims</label>
+                      <select id="promotionalClaimsCheck">
+                        <option value="warn">Warn only — continue outreach</option>
+                        <option value="block">Stop before sending</option>
+                        <option value="off">Off</option>
+                      </select>
+                      <p class="hint">Flags wording such as guarantees, prices, percentages, and urgency for review.</p>
+                    </div>
+                    <div class="form-group">
+                      <label for="messageLengthCheck">Introduction over 180 words</label>
+                      <select id="messageLengthCheck">
+                        <option value="warn">Warn only — continue outreach</option>
+                        <option value="block">Stop before sending</option>
+                        <option value="off">Off</option>
+                      </select>
+                    </div>
+                  </fieldset>
+                  <p class="hint">Turning template checks off keeps your individual choices for when you enable them again. Save sending settings to apply changes. A stopped queue must be started again.</p>
+                  <p class="hint">Lead eligibility checks are below. Recipient validity, duplicate and opt-out protection, mailbox identity, signature verification, send confirmation, and sending allowances stay active.</p>
+                </div>
+
                 <!-- Carrier Eligibility Rules -->
                 <div class="panel">
                   <div class="panel-head">

@@ -1211,8 +1211,19 @@ function fillProfile(explicitProfile) {
   updateControls();
 }
 
+function updateTemplateCheckControls() {
+  $("templateCheckOptions").disabled = !$("templateChecksEnabled").checked;
+}
+if ($("templateChecksEnabled"))
+  $("templateChecksEnabled").onchange = updateTemplateCheckControls;
+
 function fillSettings() {
   const s = state.settings;
+  const checks = s.templateChecks || {};
+  $("templateChecksEnabled").checked = checks.enabled !== false;
+  $("promotionalClaimsCheck").value = checks.promotionalClaims || "warn";
+  $("messageLengthCheck").value = checks.messageLength || "warn";
+  updateTemplateCheckControls();
   for (const key of pacingFields) {
     if ($(key)) $(key).value = s.pacing[key];
   }
@@ -1356,6 +1367,11 @@ if ($("saveSettings"))
   $("saveSettings").onclick = () =>
     action($("saveSettings"), async () => {
       const s = structuredClone(state.settings);
+      s.templateChecks = {
+        enabled: $("templateChecksEnabled").checked,
+        promotionalClaims: $("promotionalClaimsCheck").value,
+        messageLength: $("messageLengthCheck").value,
+      };
       s.business = readBusiness();
       for (const key of pacingFields) s.pacing[key] = Number($(key).value);
       for (const key of [
@@ -1790,7 +1806,11 @@ if ($("prepare"))
       if ($("signatureText")) $("signatureText").textContent = r.signature || "No signature configured in this mailbox.";
       if ($("previewTitle")) $("previewTitle").textContent = r.message.subject;
       if ($("previewBody")) $("previewBody").textContent = r.message.body;
-      notice("Compose filled in your browser. Review it before sending.");
+      if ($("warnings")) {
+        $("warnings").hidden = !r.warnings?.length;
+        $("warnings").textContent = (r.warnings || []).join(" ");
+      }
+      notice(`Compose filled in your browser. Review it before sending.${r.warnings?.length ? " Review note: " + r.warnings.join(" ") : ""}`);
     });
 
 if ($("release"))
