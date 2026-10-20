@@ -912,6 +912,12 @@
                     <label for="pollSeconds">Empty Queue Check Interval (seconds)</label>
                     <input id="pollSeconds" type="number" min="5" />
                   </div>
+                  <div class="form-group">
+                    <label>Current queue wait</label>
+                    <p id="settingsWaitStatus" class="hint" role="status">No scheduled wait.</p>
+                    <p class="hint">Clear the current countdown and rest counter to recheck the queue now. Minimum send intervals and hourly/daily caps still apply. A stopped queue stays stopped.</p>
+                    <button id="resetWait" type="button" class="secondary" disabled>Reset current wait</button>
+                  </div>
                 </div>
 
                 <!-- Carrier Eligibility Rules -->
