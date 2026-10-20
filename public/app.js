@@ -173,6 +173,11 @@ function updateControls() {
   const stopBtn = $("stop");
   if (stopBtn) stopBtn.hidden = !state.job.enabled;
 
+  const resetWait = $("resetWait");
+  if (resetWait)
+    resetWait.disabled = pending || state.busy || !!state.prepared ||
+      !(state.job.nextAt || state.job.sincePause || state.job.pauseAfter);
+
   const startBtn = $("start");
   if (startBtn)
     startBtn.disabled =
@@ -335,6 +340,13 @@ async function refresh() {
   }
 
   const nextSendEl = $("nextSend");
+  const waitStatus = $("settingsWaitStatus");
+  if (waitStatus) {
+    const remaining = Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000));
+    waitStatus.textContent = state.job.nextAt
+      ? `${state.job.status} · ${remaining}s until the next queue check.`
+      : `No scheduled wait. ${state.job.sincePause || 0} sends since the last rest.`;
+  }
   if (nextSendEl) {
     nextSendEl.textContent = state.job.nextAt
       ? `Next check: ${new Date(state.job.nextAt).toLocaleTimeString()} (${Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000))}s remaining)`
@@ -1365,6 +1377,14 @@ if ($("saveSettings"))
       $("teamToken").value = "";
       await api("/api/settings", { settings: s, teamToken: token });
       notice("Sending settings saved.");
+    });
+
+if ($("resetWait"))
+  $("resetWait").onclick = () =>
+    action($("resetWait"), async () => {
+      const result = await api("/api/reset-wait", {});
+      await refresh();
+      notice(result.message);
     });
 
 // Pacing presets click and input listeners

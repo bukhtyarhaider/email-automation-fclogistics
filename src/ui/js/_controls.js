@@ -37,6 +37,11 @@ function updateControls() {
   const stopBtn = $("stop");
   if (stopBtn) stopBtn.hidden = !state.job.enabled;
 
+  const resetWait = $("resetWait");
+  if (resetWait)
+    resetWait.disabled = pending || state.busy || !!state.prepared ||
+      !(state.job.nextAt || state.job.sincePause || state.job.pauseAfter);
+
   const startBtn = $("start");
   if (startBtn)
     startBtn.disabled =

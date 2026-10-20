@@ -389,6 +389,14 @@ if ($("saveSettings"))
       notice("Sending settings saved.");
     });
 
+if ($("resetWait"))
+  $("resetWait").onclick = () =>
+    action($("resetWait"), async () => {
+      const result = await api("/api/reset-wait", {});
+      await refresh();
+      notice(result.message);
+    });
+
 // Pacing presets click and input listeners
 const presetsGrid = $("pacingPresetsGrid");
 if (presetsGrid) {

@@ -818,6 +818,25 @@ const server = http.createServer(async (req, res) => {
         );
       busy = true;
       try {
+        if (pathname === "/api/reset-wait") {
+          if (prepared || mail.prepared)
+            throw new Error("Close the prepared message before resetting the wait.");
+          const a = state.automation;
+          const previousNextAt = a.nextAt;
+          a.nextAt = null;
+          a.sincePause = 0;
+          a.pauseAfter = 0;
+          if (a.enabled && previousNextAt) {
+            a.status = "Checking queue";
+            a.message = "Wait reset. Checking the queue and mailbox allowance.";
+          }
+          const message = a.enabled
+            ? "Wait reset. The queue will recheck now; minimum intervals and mailbox allowances still apply."
+            : "Wait and rest counter reset. Outreach remains stopped.";
+          event(message, { kind: "pacing", previousNextAt });
+          await persist();
+          return response(res, { ok: true, message, job: job() });
+        }
         if (pathname === "/api/upload") {
           if (prepared) throw new Error("Close the prepared message first.");
           let size = 0,
