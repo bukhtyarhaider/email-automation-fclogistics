@@ -12,6 +12,7 @@ import {
   render,
   reason,
   assess,
+  assessChecks,
   EMAIL,
   pickTemplate,
 } from "./core.mjs";
@@ -384,6 +385,17 @@ function template(key) {
   if (!state.templates[key]) throw new Error("Template not found.");
   return state.templates[key];
 }
+function checkTemplate(message, key) {
+  const { warnings, blockers } = assessChecks(message, state.settings.templateChecks);
+  const name = state.templates[key]?.name || key;
+  if (blockers.length)
+    throw new Error(`Template "${name}": ${blockers.join(" ")} Change Template checks in Mailbox & Settings to warn only or off.`);
+  if (warnings.length)
+    event(`Template "${name}" advisory: ${warnings.join(" ")} Outreach can continue.`, {
+      kind: "template", templateKey: key,
+    });
+  return warnings;
+}
 function currentQuota() {
   return quota({ ...state.history, ...Object.fromEntries(Object.entries(state.seedHistory).map(([id, h]) => [`seed:${id}`, h])) }, profile()?.email, state.settings.pacing);
 }
@@ -648,11 +660,7 @@ async function runner() {
           ? pickTemplate(state.templates, lead, a.lastTemplate)
           : a.templateKey;
         const message = render(lead, template(key), business());
-        const warnings = assess(message);
-        if (warnings.length) {
-          const tmplName = state.templates[key]?.name || key;
-          throw new Error(`Template "${tmplName}": ${warnings.join(" ")}`);
-        }
+        checkTemplate(message, key);
         const proof = await prepareTracked(message, c.id);
         prepared = {
           id: lead.id,
@@ -1224,10 +1232,10 @@ const server = http.createServer(async (req, res) => {
             t,
             business(),
           );
-          const warnings = assess(sampleMsg);
+          const warnings = assess(sampleMsg, state.settings.templateChecks);
           state.templates[key] = t;
           event(
-            `Saved template ${t.name}.${warnings.length ? " Compliance alert: " + warnings.join(" ") : ""}`,
+            `Saved template ${t.name}.${warnings.length ? " Review note: " + warnings.join(" ") : ""}`,
             {
               kind: "template",
               templateKey: key,
@@ -1312,11 +1320,7 @@ const server = http.createServer(async (req, res) => {
             ? pickTemplate(state.templates, l)
             : input.key;
           const message = render(l, template(key), business()),
-            warnings = assess(message);
-          if (warnings.length) {
-            const tmplName = state.templates[key]?.name || key;
-            throw new Error(`Template "${tmplName}": ${warnings.join(" ")}`);
-          }
+            warnings = checkTemplate(message, key);
           const proof = await prepareTracked(message, l.campaignId);
           prepared = {
             id: l.id,
@@ -1325,7 +1329,7 @@ const server = http.createServer(async (req, res) => {
             message,
             signature: proof.signature,
           };
-          return response(res, { ...proof, message, key });
+          return response(res, { ...proof, message, key, warnings });
         }
         if (pathname === "/api/release") {
           const record = state.tracking.records[prepared?.message.trackingId];
@@ -1651,7 +1655,7 @@ const server = http.createServer(async (req, res) => {
           url.searchParams.get("key") || Object.keys(state.templates)[0];
         if (key && state.templates[key]) {
           message = render(l, state.templates[key], business());
-          warnings = assess(message);
+          warnings = assess(message, state.settings.templateChecks);
         }
       } catch (err) {
         warnings.push(err.message);

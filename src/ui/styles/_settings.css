@@ -185,3 +185,13 @@
   flex-shrink: 0;
   margin-top: 1px;
 }
+/* Group optional template checks without adding a second panel border. */
+.template-check-options {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.template-check-options:disabled {
+  opacity: 0.5;
+}

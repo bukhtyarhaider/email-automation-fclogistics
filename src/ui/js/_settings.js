@@ -221,8 +221,19 @@ function fillProfile(explicitProfile) {
   updateControls();
 }
 
+function updateTemplateCheckControls() {
+  $("templateCheckOptions").disabled = !$("templateChecksEnabled").checked;
+}
+if ($("templateChecksEnabled"))
+  $("templateChecksEnabled").onchange = updateTemplateCheckControls;
+
 function fillSettings() {
   const s = state.settings;
+  const checks = s.templateChecks || {};
+  $("templateChecksEnabled").checked = checks.enabled !== false;
+  $("promotionalClaimsCheck").value = checks.promotionalClaims || "warn";
+  $("messageLengthCheck").value = checks.messageLength || "warn";
+  updateTemplateCheckControls();
   for (const key of pacingFields) {
     if ($(key)) $(key).value = s.pacing[key];
   }
@@ -366,6 +377,11 @@ if ($("saveSettings"))
   $("saveSettings").onclick = () =>
     action($("saveSettings"), async () => {
       const s = structuredClone(state.settings);
+      s.templateChecks = {
+        enabled: $("templateChecksEnabled").checked,
+        promotionalClaims: $("promotionalClaimsCheck").value,
+        messageLength: $("messageLengthCheck").value,
+      };
       s.business = readBusiness();
       for (const key of pacingFields) s.pacing[key] = Number($(key).value);
       for (const key of [

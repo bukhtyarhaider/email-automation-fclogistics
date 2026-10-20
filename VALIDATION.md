@@ -1,5 +1,11 @@
 # Outreach Desk 2 validation
 
+## Optional template checks — October 20, 2026
+
+Promotional-claim and over-180-word checks now default to advisory notes that allow outreach to continue. Mailbox & Settings provides independent Warn only / Stop before sending / Off choices and an Enable template checks switch that retains the individual choices. Settings apply consistently to template-save feedback, lead previews, manual preparation, selected batches, and continuous outreach. Existing workspaces receive advisory defaults; stopped queues require an explicit restart.
+
+`FC_BROWSER_TESTS=1 npm test`: **82 passed** (75 Node, 7 Python), no failures or skips. New regression coverage verifies default/migrated settings, mixed modes, invalid setting rejection, manual and continuous sends with advisories, strict selected-batch blocking before an attempt, disabled preview/save feedback, restart persistence, and desktop Chrome settings save/reload with no JavaScript errors. Existing signature, suppression, uncertain-send, shared-coordinator, quota, and workbook tests pass. UI build, changed JavaScript syntax checks, and `git diff --check` passed. All sending used fake mail in temporary workspaces; no real emails were sent. Native Windows execution remains unverified.
+
 ## Reset current wait — October 20, 2026
 
 Settings → Sending Pace & Quotas now shows the current queue countdown and a Reset current wait button. The action clears the scheduled check and rest counter, rechecks an active queue, and keeps a stopped queue stopped. Minimum send intervals, rolling allowances, shared coordinator checks, send history and blocked recipients remain in effect. The action is disabled during another operation or with a prepared message open.
