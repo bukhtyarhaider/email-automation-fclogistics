@@ -389,7 +389,7 @@ async function refresh() {
   }
 
   if (state.prepared && $("signatureText")) {
-    $("signatureText").textContent = state.prepared.signature;
+    $("signatureText").textContent = state.prepared.signature || "No signature configured in this mailbox.";
   }
 
   updateControls();
@@ -1767,7 +1767,7 @@ if ($("prepare"))
         key: $("template").value,
         randomTemplates: $("randomTemplates").checked,
       });
-      if ($("signatureText")) $("signatureText").textContent = r.signature;
+      if ($("signatureText")) $("signatureText").textContent = r.signature || "No signature configured in this mailbox.";
       if ($("previewTitle")) $("previewTitle").textContent = r.message.subject;
       if ($("previewBody")) $("previewBody").textContent = r.message.body;
       notice("Compose filled in your browser. Review it before sending.");

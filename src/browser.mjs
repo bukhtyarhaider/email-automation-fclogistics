@@ -240,16 +240,10 @@ export class MailBrowser {
       .frameLocator('iframe[title="Composer iframe"]')
       .locator("#htmlEditorIframeEditor");
     await editor.waitFor();
-    const signature = await editor
-      .locator(".spm-signature-block")
-      .evaluate((el) => el.outerHTML);
-    if (
-      !signature ||
-      !(await editor.locator(".spm-signature-block").innerText())
-    )
-      throw new Error(
-        "Existing signature not found. Configure the mailbox signature before sending.",
-      );
+    // Some mailboxes have no configured signature. Snapshot the complete list
+    // without waiting for an optional node; preserve both presence and absence.
+    const signatures = editor.locator(".spm-signature-block");
+    const signature = await signatures.evaluateAll((els) => els.map((el) => el.outerHTML));
     // Prepend escaped plain text nodes. Never replace editor.innerHTML or the signature.
     await editor.evaluate((el, body) => {
       if (el.querySelector("[data-fc-outreach]"))
@@ -283,9 +277,7 @@ export class MailBrowser {
       }, { id: message.trackingId, pixelUrl: message.pixelUrl });
     }
     if (
-      (await editor
-        .locator(".spm-signature-block")
-        .evaluate((el) => el.outerHTML)) !== signature
+      JSON.stringify(await signatures.evaluateAll((els) => els.map((el) => el.outerHTML))) !== JSON.stringify(signature)
     )
       throw new Error("Signature changed during insertion. Sending blocked.");
     const bodyNode = editor.locator("[data-fc-outreach]");
@@ -301,7 +293,7 @@ export class MailBrowser {
     this.prepared = { message, composer, editor, signature, bodyHtml };
     await this.validate();
     return {
-      signature: await editor.locator(".spm-signature-block").innerText(),
+      signature: (await signatures.allInnerTexts()).join("\n"),
     };
   }
   async validate() {
@@ -321,9 +313,9 @@ export class MailBrowser {
         "Body changed in your browser. Prepare the message again.",
       );
     if (
-      (await p.editor
+      JSON.stringify(await p.editor
         .locator(".spm-signature-block")
-        .evaluate((el) => el.outerHTML)) !== p.signature
+        .evaluateAll((els) => els.map((el) => el.outerHTML))) !== JSON.stringify(p.signature)
     )
       throw new Error("Signature changed. Sending blocked.");
     if (p.message.trackingId && (await p.editor.locator("[data-fc-outreach]").getAttribute("data-fc-tracking")) !== p.message.trackingId)
