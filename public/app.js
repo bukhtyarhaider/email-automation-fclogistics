@@ -2771,6 +2771,26 @@ if ($('trackingRefresh')) {
   $('trackingRefresh').onclick = (e) => action(e.currentTarget, loadTracking);
 }
 
+// Firebase Cloud Sync Action
+if ($('trackingFirebaseSync')) {
+  $('trackingFirebaseSync').onclick = (e) =>
+    action(e.currentTarget, async () => {
+      try {
+        const res = await api('tracking/sync-firebase', {});
+        if (res.synced > 0) {
+          notice(`Firebase: Synced ${res.synced} new open signal(s)!`, 'success');
+        } else if (res.ok) {
+          notice('Firebase: Open signals are up to date.', 'info');
+        } else {
+          notice(`Firebase: ${res.message || res.error || 'Not configured'}`, 'warn');
+        }
+      } catch (err) {
+        notice(`Firebase sync failed: ${err.message}`, 'error');
+      }
+      await loadTracking();
+    });
+}
+
 // Wire Change & Input Listeners
 for (const id of ['trackingCampaign', 'trackingStatus', 'trackingFrom', 'trackingUntil']) {
   if ($(id)) {
