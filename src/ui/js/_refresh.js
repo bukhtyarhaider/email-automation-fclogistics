@@ -145,7 +145,7 @@ async function refresh() {
   }
 
   if (state.prepared && $("signatureText")) {
-    $("signatureText").textContent = state.prepared.signature;
+    $("signatureText").textContent = state.prepared.signature || "No signature configured in this mailbox.";
   }
 
   updateControls();
