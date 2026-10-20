@@ -41,6 +41,9 @@ export const DEFAULTS = {
     promotionalClaims: "warn",
     messageLength: "warn",
   },
+  tracking: {
+    syncMode: "auto",
+  },
   team: { url: "", workerName: "", enabled: false },
 };
 export function upgrade(state) {
@@ -204,5 +207,9 @@ export function validateSettings(input) {
   }
   if (s.team.enabled && !s.team.url)
     throw new Error("Enter a shared team server URL.");
+  const tracking = { ...DEFAULTS.tracking, ...s.tracking };
+  if (!["auto", "manual"].includes(tracking.syncMode))
+    throw new Error("Invalid tracking syncMode. Use auto or manual.");
+  s.tracking = tracking;
   return s;
 }

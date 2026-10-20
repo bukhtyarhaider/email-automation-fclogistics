@@ -131,9 +131,17 @@ export class FirebaseSync {
     return Boolean(this.rtdb || this.firestore);
   }
 
-  async sync() {
+  async sync(options = {}) {
     if (!this.isConfigured()) {
       return { ok: false, message: "Firebase not configured", synced: 0 };
+    }
+    const isManualMode = this.state.settings?.tracking?.syncMode === "manual";
+    if (isManualMode && !options.force) {
+      this.updateWorkerStatus(
+        "Manual mode",
+        "Automatic background sync paused. Click 'Sync Firebase' to fetch."
+      );
+      return { ok: true, message: "Manual sync mode active; background sync paused", synced: 0 };
     }
     if (this.running) {
       return { ok: true, message: "Sync already in progress", synced: 0 };

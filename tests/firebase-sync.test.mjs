@@ -147,3 +147,29 @@ test("FirebaseSync syncs open signals from Cloud Firestore", async () => {
   assert.equal(committedBatches[0][0].data.synced, true);
   assert.equal(state.tracking.worker.firebaseSync.status, "Active");
 });
+
+test("FirebaseSync respects settings.tracking.syncMode = 'manual'", async () => {
+  const state = {
+    tracking: {},
+    settings: {
+      tracking: { syncMode: "manual" },
+    },
+  };
+  initTracking(state);
+  const persist = async () => {};
+
+  const sync = new FirebaseSync({ state, persist }, { FC_FIREBASE_DISABLE: "1" });
+  sync.rtdb = { ref: () => ({ limitToLast: () => ({ once: async () => ({ val: () => ({}) }) }) }) };
+
+  // 1. Background sync (without force: true) should pause
+  const bgResult = await sync.sync();
+  assert.equal(bgResult.ok, true);
+  assert.equal(bgResult.synced, 0);
+  assert.match(bgResult.message, /Manual sync mode active/);
+  assert.equal(state.tracking.worker.firebaseSync.status, "Manual mode");
+
+  // 2. Manual button click (with force: true) should proceed
+  const manualResult = await sync.sync({ force: true });
+  assert.equal(manualResult.ok, true);
+  assert.equal(state.tracking.worker.firebaseSync.status, "Active");
+});

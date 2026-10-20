@@ -249,6 +249,9 @@ function fillSettings() {
   if ($("teamEnabled")) $("teamEnabled").checked = s.team.enabled;
   if ($("teamUrl")) $("teamUrl").value = s.team.url;
   if ($("workerName")) $("workerName").value = s.team.workerName;
+  if ($("firebaseSyncMode")) {
+    $("firebaseSyncMode").value = s.tracking?.syncMode || "auto";
+  }
   detectActivePreset();
 }
 
@@ -399,6 +402,9 @@ if ($("saveSettings"))
         url: $("teamUrl").value,
         workerName: $("workerName").value,
       };
+      s.tracking = {
+        syncMode: $("firebaseSyncMode")?.value || "auto",
+      };
       const token = $("teamToken").value;
       $("teamToken").value = "";
       await api("/api/settings", { settings: s, teamToken: token });
@@ -412,6 +418,34 @@ if ($("resetWait"))
       await refresh();
       notice(result.message);
     });
+
+if ($("settingsFirebaseSyncBtn"))
+  $("settingsFirebaseSyncBtn").onclick = () =>
+    action($("settingsFirebaseSyncBtn"), async () => {
+      try {
+        const res = await api("/api/tracking/sync-firebase", {});
+        if (res.synced > 0) {
+          notice(`Firebase: Synced ${res.synced} new open signal(s)!`, "success");
+        } else if (res.ok) {
+          notice("Firebase: Open signals are up to date.", "info");
+        } else {
+          notice(`Firebase: ${res.message || res.error || "Not configured"}`, "warn");
+        }
+      } catch (err) {
+        notice(`Firebase sync failed: ${err.message}`, "error");
+      }
+      await refresh();
+    });
+
+if ($("firebaseSyncMode"))
+  $("firebaseSyncMode").onchange = () => {
+    const isManual = $("firebaseSyncMode").value === "manual";
+    if ($("firebaseSyncModeHint")) {
+      $("firebaseSyncModeHint").textContent = isManual
+        ? "In manual mode, background polling is paused. You can sync opens anytime by clicking 'Sync Firebase'."
+        : "In automatic mode, open signals from recipients are fetched seamlessly in the background while the app is running.";
+    }
+  };
 
 // Pacing presets click and input listeners
 const presetsGrid = $("pacingPresetsGrid");
