@@ -1,6 +1,6 @@
 import http from "node:http";
 import fs from "node:fs/promises";
-import { unlinkSync } from "node:fs";
+import { unlinkSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -24,6 +24,7 @@ import { initTracking, createRecord, syncRecord, addEvent, report, safeRecord, s
 import { MailboxMonitor } from "./mailbox-monitor.mjs";
 import { startPixelServer } from "./pixel-server.mjs";
 import { domainHealth } from "./domain-health.mjs";
+import { FirebaseSync } from "./firebase-sync.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = path.resolve(process.env.FC_DATA_DIR || path.join(ROOT, "data"));
@@ -186,6 +187,7 @@ function persist() {
   return persistTail;
 }
 const monitor = new MailboxMonitor({ state, persist });
+const firebaseSync = new FirebaseSync({ state, persist });
 function track(item) {
   let record = state.tracking.records[item.trackingId];
   if (!record) record = createRecord(state.tracking, { to: item.recipient, subject: item.subject }, {
@@ -269,18 +271,29 @@ function selectCampaign(id) {
   state.workbook = c.workbook;
 }
 async function reload(c = activeCampaign()) {
-  if (!c) return;
-  const parsed = await python(
-    "read",
-    path.join(DATA, c.workbook.file),
-    c.mapping || {},
-  );
-  for (const l of parsed.leads) {
-    l.hidden = parsed.sheets.find((s) => s.part === l.part)?.hidden;
-    l.campaignId = c.id;
+  if (!c || !c.workbook?.file) return;
+  const filePath = path.join(DATA, c.workbook.file);
+  if (!existsSync(filePath)) {
+    console.warn(`[Workbook] File not found for campaign "${c.name || c.id}": ${filePath}`);
+    campaignData.set(c.id, { sheets: [], leads: [] });
+    return;
   }
-  campaignData.set(c.id, parsed);
-  campaignRevision++;
+  try {
+    const parsed = await python(
+      "read",
+      filePath,
+      c.mapping || {},
+    );
+    for (const l of parsed.leads) {
+      l.hidden = parsed.sheets.find((s) => s.part === l.part)?.hidden;
+      l.campaignId = c.id;
+    }
+    campaignData.set(c.id, parsed);
+    campaignRevision++;
+  } catch (err) {
+    console.warn(`[Workbook] Failed to load workbook for campaign "${c.name || c.id}":`, err.message);
+    campaignData.set(c.id, { sheets: [], leads: [] });
+  }
 }
 for (const c of state.campaigns) await reload(c);
 if (state.automation.enabled) {
@@ -869,6 +882,10 @@ const server = http.createServer(async (req, res) => {
           recordPlacement(record, input.status, input.evidence);
           await persist();
           return response(res, { ok: true });
+        }
+        if (pathname === "/api/tracking/sync-firebase" || pathname === "/tracking/sync-firebase") {
+          const result = await firebaseSync.sync({ force: true });
+          return response(res, result);
         }
         if (pathname === "/api/tracking/seed-plan") {
           if (state.automation.enabled || prepared) throw new Error("Stop outreach and close compose before seed tests.");
@@ -1761,9 +1778,11 @@ const monitorTimer = setInterval(() => {
     }
   }
   void monitor.run().catch(() => { state.tracking.worker.storage = { status: "Needs attention", message: "Monitoring state could not be saved" }; });
+  void firebaseSync.sync().catch(() => {});
 }, 15000);
 monitorTimer.unref();
 if (process.env.FC_MONITOR_ENABLED === "1") void monitor.run().catch(() => {});
+void firebaseSync.sync().catch(() => {});
 async function restoreMailbox() {
   const account = profile();
   if (!account?.email || account.autoReconnect === false) return;

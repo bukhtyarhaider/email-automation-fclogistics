@@ -990,6 +990,34 @@
                   </div>
                 </div>
 
+                <!-- Firebase Open Telemetry & Sync Settings -->
+                <div class="panel">
+                  <div class="panel-head">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <h2 class="panel-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+                        Firebase Open Telemetry Sync
+                      </h2>
+                      <span class="status-pill ready" id="settingsFirebaseStatusBadge">Ready</span>
+                    </div>
+                  </div>
+                  <p class="hint">Choose whether open signals captured by your Vercel/Firebase endpoint sync automatically in the background or only when manually requested.</p>
+
+                  <div class="form-group">
+                    <label for="firebaseSyncMode">Sync Mode</label>
+                    <select id="firebaseSyncMode">
+                      <option value="auto">Automatic (Background polling every 15s + startup sync)</option>
+                      <option value="manual">Manual (Sync only on demand / button click)</option>
+                    </select>
+                    <p class="hint" id="firebaseSyncModeHint">In automatic mode, open signals from recipients are fetched seamlessly in the background while the app is running.</p>
+                  </div>
+
+                  <div class="form-group" style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle); padding-top: 10px;">
+                    <small id="settingsFirebaseDiag" style="color: var(--text-muted); font-size: 11.5px;">Auto-detected: data/firebase-service-account.json</small>
+                    <button id="settingsFirebaseSyncBtn" type="button" class="secondary" style="font-size: 11px; padding: 4px 10px;">Sync opens now</button>
+                  </div>
+                </div>
+
                 <!-- Shared Team Server -->
                 <div class="panel">
                   <div class="panel-head">
@@ -1372,6 +1400,10 @@
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                   Domain Health
                 </a>
+                <button id="trackingFirebaseSync" class="secondary" title="Sync opens from Firebase Cloud Firestore">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+                  Sync Firebase
+                </button>
                 <button id="trackingRefresh" class="secondary refresh-btn" title="Refresh tracking telemetries">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
                   Refresh Data
