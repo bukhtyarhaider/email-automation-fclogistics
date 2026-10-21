@@ -1,5 +1,18 @@
 # Outreach Desk 2 validation
 
+## Firebase 24/7 open telemetry sync and UI modular architecture — October 21, 2026
+
+Integrated dual Firebase Realtime Database and Google Cloud Firestore open telemetry synchronization (`src/firebase-sync.mjs`) to capture email opens 24/7 without requiring ngrok, public inbound ports, or 24/7 workstation uptime. Added automatic service account auto-discovery (`data/firebase-service-account.json`), configurable Automatic vs Manual sync modes, dashboard "Sync Firebase" trigger button, and live worker status telemetry. Reorganized dashboard frontend into a modular source structure under `src/ui/` with automated compilation (`npm run build:ui`).
+
+`FC_BROWSER_TESTS=1 npm test`: **86 passed** (79 Node tests, 7 Python tests), with 0 failures and 0 skipped.
+- **Firebase open telemetry**: Unit tests verify graceful startup when unconfigured, Realtime Database syncing with local `openIndex` reconciliation, Cloud Firestore batch commits, multi-PC filtering via `FC_TRACKING_PC_ID`, manual mode pause enforcement, and error resilience.
+- **Process lifecycle & single-instance locking**: Unit coverage validates `scripts/launch.mjs` handling active instances, graceful process termination (`--close`, `--stop`), restart (`--restart`), and stale lock recovery (`data/app.lock`).
+- **Management & compliance features**: Tests verify mailbox profile management, suppression list additions and unsuppression removal with team coordinator synchronization, template JSON export/import, surgical Excel lead deletion (`/api/delete-leads`), lead preview drawers, sending pace anti-spam presets, live activity event filtering/export/clear, and reset wait.
+- **Full browser checks**: Headless Chrome tests verify saved persistent browser profiles, session restoration, challenge states, CDP discovery and attach/detach, composer signature snapshotting and tamper detection, marker/pixel insertion, seed testing workflow, and tracking dashboard responsive UI.
+- **Build & packaging**: `npm run build:ui` successfully compiles modular CSS, HTML partials, and JS modules into `public/`. `npm run doctor` and `python3 scripts/bundle.py` pass cleanly.
+
+All automated verification used synthetic local fixtures and mock adapters; no real outreach emails were sent. Native Windows execution remains unverified locally.
+
 ## Optional template checks — October 20, 2026
 
 Promotional-claim and over-180-word checks now default to advisory notes that allow outreach to continue. Mailbox & Settings provides independent Warn only / Stop before sending / Off choices and an Enable template checks switch that retains the individual choices. Settings apply consistently to template-save feedback, lead previews, manual preparation, selected batches, and continuous outreach. Existing workspaces receive advisory defaults; stopped queues require an explicit restart.

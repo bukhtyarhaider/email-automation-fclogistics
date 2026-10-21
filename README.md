@@ -9,7 +9,24 @@ A configurable local email sales tool for teams using Private Email. Each PC has
 3. Windows: open `Setup-Windows.cmd` once, then `Start-Windows.cmd`. macOS: open `Setup-Mac.command` once, then `Start-Mac.command`. If macOS strips execute permission from the archive, run `chmod +x *.command` in that folder. Setup installs the locked npm dependencies from the npm registry.
 4. The launcher opens http://127.0.0.1:4317. Keep its terminal open while using the tool. Closing it stops the local server. Linux also works with `npm ci` then `npm run launch`.
 
+Both `Start-Windows.cmd` and `Start-Mac.command` automatically detect `.env` in the project root and launch Node with `--env-file=.env`.
+
 The distribution contains code and templates only. It excludes workbook data, mailbox sessions, customer-specific state, screenshots, history, and team access tokens.
+
+### Launcher lifecycle and single-instance management
+
+The launcher (`scripts/launch.mjs`) manages process lifecycles and enforces single-instance locking using `data/app.lock`:
+
+- **Automatic instance detection**: If Outreach Desk is already running, launching again will not create port conflicts; it brings the active dashboard to the front in your default browser.
+- **Interactive options**: In an active terminal, running the launcher prompts:
+  - `[Enter]`: Keep active instance running (default).
+  - `[R]`: Terminate the existing process gracefully and restart a fresh server.
+  - `[C]`: Close the running instance and exit.
+- **Command-line flags**:
+  - `npm run launch -- --restart` (or `-r`): Stop existing instance and restart.
+  - `npm run launch -- --close` (or `--stop`): Stop the running instance cleanly.
+  - `npm run launch -- --open` (or `-o`): Open active instance in browser without prompting.
+- **Stale lock recovery**: If an abnormal OS shutdown leaves `data/app.lock`, the launcher checks process health, removes orphaned lock files, and terminates unresponsive background PIDs before starting fresh.
 
 ## Configure a mailbox and campaign
 
@@ -43,7 +60,13 @@ Persistent profiles reduce repeated logins; the provider controls session lifeti
 
 Profiles contain sensitive login material. Keep them on the same device/OS user, use OS account protections and restricted Windows folder ACLs, and exclude them from shared archives and source control. Do not copy browser sessions between macOS and Windows. Each installation signs in independently. Saved mailbox login data is retained when a mailbox configuration is deleted; remove obsolete browser-profile directories only after stopping the app and their browser.
 
-Add `.xlsx` files as campaigns. Imports make a working copy and preserve an original backup. Use the campaign selector to inspect each one, name it, enable/disable it, or limit it to exact worksheet names. The continuous queue rotates through enabled campaigns; **Send selected leads** only processes the selected recipients, respecting the same pacing and allowances.
+### Campaigns, lead inspection and surgical management
+
+Add `.xlsx` files as campaigns. Imports make a working copy and preserve an original backup. Use the campaign selector to inspect each one, name it, enable/disable it, limit it to exact worksheet names, or delete obsolete campaign workspaces. The continuous queue rotates through enabled campaigns; **Send selected leads** only processes the selected recipients, respecting the same pacing and allowances.
+
+- **Lead Preview Drawer & Modal**: Click any lead in the Leads table to slide open the Lead Inspector drawer, displaying all imported spreadsheet fields, carrier operating status, eligibility reasons, and rendered template previews.
+- **Surgical Lead Deletion**: Select individual or multiple leads in the Leads table and click **Delete selected leads** to permanently and surgically purge them from the underlying campaign `.xlsx` workbook using Python openpyxl routines without affecting surrounding formatting or formula caches.
+- **Campaign Workspace Deletion**: In **Campaigns**, delete unused campaigns to remove their working copies and clean up workspace memory.
 
 Column headers supported by default include `Carrier Legal Name`/`Company`/`Company name`, `Email`/`Email address`, `Status`, and `Owner / Principal`/`Contact`/`Contact name`. Optional per-worksheet mappings are editable under **Campaign settings**:
 
@@ -59,25 +82,46 @@ Carrier eligibility defaults require Active operating status and No out-of-servi
 
 Configure minimum/maximum gap seconds, hourly and rolling 24-hour allowances, minimum/maximum sends before a rest, minimum/maximum rest seconds, and the empty-queue polling interval. The bounds are editable. Intervals use independent random samples, and longer rests never shorten the normal minimum gap. Limits apply to the selected mailbox; attempts with an ambiguous outcome count against them. Manually sent messages and sends from other software are outside this tool’s counters.
 
-Under **Settings → Sending Pace & Quotas**, **Reset current wait** clears the scheduled countdown and rest counter so an active queue rechecks immediately. Minimum send intervals, rolling hourly/daily allowances, team coordination, and recipient eligibility still apply, so a required wait can be scheduled again. Resetting preserves history and blocked recipients and leaves a stopped queue stopped.
+### Anti-spam pacing presets & wait reset
+
+Under **Settings → Sending Pace & Quotas**:
+- **Pacing Presets**: Quickly apply recommended anti-spam sending cadences:
+  - **Safe (Recommended)**: 180–360s gaps, 20/hour cap, 100/day cap, pause every 8–15 sends for 10–30 minutes.
+  - **Moderate**: 120–240s gaps, 30/hour cap, 150/day cap, pause every 12–20 sends for 8–20 minutes.
+  - **Aggressive**: 60–120s gaps, 45/hour cap, 250/day cap, pause every 20–30 sends for 5–15 minutes.
+  - **Custom**: Full manual control over every bound and interval.
+- **Reset current wait**: Clears the scheduled countdown and rest counter so an active queue rechecks immediately. Minimum send intervals, rolling hourly/daily allowances, team coordination, and recipient eligibility still apply, so a required wait can be scheduled again. Resetting preserves history and blocked recipients and leaves a stopped queue stopped.
 
 Use **Start continuous outreach** to run until stopped. The queue waits for allowance renewal, for new eligible leads, or for a disconnected mailbox. Add new campaigns while it waits. It saves the next scheduled check, progress, and enabled state. A restart retains the queue and waits for reconnection before resuming; stopping saves a disabled state. Errors pause the runner for attention. **Stop outreach** interrupts waiting promptly and prevents the next send; an already submitted send must finish its confirmation/recovery step.
 
 24/7 operation requires the PC, local server, browser, network, and mailbox session to remain available, and sleep to be configured by the operator. This version does not install an OS background service. When the app starts, a saved enabled queue can resume after automatic browser-session restoration if the login is still valid and startup restoration is enabled. Expired sessions require operator sign-in.
 
-## Templates and history
+## Templates, compliance and history
 
 There are 16 editable introduction variants. Random selection uses only enabled templates whose required lead fields are present, honors selection weights, and avoids the immediately previous variant when alternatives exist. You can add or delete variants and select one fixed template instead. This is deterministic field personalization, not an AI that infers services or invents information about a lead.
 
-**Mailbox & Settings → Template checks** controls the promotional-claims and over-180-word checks independently: **Warn only** (the default) shows a review note and allows outreach to continue; **Stop before sending** blocks preparation; **Off** disables that check. The master **Enable template checks** switch disables both while retaining your individual choices. These saved choices apply to template-save feedback, previews, manual preparation, selected batches, and continuous outreach. Existing workspaces receive the advisory defaults on upgrade. Save sending settings to apply changes, then restart a queue previously stopped by a warning. Lead eligibility switches remain in the same settings page. Invalid message text/tokens, invalid recipients, duplicates, suppression/opt-outs, uncertain sends, mailbox identity/signature checks, send confirmation, and pacing/quotas retain their protections.
+### Compliance authoring tools and checks
+
+- **Opt-out Instruction Helper**: One-click insertion of compliant unsubscribe wording into template bodies.
+- **Live Compliance Word Count**: Real-time word counter with color-coded advisory warning if template length exceeds the 180-word deliverability recommendation.
+- **Template Export & Import**: Export custom template suites as JSON (`/api/export-templates`) or import templates (`/api/import-templates`) to share proven variants across team workstations.
+- **Template checks**: **Mailbox & Settings → Template checks** controls promotional-claims and over-180-word checks independently:
+  - **Warn only** (default): Shows an advisory review note while permitting outreach to proceed.
+  - **Stop before sending**: Blocks message preparation until wording is adjusted.
+  - **Off**: Disables the check completely.
+  The master **Enable template checks** switch toggles both checks simultaneously while preserving individual preferences.
 
 Supported tokens: `{{firstName}}`, `{{company}}`, `{{city}}`, `{{state}}`, `{{locationPhrase}}`, `{{senderName}}`, `{{businessName}}`, `{{services}}`, `{{legalName}}`, `{{address}}`. Business values come from the active mailbox profile. Existing version-1 standard sender/address text is migrated to editable profile tokens; edited templates and send history remain available.
 
 Each message uses one recipient and keeps any existing webmail signature unchanged. Mailboxes with no configured signature can prepare messages normally. Adding, removing, or editing a signature after preparation, unexpected recipients, changed message content, and changed compose controls block sending. The tool records its durable reservation before clicking Send, requires a fresh visible webmail success notice, and then patches only the relevant XLSX status cell. This confirms submission to webmail, not delivery to an inbox.
 
-History stores the recipient, account, campaign, template, subject, rendered body, signature text, timestamps, confirmation evidence, uncertainty, and workbook repair state. **Live System Activity** provides a dedicated real-time telemetry console with visual and raw terminal feeds, pacing countdowns, event category filters, freeze/pause stream controls, and log export (.json / .log). **Send History & Audit** includes a searchable, paginated send history with full-message details, inspector drawer, and recovery action center; **Export full history** includes all saved attempts and events. Old attempts from version 1 contain only the information recorded by that version. Downloads export the selected campaign’s updated workbook. Original files remain unchanged.
+### Telemetry, suppression and audit
 
-Uncertain sends never retry automatically. Check the Sent folder and record the outcome in Activity. Workbook updates can be repaired without another send. Add opt-outs to **Do not contact**. Optional IMAP monitoring now records confidently correlated DSN bounces and suppresses permanent failures; automatic opt-out reply interpretation is not implemented. These rules and conservative pacing do not guarantee inbox placement or bypass provider controls.
+- **Live System Activity**: A dedicated real-time telemetry console with visual status feeds, raw terminal logs, pacing countdowns, event category filters (`all`, `send`, `pacing`, `error`, `system`), freeze/pause stream controls, log clear (`/api/clear-events`), and export as `.json` or `.log`/`.txt`.
+- **Suppression List Management**: Add opt-outs to **Suppression list**. Operators can also remove/unsuppress addresses (`/api/unsuppress`); removals automatically synchronize with the shared team coordinator.
+- **Send History & Audit**: Searchable, paginated send history with full message details, inspector drawer, open telemetry badges, bounce diagnostics, and recovery action center. **Export full history** exports all saved attempts, tracking metadata, and events as JSON.
+
+Uncertain sends never retry automatically. Check the Sent folder and record the outcome in Activity. Workbook updates can be repaired without another send. Add opt-outs to **Do not contact**. Optional IMAP monitoring records confidently correlated DSN bounces and suppresses permanent failures; automatic opt-out reply interpretation is not implemented. These rules and conservative pacing do not guarantee inbox placement or bypass provider controls.
 
 ## Shared team server
 
@@ -118,24 +162,49 @@ Server environment variables:
 
 These administrator limits apply in addition to each PC’s settings. Never run multiple coordinator processes against one ledger or copy ledger files over a running server. The coordinator serializes claims and durably saves them before responding. An unattempted reservation can expire after 30 minutes; Sending, Sent, and Uncertain records never expire into eligibility. After a coordinator restart, unfinished Sending records become Uncertain. Keep the ledger and token backed up; all PCs depend on that history for duplicate protection.
 
+## Email tracking, 24/7 Firebase sync and deliverability
+
+Open **Email Tracking** for independent submission/bounce/open-signal dimensions, campaign/date/status filters, unmatched notifications, controlled seed inbox testing studio, and read-only domain authentication checks. The existing Playwright sender and durable JSON store remain in place. IMAP monitoring and open tracking default to disabled; no real test emails or DNS changes are made automatically.
+
+### Open signals: Local pixel server vs 24/7 Firebase sync
+
+Outreach Desk provides two methods for open tracking:
+
+1. **Local GIF Pixel Listener** (`src/pixel-server.mjs`): Runs an isolated HTTP listener on port 4319 serving 1×1 transparent GIFs for opaque 256-bit hashed tokens. Requires an external HTTPS reverse proxy (nginx/caddy) mapped to `FC_TRACKING_PUBLIC_URL` and requires the local workstation to remain online.
+2. **24/7 Firebase Cloud Telemetry Sync** (`src/firebase-sync.mjs`): Eliminates the need for local port forwarding, ngrok tunnels, or keeping the PC on 24/7. When emails are opened while your PC is asleep or off, a cloud worker logs open events into Firebase Realtime Database or Cloud Firestore. When Outreach Desk runs, `FirebaseSync` automatically polls pending opens, updates message records with 1-hour hourly coalescing, and flags them as synced.
+   - **Credentials auto-discovery**: Automatically detects `data/firebase-service-account.json`, or environment variables (`FC_FIREBASE_CREDENTIALS_PATH`, `FC_FIREBASE_SERVICE_ACCOUNT_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`).
+   - **Sync modes**: Configurable in **Settings → Email Tracking Telemetry** as **Automatic** (periodic background sync) or **Manual** (operator triggers on demand via the **Sync Firebase** button in Email Tracking).
+   - **Multi-PC isolation**: Uses `FC_TRACKING_PC_ID` so independent workstations sync only their relevant campaign messages without cross-PC race conditions.
+
+### Controlled Seed Inbox Testing Studio & Domain Health
+
+- **Seed Studio**: Reserve and test dedicated mailboxes (`FC_SEEDS`) with synthetic leads before launching major campaigns. Appends `[FC seed <UUID>]` to track folder placement across Gmail, Outlook, Yahoo, and Private Email. Inspect results via the slide-over Timeline Drawer.
+- **Domain Authentication Checks**: Read-only TXT queries verify SPF, DKIM selector, and DMARC record syntax with actionable deliverability guidance.
+
+See [TRACKING.md](TRACKING.md) for full architecture, environment configurations, and end-to-end verification workflows.
+
 ## Data and development
 
 Local UI binds only to loopback and checks host/origin/request headers. `data/` contains private leads, saved profiles, campaign working copies, original backups, rendered email content, suppression, and history. Back it up and restrict OS access. Directory/file modes restrict access on Unix; on Windows access depends on the installation folder’s ACLs. Do not share your data folder with other users or package it for team distribution. Never commit passwords or team tokens.
 
-`FC_DATA_DIR` chooses the local data folder; `FC_PYTHON` chooses Python; `PORT` changes the local UI port. For developers on this Codex workstation, the bundled Playwright runtime remains an optional fallback. Standard team installations use npm dependencies.
+`FC_DATA_DIR` chooses the local data folder; `FC_PYTHON` chooses Python; `PORT` changes the local UI port. Standard team installations use npm dependencies.
 
 ```sh
-npm test
-npm run doctor
-npm run bundle
+npm test              # Run unit and integration tests (synthetic mail)
+npm run doctor        # Check Node, Python, and system prerequisites
+npm run build:ui      # Compile modular HTML, CSS, and JS from src/ui/ into public/
+npm run bundle        # Create clean production zip under dist/
 ```
 
-Tests use synthetic workbook records and a fake mail adapter, with no real sending. They cover continuous queue exhaustion, adding a campaign, stop/restart persistence, uncertain outcomes, team reservations and quotas, random pacing, template matching, legacy migration, and surgical workbook writes. Windows launcher files are provided but need a real Windows installation check; functional tests were run on macOS.
+### UI Modular Architecture
 
-Run `FC_BROWSER_TESTS=1 npm test` on macOS (PowerShell: `$env:FC_BROWSER_TESTS='1'; npm test`) to also run actual Chrome tests against synthetic local inboxes and temporary profiles, including persistent cookies, restart reuse, profile locks, manual challenge recovery, wrong-account detection, expiry, CDP attach/detach, discovery and desktop/mobile browser settings. Set `FC_TEST_BROWSER_CHANNEL=msedge` to exercise Edge instead. `.github/workflows/test.yml` adds macOS/Windows regression runs and Windows Edge coverage; those CI jobs must run before native Windows compatibility can be confirmed. No live Cloudflare/Namecheap outcome is claimed by synthetic tests.
+The frontend is maintained as modular source components under `src/ui/`:
+- `src/ui/html/`: View partials (`_view-dashboard.html`, `_view-tracking.html`, `_view-settings.html`, `_drawer-lead.html`, etc.)
+- `src/ui/styles/`: Scoped CSS (`_tokens.css`, `_base.css`, `_tracking.css`, `_drawer.css`, etc.)
+- `src/ui/js/`: Domain modules (`_controls.js`, `_leads.js`, `_tracking.js`, `_settings.js`, etc.)
 
-## Email tracking and mailbox monitoring
+Run `npm run build:ui` to concatenate and build `public/index.html`, `public/style.css`, and `public/app.js`.
 
-Open **Email Tracking** for independent submission/bounce/open-signal dimensions, campaign/date/status filters, unmatched notifications, seed Inbox/Spam results, and read-only domain authentication checks. The existing Playwright sender and durable JSON store remain in place. IMAP monitoring and open tracking default to disabled; no real test emails or DNS changes are made automatically.
+### Headless browser tests
 
-See [TRACKING.md](TRACKING.md) for the architecture, exact file manifest, additive migration, `.env.example`, Namecheap IMAP setup, authorized seed/OAuth configuration, HTTPS pixel deployment, worker operation, test commands, and live verification limits. Restart the app after installing the updated locked dependencies.
+Run `FC_BROWSER_TESTS=1 npm test` on macOS (PowerShell: `$env:FC_BROWSER_TESTS='1'; npm test`) to run the complete suite including real Chrome tests against synthetic local inboxes and temporary profiles: persistent cookies, restart reuse, profile locks, manual challenge recovery, wrong-account detection, expiry, CDP attach/detach, discovery, tracking dashboard filters, and desktop/mobile responsiveness. Set `FC_TEST_BROWSER_CHANNEL=msedge` to exercise Edge instead. No live Cloudflare/Namecheap outcome is claimed by synthetic tests.

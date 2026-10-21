@@ -12,22 +12,25 @@ Tracking joins this flow at composition and at the durable reservation/confirmat
 
 | File | Change / responsibility |
 |---|---|
-| `src/tracking.mjs` (new) | Additive migration, UUIDs, status dimensions, bounded events, hashed open tokens, DSN correlation/idempotency, manual-review records, filtered reporting, seed configuration/results |
-| `src/mailbox-monitor.mjs` (new) | TLS IMAP reader, structured MIME DSNs, Sent Message-ID reconciliation, UIDVALIDITY cursors, reconnect/backoff, authorized seed-folder inspection |
-| `src/pixel-server.mjs` (new) | Separate GIF-only HTTP listener; no dashboard/admin routes |
-| `src/domain-health.mjs` (new) | Read-only SPF/DKIM/DMARC TXT checks, actionable warnings, explicit lookup failures |
+| `src/tracking.mjs` | Additive migration, UUIDs, status dimensions, bounded events, hashed open tokens, DSN correlation/idempotency, manual-review records, filtered reporting, seed configuration/results |
+| `src/firebase-sync.mjs` (new) | Dual Firebase Realtime Database & Cloud Firestore sync worker for 24/7 open telemetry without reverse proxies or 24/7 PC uptime |
+| `src/mailbox-monitor.mjs` | TLS IMAP reader, structured MIME DSNs, Sent Message-ID reconciliation, UIDVALIDITY cursors, reconnect/backoff, authorized seed-folder inspection |
+| `src/pixel-server.mjs` | Separate GIF-only HTTP listener; no dashboard/admin routes |
+| `src/domain-health.mjs` | Read-only SPF/DKIM/DMARC TXT checks, actionable warnings, explicit lookup failures |
 | `src/browser.mjs` | Insert a per-message HTML marker and optional pixel; retain text/signature validation and fresh-confirmation requirement |
 | `src/delivery.mjs` | Tracking UUID/status and bounded error reason on every reservation; safe hooks that cannot cause a second send |
-| `src/server.mjs` | Tracking hooks, reporting/seed/manual-result APIs, background mailbox loop, listener lifecycle, existing-history reconciliation |
-| `public/index.html`, `public/app.js`, `public/style.css` | Email Tracking dashboard, filters, message events, review queue, monitor state, seed controls, DNS checks |
-| `package.json`, `package-lock.json` | Locked ImapFlow and MailParser dependencies; no new mail-sending transport |
+| `src/server.mjs` | Tracking hooks, reporting/seed/manual-result APIs, background mailbox loop, Firebase sync trigger, listener lifecycle, existing-history reconciliation |
+| `src/ui/`, `src/ui/build.mjs` (new) | Modular UI architecture: scoped CSS, view partials, and domain JS modules compiled into `public/` assets |
+| `public/index.html`, `public/app.js`, `public/style.css` | Compiled Email Tracking dashboard, filters, message events, review queue, monitor state, seed controls, DNS checks, slide-over drawer |
+| `package.json`, `package-lock.json` | Locked `firebase-admin`, `imapflow`, and `mailparser` dependencies; no new mail-sending transport |
 | `scripts/test.mjs` | Serialize tests that use fixed local ports; disable live mailbox monitoring by default in tests |
 | `scripts/bundle.py` | Include tracking documentation and safe environment example in the existing source bundle |
-| `.env.example` (new), `.gitignore` | Safe placeholders; ignore private environment files |
-| `tests/tracking.test.mjs` (new) | Parser, correlation, bounce/open/placement/error/security/reporting checks with mocks |
-| `tests/tracking-integration.test.mjs` (new) | Local HTTP + fake sender, pixel isolation, seed deduplication, manual results and restart persistence |
-| `tests/browser-tracking.test.mjs`, `tests/browser-tracking-ui.test.mjs` (new) | Opt-in headless browser verification of synthetic composer HTML and responsive dashboard filters |
-| `README.md`, `VALIDATION.md`, `TRACKING.md` (new) | Entry points, setup, limits and validation evidence |
+| `.env.example`, `.gitignore` | Safe placeholders; ignore private environment files and service account secrets |
+| `tests/firebase-sync.test.mjs` (new) | Auto-discovery, RTDB sync, Firestore sync, manual sync mode, and error handling unit tests |
+| `tests/tracking.test.mjs` | Parser, correlation, bounce/open/placement/error/security/reporting checks with mocks |
+| `tests/tracking-integration.test.mjs` | Local HTTP + fake sender, pixel isolation, seed deduplication, manual results and restart persistence |
+| `tests/browser-tracking.test.mjs`, `tests/browser-tracking-ui.test.mjs` | Opt-in headless browser verification of synthetic composer HTML and responsive dashboard filters |
+| `README.md`, `VALIDATION.md`, `TRACKING.md` | Entry points, setup, limits and validation evidence |
 
 ## Storage and migration
 
@@ -41,7 +44,7 @@ A record has independent dimensions:
 - `deliveryStatus`: `delivery_unknown`, `hard_bounced`, or `soft_bounced`.
 - `bounceStatus`/`bounceReason`: observed DSN failure and diagnostic, without replacing submission evidence.
 - `firstOpenAt`/`lastOpenAt`/`opens` and `open_detected` events: remote-image requests only.
-- `placement`: seed result, folder evidence, source (`imap` or `manual`), timestamp.
+- `placement`: seed result, folder evidence, source (`imap`, `manual`, or `open_signal`), timestamp.
 - Sender/recipient/subject/campaign, attempt/confirmation timestamps, Message-IDs, and last event timestamp.
 
 There is deliberately no automatic `delivered` status. A sent/opened/bounced message can show all of those dimensions together. `delivery_unknown` is not a failure classification. A pre-submit error is `send_failed`; an error after a possible click without confirmation is `delivery_unknown` and remains `Uncertain` in legacy history. Neither becomes retryable automatically. Existing manual reconciliation records the operator's Sent-folder evidence separately.
@@ -50,15 +53,15 @@ A tracking-hook failure marks `trackingSyncNeeded` on durable send history and i
 
 ## Environment and startup
 
-Install the locked dependencies with `npm ci`. Copy `.env.example` to `.env` and protect that file (on macOS/Linux: `chmod 600 .env`). Values are optional unless the feature is enabled. Node's environment-file loader is available in Node 20.6+:
+Install the locked dependencies with `npm ci`. Copy `.env.example` to `.env` and protect that file (on macOS/Linux: `chmod 600 .env`). Values are optional unless the feature is enabled. Both `Start-Mac.command` and `Start-Windows.cmd` automatically detect `.env` and launch Node with `--env-file=.env`. Node's environment-file loader is also available in Node 20.6+:
 
 ```sh
 node --env-file=.env src/server.mjs
-# Or use the existing launcher and open the dashboard automatically:
+# Or use the launcher directly:
 node --env-file=.env scripts/launch.mjs
 ```
 
-The existing `npm start`, macOS and Windows launchers inherit environment variables but do not automatically read `.env`. You can instead set environment variables through your shell/service environment. Do not commit credentials. The environment template documents each variable and examples for multiple senders.
+`npm start` inherits already-set shell environment variables. You can set environment variables through your shell, service environment, or `.env`. Do not commit credentials or service account files.
 
 | Variable | Default / meaning |
 |---|---|
@@ -70,8 +73,16 @@ The existing `npm start`, macOS and Windows launchers inherit environment variab
 | `FC_IMAP_MAILBOXES` | `[]`; multiple sender configs with unique `id`, `user`, `host`, `passwordEnv` or `accessTokenEnv`, optional `sentFolder`/`inboxFolder` |
 | `FC_OPEN_TRACKING_ENABLED` | `0`; enables pixel insertion/listening only with consent flag |
 | `FC_OPEN_TRACKING_CONSENT` | `0`; explicitly authorize telemetry before setting `1` |
-| `FC_TRACKING_PUBLIC_URL` | Public HTTPS base, e.g. `https://tracking.example.com`; no username/password/query/fragment |
+| `FC_TRACKING_PUBLIC_URL` | Public HTTPS base, e.g. `https://tracking.example.com` or Cloud Function URL |
 | `FC_PIXEL_HOST` / `FC_PIXEL_PORT` | `127.0.0.1` / `4319`; separate listener, reverse proxy required for public access |
+| `FC_TRACKING_PC_ID` | `1`; workstation identifier for multi-PC team isolation and Firebase sync filtering |
+| `FC_FIREBASE_CREDENTIALS_PATH` | Path to Firebase service account JSON (auto-detects `data/firebase-service-account.json` if omitted) |
+| `FC_FIREBASE_SERVICE_ACCOUNT_KEY` | Inlined JSON or base64-encoded Firebase service account credentials |
+| `FC_FIREBASE_PROJECT_ID` | Project ID for discrete Firebase credential configuration |
+| `FC_FIREBASE_CLIENT_EMAIL` | Service account email for discrete Firebase credential configuration |
+| `FC_FIREBASE_PRIVATE_KEY` | Private key string for discrete Firebase credential configuration |
+| `FC_FIREBASE_DATABASE_URL` | Firebase Realtime Database URL (defaults to Asia-Southeast1 instance) |
+| `FC_FIREBASE_DISABLE` | `0`; set to `1` to completely bypass Firebase open telemetry sync |
 | `FC_SEEDS` | `[]`; array of dedicated authorized test mailboxes; manual configuration needs only unique `id`, unique `email`, optional `provider` |
 | Named password/token variables | Secrets referenced by `passwordEnv` or `accessTokenEnv`; never inline them in mailbox JSON |
 | `FC_BROWSER_TESTS` | Test-only `1` enables synthetic headless browser checks |
@@ -95,7 +106,9 @@ The adapter adds `data-fc-tracking` to the existing HTML wrapper. A Sent copy wi
 
 Set both open flags to `1` only for authorized tracking and configure an HTTPS base URL. Each new ordinary email gets 256 bits of random token entropy; only its SHA-256 hash is stored in application data. The URL contains no recipient address. A 1×1 remote image is appended inside the existing HTML text wrapper. Text nodes and signature are unchanged. If the public URL is invalid, the message is prepared without the pixel and a configuration warning is shown; core sending remains available. Pixels on seed tests are omitted so placement testing does not require an open-tracking service.
 
-Reverse-proxy the **pixel listener only**, for example:
+### Local pixel server (Option 1)
+
+When using the self-hosted pixel listener (`src/pixel-server.mjs`), reverse-proxy the **pixel listener only**, for example:
 
 ```nginx
 # Within an HTTPS server configured with your own valid certificate:
@@ -112,6 +125,31 @@ Requests before the durable attempt are ignored to reduce composer-preview noise
 
 Remote-image blocking creates false negatives. Apple privacy proxies and security scanners create false positives. The composer itself, forwarding, image caching and later re-fetches can affect signals. No request proves a human read or visually saw the message. The public endpoint, proxy and provider behavior need end-to-end deployment verification. The application does not bypass client privacy protections.
 
+## 24/7 Firebase cloud open telemetry sync (Option 2)
+
+Running a self-hosted pixel server on a local desktop PC has a fundamental limitation: if the PC is shut down, asleep, or disconnected, any emails opened by prospects are missed.
+
+Outreach Desk integrates with Google Firebase via `src/firebase-sync.mjs` to solve this cleanly:
+- A cloud endpoint (such as a Cloud Function, Cloudflare Worker, or Firebase Hosting URL) serves the 1×1 transparent GIF and records opens to Firebase Realtime Database or Cloud Firestore under `email_opens`.
+- Recorded payload: `{ token, tokenHash, pcId, openedAt, synced: false }`.
+- When Outreach Desk is active, `FirebaseSync` automatically reconciles pending opens with the local `state.tracking.openIndex`, records `open_detected` events, updates recipient timelines, and sets `synced: true` in Firebase.
+- Works offline: Turn off your PC over the weekend; when you launch Outreach Desk on Monday, all opens that occurred while offline are synced instantly.
+
+### Credentials auto-discovery
+
+`FirebaseSync` automatically searches the following locations in order:
+1. `data/firebase-service-account.json` (simply place your downloaded Google Cloud service account key into the `data/` directory).
+2. `FC_FIREBASE_CREDENTIALS_PATH` environment variable.
+3. `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
+4. `FC_FIREBASE_SERVICE_ACCOUNT_KEY` (raw JSON string or Base64-encoded string).
+5. Discrete environment variables (`FC_FIREBASE_PROJECT_ID`, `FC_FIREBASE_CLIENT_EMAIL`, `FC_FIREBASE_PRIVATE_KEY`).
+
+### Sync modes and controls
+
+- **Automatic mode** (`settings.tracking.syncMode = "auto"`): `FirebaseSync` polls Firebase every cycle during the background monitor loop.
+- **Manual mode** (`settings.tracking.syncMode = "manual"`): Automatic polling is paused; the operator clicks **Sync Firebase** in the Email Tracking dashboard header or Settings to fetch pending telemetry on demand.
+- **Worker Status Badge**: The Email Tracking header displays the live state (`Active`, `Manual mode`, `Needs configuration`, or `Needs attention`) with sync count and timestamp.
+
 ## Seed inbox setup and manual workflow
 
 Configure `FC_SEEDS` with only mailboxes you own or have permission to inspect. A minimal manual configuration:
@@ -120,11 +158,11 @@ Configure `FC_SEEDS` with only mailboxes you own or have permission to inspect. 
 FC_SEEDS='[{"id":"gmail-test","email":"your-dedicated-test@gmail.com","provider":"gmail"},{"id":"outlook-test","email":"your-dedicated-test@outlook.com","provider":"outlook"}]'
 ```
 
-In the dashboard select the active campaign and template, open Email Tracking, choose a content sample from the currently loaded lead page, and enter a unique test key. **Create seed plan** reserves records but sends nothing. **Send seed** submits each dedicated test message through the existing Playwright composer after checking signature, mailbox interval and quota. The sample lead is never contacted by this action; only the configured seed recipient is addressed. Seed sending requires the continuous queue stopped, no existing compose window, and a dedicated sending profile without shared-team mode. Existing normal team sending is unchanged.
+In the dashboard select the active campaign and template, open **Email Tracking → Seed Testing Studio**, choose a content sample from the currently loaded lead page, and enter a unique test key. **Create seed plan** reserves records but sends nothing. **Send seed** submits each dedicated test message through the existing Playwright composer after checking signature, mailbox interval and quota. The sample lead is never contacted by this action; only the configured seed recipient is addressed. Seed sending requires the continuous queue stopped, no existing compose window, and a dedicated sending profile without shared-team mode. Existing normal team sending is unchanged.
 
 Repeated requests with the same key and identical content reuse the plan; changed inputs with an existing key are rejected. Each seed is durably reserved before composition, so a crash/timeout cannot automatically resend it. If a test is interrupted even before its Send attempt, inspect webmail first; an intentional replacement test needs a new key. Already attempted records remain blocked after restart. Tests deliberately append `[FC seed <UUID>]` to subjects for exact folder correlation; this suffix can affect placement and should be considered when interpreting results.
 
-Without inbox access configured, open each dedicated mailbox yourself and inspect Inbox/Spam/Junk/other folders. Use the record's **Details → Manual seed placement**, add folder/time evidence, and save. No automated placement is claimed. Manual evidence is retained as an operator assertion, separate from IMAP evidence; the worker does not override manual results.
+Without inbox access configured, open each dedicated mailbox yourself and inspect Inbox/Spam/Junk/other folders. Click the record in Email Tracking to open the **Timeline Drawer**, select **Manual seed placement**, add folder/time evidence, and save. No automated placement is claimed. Manual evidence is retained as an operator assertion, separate from IMAP evidence; the worker does not override manual results.
 
 For automatic inspection add `host`, optional `user` (defaults to seed email), `accessTokenEnv` or supported `passwordEnv`, and optional `folders: {inbox, spam, other: []}`. The worker reads configured folders (Inbox and discovered special-use Junk by default). Override localized folder paths explicitly, including Gmail's Spam path where necessary. Messages must match the unique subject plus sender and seed recipient. Multiple copies become an explicit review result. Until one hour after confirmation, absence is `awaiting`; afterward it is `not_found` in configured folders, not a delivery failure. Checks continue for seven days, permitting delayed arrival or later moves.
 
@@ -147,6 +185,7 @@ Local APIs:
 - `POST /api/tracking/seed-plan`: `{testKey, leadId, key}` (active campaign/profile/template).
 - `POST /api/tracking/seed-send`: `{trackingId}`; sends exactly one reserved seed test.
 - `POST /api/tracking/manual-placement`: `{trackingId, status, evidence}`.
+- `POST /api/tracking/sync-firebase` (or `/tracking/sync-firebase`): force immediate Firebase open telemetry synchronization.
 
 POSTs retain the existing loopback Host/Origin and `X-FC-Request: 1` checks. The existing full-history JSON export now includes safe tracking records, seed plan metadata and unmatched DSNs; it omits open-token hashes. Treat exports as private: history still includes recipient metadata and rendered email bodies. Back up/retain/delete the private data folder according to your operational policy. There is no new automatic data-retention scheduler. Events and open buckets are bounded per message, while legitimate message records, cursors and DSN/review audit entries persist; very large installations should plan storage/archival and a future database migration.
 
@@ -160,13 +199,13 @@ FC_BROWSER_TESTS=1 npm test
 # Windows PowerShell: $env:FC_BROWSER_TESTS='1'; npm test
 ```
 
-Tests cover fresh confirmation, failed/pre-submit and uncertain sends, durable reservation failures, permanent/temporary/multipart DSNs, duplicate processing, wrong-recipient/sender/ambiguous correlation, Sent reconciliation, open endpoint/deduplication/bounds/outage, Inbox/Spam seed evidence, worker backoff/TLS/auth rules, reporting, migration and restart deduplication. Existing continuous-queue/coordinator/XLSX regression tests still run. This JavaScript project has no TypeScript or configured lint tool; syntax checks and `git diff --check` supplement the suite.
+Tests cover fresh confirmation, failed/pre-submit and uncertain sends, durable reservation failures, permanent/temporary/multipart DSNs, duplicate processing, wrong-recipient/sender/ambiguous correlation, Sent reconciliation, open endpoint/deduplication/bounds/outage, Firebase RTDB/Firestore syncing and credential auto-discovery, Inbox/Spam seed evidence, worker backoff/TLS/auth rules, reporting, migration and restart deduplication. Existing continuous-queue/coordinator/XLSX regression tests still run. This JavaScript project has no TypeScript or configured lint tool; syntax checks and `git diff --check` supplement the suite.
 
 For a real, explicitly authorized end-to-end test:
 
 1. Use a designated test sending mailbox and dedicated seed recipients; stop the normal queue. Configure IMAP and seeds, then restart and connect Playwright normally.
 2. Create a seed plan and send one seed per configured interval. Check webmail confirmation, monitor state, Sent Message-ID, and Inbox/Spam evidence. Confirm a second send of the same record is blocked.
-3. For optional open signals, first deploy the HTTPS proxy, then prepare a normal message addressed only to a designated test recipient, with both flags enabled. Verify the preserved signature/body and raw received HTML, fetch its image, and inspect `open_detected`. Repeated fetches in the same hour should add no bucket.
+3. For optional open signals, first deploy the HTTPS proxy or configure Firebase credentials, then prepare a normal message addressed only to a designated test recipient, with both flags enabled. Verify the preserved signature/body and raw received HTML, fetch its image, and inspect `open_detected`. Repeated fetches in the same hour should add no bucket.
 4. Use a mailbox-controlled DSN fixture or an approved provider test address to test a genuine failure. Check its original Message-ID and failed recipient before expecting an automatic match. Do not create unsolicited invalid-recipient traffic. Missing identifiers must stay in manual review.
 5. Restart the app and verify records, failures, seed plan and suppression survive. Stop IMAP access and verify backoff without new sends or invented placement results.
 
