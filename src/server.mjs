@@ -18,7 +18,7 @@ import {
 } from "./core.mjs";
 import { deliver } from "./delivery.mjs";
 import { upgrade, validateSettings, DEFAULTS } from "./config.mjs";
-import { quota, nextPause } from "./pacing.mjs";
+import { quota, nextPause, requiredWait } from "./pacing.mjs";
 import { TeamClient } from "./team.mjs";
 import { initTracking, createRecord, syncRecord, addEvent, report, safeRecord, seedConfig, recordPlacement, hash } from "./tracking.mjs";
 import { MailboxMonitor } from "./mailbox-monitor.mjs";
@@ -409,8 +409,19 @@ function checkTemplate(message, key) {
     });
   return warnings;
 }
+function mailboxHistory() {
+  return { ...state.history, ...Object.fromEntries(Object.entries(state.seedHistory).map(([id, h]) => [`seed:${id}`, h])) };
+}
 function currentQuota() {
-  return quota({ ...state.history, ...Object.fromEntries(Object.entries(state.seedHistory).map(([id, h]) => [`seed:${id}`, h])) }, profile()?.email, state.settings.pacing);
+  return quota(mailboxHistory(), profile()?.email, state.settings.pacing);
+}
+function pacingWait(includeTeam = false) {
+  const now = Date.now();
+  const local = requiredWait(mailboxHistory(), profile()?.email, state.settings.pacing, now);
+  const shared = includeTeam && state.settings.team.enabled
+    ? requiredWait(teamSnapshot.records, profile()?.email, state.settings.pacing, now, true)
+    : null;
+  return (shared?.seconds || 0) > (local?.seconds || 0) ? shared : local;
 }
 function checkBusiness() {
   for (const key of [
@@ -563,39 +574,15 @@ async function runner() {
         await new Promise((r) => setTimeout(r, 1000));
         continue;
       }
+      // A reset/settings request may have acquired busy while connection was checked.
+      if (busy || !a.enabled || (a.nextAt && Date.parse(a.nextAt) > Date.now())) continue;
       try {
         busy = true;
         await syncTeam();
         checkBusiness();
-        const lastLocal = [...Object.values(state.history), ...Object.values(state.seedHistory)]
-          .filter((h) => !h.accountEmail || h.accountEmail === profile().email)
-          .reduce(
-            (n, h) => Math.max(n, Date.parse(h.confirmedAt || h.at) || 0),
-            0,
-          );
-        if (
-          lastLocal &&
-          lastLocal + state.settings.pacing.minSeconds * 1000 > Date.now()
-        ) {
-          await waitFor(
-            Math.ceil(
-              (lastLocal +
-                state.settings.pacing.minSeconds * 1000 -
-                Date.now()) /
-                1000,
-            ),
-            "Waiting",
-            "Maintaining the mailbox interval from the last attempt.",
-          );
-          continue;
-        }
-        const q = currentQuota();
-        if (q.waitMs) {
-          await waitFor(
-            Math.ceil(q.waitMs / 1000) + 1,
-            "Allowance pause",
-            "Waiting for the rolling mailbox allowance to renew.",
-          );
+        const localWait = pacingWait();
+        if (localWait) {
+          await waitFor(localWait.seconds, localWait.status, localWait.message);
           continue;
         }
         let choice = null;
@@ -634,35 +621,9 @@ async function runner() {
         }
         const { c, lead } = choice;
         if (state.settings.team.enabled) {
-          const records = Object.values(teamSnapshot.records);
-          const last = records
-            .filter((r) => r.accountEmail === profile().email)
-            .reduce((n, r) => Math.max(n, Date.parse(r.at) || 0), 0);
-          const teamQ = quota(
-            teamSnapshot.records,
-            profile().email,
-            state.settings.pacing,
-          );
-          if (teamQ.waitMs) {
-            await waitFor(
-              Math.ceil(teamQ.waitMs / 1000) + 1,
-              "Team allowance pause",
-              "Waiting for the shared mailbox allowance.",
-            );
-            continue;
-          }
-          if (
-            last &&
-            Date.now() - last < state.settings.pacing.minSeconds * 1000
-          ) {
-            await waitFor(
-              Math.ceil(
-                (last + state.settings.pacing.minSeconds * 1000 - Date.now()) /
-                  1000,
-              ) + 1,
-              "Team pacing",
-              "Waiting for the shared mailbox interval.",
-            );
+          const sharedWait = pacingWait(true);
+          if (sharedWait) {
+            await waitFor(sharedWait.seconds, sharedWait.status, sharedWait.message);
             continue;
           }
         }
@@ -843,20 +804,26 @@ const server = http.createServer(async (req, res) => {
           if (prepared || mail.prepared)
             throw new Error("Close the prepared message before resetting the wait.");
           const a = state.automation;
+          if (a.enabled) await syncTeam();
           const previousNextAt = a.nextAt;
           a.nextAt = null;
           a.sincePause = 0;
           a.pauseAfter = 0;
-          if (a.enabled && previousNextAt) {
+          const required = a.enabled ? pacingWait(true) : null;
+          if (required) {
+            await waitFor(required.seconds, required.status, required.message);
+          } else if (a.enabled) {
             a.status = "Checking queue";
-            a.message = "Wait reset. Checking the queue and mailbox allowance.";
+            a.message = "Wait reset. Checking the queue now.";
           }
-          const message = a.enabled
-            ? "Wait reset. The queue will recheck now; minimum intervals and mailbox allowances still apply."
+          const message = required
+            ? `Optional wait and rest counter reset. ${required.message}`
+            : a.enabled
+            ? "Wait reset. The queue will recheck now."
             : "Wait and rest counter reset. Outreach remains stopped.";
           event(message, { kind: "pacing", previousNextAt });
           await persist();
-          return response(res, { ok: true, message, job: job() });
+          return response(res, { ok: true, message, waitCleared: !a.nextAt, job: job() });
         }
         if (pathname === "/api/upload") {
           if (prepared) throw new Error("Close the prepared message first.");

@@ -51,9 +51,7 @@ function renderLiveActivityView() {
     if (countdownWrap) countdownWrap.hidden = false;
     const diffMs = Date.parse(job.nextAt) - Date.now();
     const totalSec = Math.max(0, Math.ceil(diffMs / 1000));
-    const mins = String(Math.floor(totalSec / 60)).padStart(2, "0");
-    const secs = String(totalSec % 60).padStart(2, "0");
-    if (countdownTimer) countdownTimer.textContent = `${mins}:${secs}`;
+    if (countdownTimer) countdownTimer.textContent = waitClock(totalSec);
     if (countdownLabel) countdownLabel.textContent = job.status ? `${job.status}:` : "Next send scheduled in:";
   } else {
     if (countdownWrap) countdownWrap.hidden = true;
@@ -241,10 +239,8 @@ setInterval(() => {
     if (diffMs > 0) {
       if (wrap) wrap.hidden = false;
       const totalSec = Math.ceil(diffMs / 1000);
-      const mins = String(Math.floor(totalSec / 60)).padStart(2, "0");
-      const secs = String(totalSec % 60).padStart(2, "0");
       const timerEl = $("liveCountdownTimer");
-      if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+      if (timerEl) timerEl.textContent = waitClock(totalSec);
       const barEl = $("liveCountdownBar");
       if (barEl) {
         if (!liveCountdownTotal || totalSec > liveCountdownTotal) {

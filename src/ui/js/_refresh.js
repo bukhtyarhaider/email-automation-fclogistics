@@ -95,12 +95,12 @@ async function refresh() {
   if (waitStatus) {
     const remaining = Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000));
     waitStatus.textContent = state.job.nextAt
-      ? `${state.job.status} · ${remaining}s until the next queue check.`
+      ? `${state.job.status} · ${waitDuration(remaining)} until the next queue check (${new Date(state.job.nextAt).toLocaleString()}). ${state.job.message || ""}`
       : `No scheduled wait. ${state.job.sincePause || 0} sends since the last rest.`;
   }
   if (nextSendEl) {
     nextSendEl.textContent = state.job.nextAt
-      ? `Next check: ${new Date(state.job.nextAt).toLocaleTimeString()} (${Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000))}s remaining)`
+      ? `Next check: ${new Date(state.job.nextAt).toLocaleString()} (${waitDuration((Date.parse(state.job.nextAt) - Date.now()) / 1000)} remaining)`
       : "";
   }
 

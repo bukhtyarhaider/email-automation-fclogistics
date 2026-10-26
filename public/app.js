@@ -27,6 +27,21 @@ const escape = (s) =>
       ],
   );
 
+function waitDuration(seconds) {
+  const total = Math.max(0, Math.ceil(seconds) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  return [hours ? `${hours}h` : "", minutes ? `${minutes}m` : "", `${secs}s`].filter(Boolean).join(" ");
+}
+
+function waitClock(seconds) {
+  const total = Math.max(0, Math.ceil(seconds) || 0);
+  const parts = [Math.floor(total / 60) % 60, total % 60];
+  if (total >= 3600) parts.unshift(Math.floor(total / 3600));
+  return parts.map((n) => String(n).padStart(2, "0")).join(":");
+}
+
 async function api(url, data) {
   const response = await fetch(
     url,
@@ -344,12 +359,12 @@ async function refresh() {
   if (waitStatus) {
     const remaining = Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000));
     waitStatus.textContent = state.job.nextAt
-      ? `${state.job.status} · ${remaining}s until the next queue check.`
+      ? `${state.job.status} · ${waitDuration(remaining)} until the next queue check (${new Date(state.job.nextAt).toLocaleString()}). ${state.job.message || ""}`
       : `No scheduled wait. ${state.job.sincePause || 0} sends since the last rest.`;
   }
   if (nextSendEl) {
     nextSendEl.textContent = state.job.nextAt
-      ? `Next check: ${new Date(state.job.nextAt).toLocaleTimeString()} (${Math.max(0, Math.ceil((Date.parse(state.job.nextAt) - Date.now()) / 1000))}s remaining)`
+      ? `Next check: ${new Date(state.job.nextAt).toLocaleString()} (${waitDuration((Date.parse(state.job.nextAt) - Date.now()) / 1000)} remaining)`
       : "";
   }
 
@@ -1405,8 +1420,11 @@ if ($("resetWait"))
   $("resetWait").onclick = () =>
     action($("resetWait"), async () => {
       const result = await api("/api/reset-wait", {});
+      liveCountdownTotal = null;
       await refresh();
-      notice(result.message);
+      notice(result.job.nextAt
+        ? `${result.message} Next check: ${new Date(result.job.nextAt).toLocaleString()}.`
+        : result.message);
     });
 
 if ($("settingsFirebaseSyncBtn"))
@@ -1964,9 +1982,7 @@ function renderLiveActivityView() {
     if (countdownWrap) countdownWrap.hidden = false;
     const diffMs = Date.parse(job.nextAt) - Date.now();
     const totalSec = Math.max(0, Math.ceil(diffMs / 1000));
-    const mins = String(Math.floor(totalSec / 60)).padStart(2, "0");
-    const secs = String(totalSec % 60).padStart(2, "0");
-    if (countdownTimer) countdownTimer.textContent = `${mins}:${secs}`;
+    if (countdownTimer) countdownTimer.textContent = waitClock(totalSec);
     if (countdownLabel) countdownLabel.textContent = job.status ? `${job.status}:` : "Next send scheduled in:";
   } else {
     if (countdownWrap) countdownWrap.hidden = true;
@@ -2154,10 +2170,8 @@ setInterval(() => {
     if (diffMs > 0) {
       if (wrap) wrap.hidden = false;
       const totalSec = Math.ceil(diffMs / 1000);
-      const mins = String(Math.floor(totalSec / 60)).padStart(2, "0");
-      const secs = String(totalSec % 60).padStart(2, "0");
       const timerEl = $("liveCountdownTimer");
-      if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+      if (timerEl) timerEl.textContent = waitClock(totalSec);
       const barEl = $("liveCountdownBar");
       if (barEl) {
         if (!liveCountdownTotal || totalSec > liveCountdownTotal) {

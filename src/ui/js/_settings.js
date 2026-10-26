@@ -415,8 +415,11 @@ if ($("resetWait"))
   $("resetWait").onclick = () =>
     action($("resetWait"), async () => {
       const result = await api("/api/reset-wait", {});
+      liveCountdownTotal = null;
       await refresh();
-      notice(result.message);
+      notice(result.job.nextAt
+        ? `${result.message} Next check: ${new Date(result.job.nextAt).toLocaleString()}.`
+        : result.message);
     });
 
 if ($("settingsFirebaseSyncBtn"))

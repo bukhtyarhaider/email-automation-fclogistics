@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { upgrade } from '../src/config.mjs';
 import { loadPlaywright } from '../src/browser.mjs';
 import { initTracking } from '../src/tracking.mjs';
 
-async function fixture(t, port) {
+async function fixture(t, port, configure = () => {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fc-wait-reset-'));
   const state = upgrade({});
   const account = state.profiles[0];
@@ -22,6 +22,7 @@ async function fixture(t, port) {
   state.suppression['optout@example.com'] = 'Opted out';
   Object.assign(state.automation, { enabled: true, status: 'Resting', nextAt: new Date(Date.now() + 600000).toISOString(), sent: 7, sincePause: 7, pauseAfter: 8 });
   initTracking(state);
+  configure(state);
   await fs.writeFile(path.join(dir, 'state.json'), JSON.stringify(state));
   let child;
   async function stop() {
@@ -44,7 +45,7 @@ async function fixture(t, port) {
       if (value) return value;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    throw new Error('Queue did not reach expected state');
+    throw new Error(`Queue did not reach expected state: ${JSON.stringify((await api('state')).job)}`);
   }
   async function start() {
     child = spawn(process.execPath, ['--import', path.resolve('tests/fixtures/fake-mail.mjs'), path.resolve('src/server.mjs')], {
@@ -64,7 +65,9 @@ async function fixture(t, port) {
 test('reset wait persists counters while preserving uncertain history, suppression, quotas and stopped state', async (t) => {
   const { dir, api, until, start, stop, state: initial } = await fixture(t, 14635);
   const reset = await api('reset-wait', {});
-  assert.equal(reset.job.nextAt, null);
+  assert.equal(reset.waitCleared, false);
+  assert.equal(reset.job.status, 'Allowance pause');
+  assert.match(reset.message, /rolling hourly cap reached/);
   assert.equal(reset.job.sincePause, 0);
   assert.equal(reset.job.pauseAfter, 0);
   assert.equal(reset.job.sent, 7);
@@ -101,8 +104,73 @@ test('reset wait persists counters while preserving uncertain history, suppressi
   assert.equal(restarted.job.sent, 7);
 });
 
+for (const status of ['Waiting', 'Resting']) {
+  test(`reset clears a six-hour ${status} countdown and the active queue makes progress`, async (t) => {
+    const { dir, api, until } = await fixture(t, status === 'Waiting' ? 14637 : 14638, (state) => {
+      state.automation.status = status;
+      state.automation.randomTemplates = true;
+      state.automation.nextAt = new Date(Date.now() + 21600000).toISOString();
+      Object.assign(state.settings.pacing, { hourlyCap: 20, pauseEveryMin: 1, pauseEveryMax: 1, pauseMinSeconds: 21600, pauseMaxSeconds: 21600 });
+      state.settings.eligibility.requireActive = false;
+      state.settings.eligibility.requireNoOutOfService = false;
+    });
+    const workbook = path.join(dir, 'sample.xlsx');
+    execFileSync(process.platform === 'win32' ? 'python' : 'python3', [path.resolve('tests/fixtures/workbook.py'), workbook]);
+    await api('import', { path: workbook });
+    await api('connect', {});
+    assert(Date.parse((await api('state')).job.nextAt) > Date.now() + 21000000);
+    const reset = await api('reset-wait', {});
+    assert.equal(reset.waitCleared, true);
+    assert.equal(reset.job.nextAt, null);
+    assert.equal(reset.job.sincePause, 0);
+    assert.equal(reset.job.pauseAfter, 0);
+    const progressed = await until(async () => {
+      const s = await api('state');
+      return s.job.sent === 8 && !s.busy ? s : false;
+    });
+    assert.equal(progressed.job.status, 'Resting');
+    // A fresh rest after a confirmed send is expected, not the old timer persisting.
+    assert.equal(progressed.attempts['uncertain@example.com'].status, 'Uncertain');
+    assert.equal(progressed.suppression['optout@example.com'], 'Opted out');
+    const sends = (await fs.readFile(path.join(dir, 'sends.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse);
+    assert.equal(sends.length, 1);
+  });
+}
+
+test('reset explains an unavoidable six-hour daily allowance immediately and persists it', async (t) => {
+  const { dir, api, stop, start } = await fixture(t, 14639, (state) => {
+    Object.assign(state.settings.pacing, { hourlyCap: 20, dailyCap: 1 });
+    state.history['uncertain@example.com'].at = new Date(Date.now() - 18 * 3600000).toISOString();
+    state.automation.nextAt = new Date(Date.now() + 21600000).toISOString();
+  });
+  const reset = await api('reset-wait', {});
+  assert.equal(reset.waitCleared, false);
+  assert.equal(reset.job.status, 'Allowance pause');
+  assert.match(reset.message, /rolling 24-hour cap reached/);
+  assert(Date.parse(reset.job.nextAt) > Date.now() + 21500000);
+  assert(Date.parse(reset.job.nextAt) < Date.now() + 21700000);
+  await stop();
+  await start();
+  assert.equal((await api('state')).job.nextAt, reset.job.nextAt);
+  assert.equal(await fs.access(path.join(dir, 'sends.jsonl')).then(() => true, () => false), false);
+});
+
+test('reset labels a required minimum interval instead of silently recreating Waiting', async (t) => {
+  const { api } = await fixture(t, 14640, (state) => {
+    Object.assign(state.settings.pacing, { hourlyCap: 20, minSeconds: 21600, maxSeconds: 21600 });
+  });
+  const reset = await api('reset-wait', {});
+  assert.equal(reset.waitCleared, false);
+  assert.equal(reset.job.status, 'Minimum interval');
+  assert.match(reset.message, /configured minimum interval still applies/);
+  assert(Date.parse(reset.job.nextAt) > Date.now() + 21000000);
+});
+
 test('settings reset wait works on desktop/mobile and disables after resetting', { skip: process.env.FC_BROWSER_TESTS !== '1' }, async (t) => {
-  const { api } = await fixture(t, 14636);
+  const { api } = await fixture(t, 14636, (state) => {
+    state.history = {};
+    state.automation.nextAt = new Date(Date.now() + 21600000).toISOString();
+  });
   const browser = await loadPlaywright().chromium.launch({ channel: process.env.FC_TEST_BROWSER_CHANNEL || 'chrome', headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -115,7 +183,7 @@ test('settings reset wait works on desktop/mobile and disables after resetting',
     await page.setViewportSize({ width, height: 1000 });
     await button.scrollIntoViewIfNeeded();
     assert.equal(await button.isVisible(), true);
-    assert.match(await page.locator('#settingsWaitStatus').innerText(), /\d+s until the next queue check/);
+    assert.match(await page.locator('#settingsWaitStatus').innerText(), /5h|6h/);
     const sizes = await page.evaluate(() => [innerWidth, document.documentElement.scrollWidth]);
     assert(sizes[1] <= sizes[0] + 1, sizes.join('/'));
   }
@@ -124,4 +192,18 @@ test('settings reset wait works on desktop/mobile and disables after resetting',
   assert.equal((await api('state')).job.sincePause, 0);
   assert.match(await page.locator('#notice').innerText(), /Wait reset/);
   assert.deepEqual(errors, []);
+});
+
+test('settings shows the precise reason when reset retains a required long wait', { skip: process.env.FC_BROWSER_TESTS !== '1' }, async (t) => {
+  await fixture(t, 14641, (state) => {
+    Object.assign(state.settings.pacing, { hourlyCap: 20, minSeconds: 21600, maxSeconds: 21600 });
+  });
+  const browser = await loadPlaywright().chromium.launch({ channel: process.env.FC_TEST_BROWSER_CHANNEL || 'chrome', headless: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto('http://127.0.0.1:14641/#settings');
+  await page.getByRole('button', { name: 'Reset current wait', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('configured minimum interval still applies'));
+  assert.match(await page.locator('#settingsWaitStatus').innerText(), /Minimum interval.*5h.*minimum send interval/);
+  assert.match(await page.locator('#notice').innerText(), /Next check:/);
 });

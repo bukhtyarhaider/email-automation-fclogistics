@@ -27,6 +27,21 @@ const escape = (s) =>
       ],
   );
 
+function waitDuration(seconds) {
+  const total = Math.max(0, Math.ceil(seconds) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  return [hours ? `${hours}h` : "", minutes ? `${minutes}m` : "", `${secs}s`].filter(Boolean).join(" ");
+}
+
+function waitClock(seconds) {
+  const total = Math.max(0, Math.ceil(seconds) || 0);
+  const parts = [Math.floor(total / 60) % 60, total % 60];
+  if (total >= 3600) parts.unshift(Math.floor(total / 3600));
+  return parts.map((n) => String(n).padStart(2, "0")).join(":");
+}
+
 async function api(url, data) {
   const response = await fetch(
     url,

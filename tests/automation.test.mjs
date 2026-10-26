@@ -8,7 +8,7 @@ import {
   assess,
   reason,
 } from "../src/core.mjs";
-import { quota, nextPause } from "../src/pacing.mjs";
+import { quota, nextPause, requiredWait } from "../src/pacing.mjs";
 import { TeamLedger } from "../src/team.mjs";
 const lead = {
   company: "Example Fleet",
@@ -118,6 +118,28 @@ test("rolling quotas are mailbox-specific and calculate the next safe send", () 
     quota(history, "a@example.com", { hourlyCap: 3, dailyCap: 1 }, now).waitMs,
     86395000,
   );
+});
+test("required waits use the longest real limit and distinguish shared quotas from intervals", () => {
+  const now = Date.now();
+  const history = {
+    a: { accountEmail: "a@example.com", at: new Date(now - 60000).toISOString() },
+    b: { accountEmail: "b@example.com", at: new Date(now).toISOString() },
+  };
+  const pacing = { ...DEFAULTS.pacing, hourlyCap: 1, dailyCap: 100 };
+  const local = requiredWait(history, "a@example.com", pacing, now);
+  assert.equal(local.status, "Allowance pause");
+  assert.equal(local.seconds, 3541);
+  assert.match(local.message, /rolling hourly cap/);
+  const shared = requiredWait(history, "a@example.com", pacing, now, true);
+  assert.equal(shared.status, "Team allowance pause");
+  assert.match(shared.message, /Shared mailbox/);
+  pacing.hourlyCap = 20;
+  const interval = requiredWait(history, "a@example.com", pacing, now);
+  assert.equal(interval.status, "Minimum interval");
+  assert.equal(interval.seconds, 120);
+  assert.equal(requiredWait(history, "a@example.com", pacing, now, true).status, "Team pacing");
+  assert.equal(requiredWait(history, "c@example.com", pacing, now), null);
+  assert.equal(requiredWait(history, "a@example.com", pacing, now + 180000), null);
 });
 test("config validates ranges and permits generic leads by explicit rule selection", () => {
   const s = structuredClone(DEFAULTS);
