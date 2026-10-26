@@ -8,8 +8,10 @@ import { once } from 'node:events';
 import { upgrade } from '../src/config.mjs';
 import { loadPlaywright } from '../src/browser.mjs';
 import { initTracking } from '../src/tracking.mjs';
+import http from 'node:http';
+import { TeamLedger } from '../src/team.mjs';
 
-async function fixture(t, port, configure = () => {}) {
+async function fixture(t, port, configure = () => {}, extraEnv = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'fc-wait-reset-'));
   const state = upgrade({});
   const account = state.profiles[0];
@@ -23,6 +25,7 @@ async function fixture(t, port, configure = () => {}) {
   Object.assign(state.automation, { enabled: true, status: 'Resting', nextAt: new Date(Date.now() + 600000).toISOString(), sent: 7, sincePause: 7, pauseAfter: 8 });
   initTracking(state);
   configure(state);
+  initTracking(state);
   await fs.writeFile(path.join(dir, 'state.json'), JSON.stringify(state));
   let child;
   async function stop() {
@@ -49,7 +52,7 @@ async function fixture(t, port, configure = () => {}) {
   }
   async function start() {
     child = spawn(process.execPath, ['--import', path.resolve('tests/fixtures/fake-mail.mjs'), path.resolve('src/server.mjs')], {
-      env: { ...process.env, FC_DATA_DIR: dir, PORT: String(port), TEST_SEND_LOG: path.join(dir, 'sends.jsonl'), FC_MONITOR_ENABLED: '0', FC_OPEN_TRACKING_ENABLED: '0' },
+      env: { ...process.env, FC_DATA_DIR: dir, PORT: String(port), TEST_SEND_LOG: path.join(dir, 'sends.jsonl'), FC_MONITOR_ENABLED: '0', FC_OPEN_TRACKING_ENABLED: '0', ...extraEnv },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     let stderr = ''; child.stderr.on('data', (b) => { stderr += b; });
@@ -166,7 +169,7 @@ test('reset labels a required minimum interval instead of silently recreating Wa
   assert(Date.parse(reset.job.nextAt) > Date.now() + 21000000);
 });
 
-test('settings reset wait works on desktop/mobile and disables after resetting', { skip: process.env.FC_BROWSER_TESTS !== '1' }, async (t) => {
+test('settings hard reset works on desktop/mobile and disables after resetting', { skip: process.env.FC_BROWSER_TESTS !== '1' }, async (t) => {
   const { api } = await fixture(t, 14636, (state) => {
     state.history = {};
     state.automation.nextAt = new Date(Date.now() + 21600000).toISOString();
@@ -176,7 +179,7 @@ test('settings reset wait works on desktop/mobile and disables after resetting',
   const page = await browser.newPage();
   const errors = []; page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('http://127.0.0.1:14636/#settings');
-  const button = page.getByRole('button', { name: 'Reset current wait', exact: true });
+  const button = page.getByRole('button', { name: 'Hard reset wait & quotas', exact: true });
   await button.waitFor();
   await page.waitForFunction(() => !document.querySelector('#resetWait').disabled);
   for (const width of [1440, 390]) {
@@ -187,23 +190,146 @@ test('settings reset wait works on desktop/mobile and disables after resetting',
     const sizes = await page.evaluate(() => [innerWidth, document.documentElement.scrollWidth]);
     assert(sizes[1] <= sizes[0] + 1, sizes.join('/'));
   }
+  page.once('dialog', (dialog) => dialog.accept());
   await button.click();
   await page.waitForFunction(() => document.querySelector('#resetWait').disabled && document.querySelector('#settingsWaitStatus').textContent.startsWith('No scheduled wait.'));
   assert.equal((await api('state')).job.sincePause, 0);
-  assert.match(await page.locator('#notice').innerText(), /Wait reset/);
+  assert.match(await page.locator('#notice').innerText(), /Hard reset complete/);
   assert.deepEqual(errors, []);
 });
 
-test('settings shows the precise reason when reset retains a required long wait', { skip: process.env.FC_BROWSER_TESTS !== '1' }, async (t) => {
-  await fixture(t, 14641, (state) => {
-    Object.assign(state.settings.pacing, { hourlyCap: 20, minSeconds: 21600, maxSeconds: 21600 });
+test('settings warns before overriding a long minimum/quota wait; cancel preserves it and confirm clears it', { skip: process.env.FC_BROWSER_TESTS !== '1' }, async (t) => {
+  const { api } = await fixture(t, 14641, (state) => {
+    Object.assign(state.settings.pacing, { dailyCap: 1, minSeconds: 21600, maxSeconds: 21600 });
+    state.automation.nextAt = new Date(Date.now() + 21600000).toISOString();
   });
   const browser = await loadPlaywright().chromium.launch({ channel: process.env.FC_TEST_BROWSER_CHANNEL || 'chrome', headless: true });
   t.after(() => browser.close());
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:14641/#settings');
-  await page.getByRole('button', { name: 'Reset current wait', exact: true }).click();
-  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('configured minimum interval still applies'));
-  assert.match(await page.locator('#settingsWaitStatus').innerText(), /Minimum interval.*5h.*minimum send interval/);
-  assert.match(await page.locator('#notice').innerText(), /Next check:/);
+  const button = page.getByRole('button', { name: 'Hard reset wait & quotas', exact: true });
+  const before = (await api('state')).job.nextAt;
+  let warning;
+  page.once('dialog', async (dialog) => { warning = dialog.message(); await dialog.dismiss(); });
+  await button.click();
+  assert.match(warning, /active queue may send immediately/);
+  assert.match(warning, /Provider-enforced limits still apply/);
+  assert.equal((await api('state')).job.nextAt, before);
+  page.once('dialog', (dialog) => dialog.accept());
+  await button.click();
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('Hard reset complete'));
+  assert.match(await page.locator('#settingsWaitStatus').innerText(), /No scheduled wait/);
+  const after = await api('state');
+  assert.equal(after.job.nextAt, null);
+  assert.equal(after.remaining, 1);
+  assert.equal(after.dayRemaining, 1);
+});
+
+test('confirmed hard reset persists fresh quotas/interval and the queue sends despite exhausted old limits', async (t) => {
+  const { dir, api, until, stop, start, state: initial } = await fixture(t, 14642, (state) => {
+    Object.assign(state.settings.pacing, { dailyCap: 1, minSeconds: 21600, maxSeconds: 21600, pauseEveryMin: 1, pauseEveryMax: 1 });
+    state.automation.nextAt = new Date(Date.now() + 21600000).toISOString();
+    state.automation.randomTemplates = true;
+    state.settings.eligibility.requireActive = false;
+    state.settings.eligibility.requireNoOutOfService = false;
+    state.seedHistory.old = { accountEmail: state.profiles[0].email, at: new Date().toISOString(), status: 'Sent' };
+  });
+  const workbook = path.join(dir, 'sample.xlsx');
+  execFileSync(process.platform === 'win32' ? 'python' : 'python3', [path.resolve('tests/fixtures/workbook.py'), workbook]);
+  await api('import', { path: workbook });
+  await assert.rejects(api('reset-wait', { hardReset: true }), /Confirm the warning/);
+  assert((await api('state')).job.nextAt);
+  const reset = await api('reset-wait', { hardReset: true, confirmOverride: true });
+  assert.equal(reset.waitCleared, true);
+  assert.equal(reset.job.nextAt, null);
+  assert.equal(reset.job.sincePause, 0);
+  assert.equal(reset.job.pauseAfter, 0);
+  assert.equal(reset.job.sent, 7);
+  await stop();
+  const disk = JSON.parse(await fs.readFile(path.join(dir, 'state.json'), 'utf8'));
+  assert.deepEqual(disk.history, initial.history);
+  assert.deepEqual(disk.seedHistory, initial.seedHistory);
+  assert.deepEqual(disk.suppression, initial.suppression);
+  const epoch = disk.pacingResets[initial.profiles[0].email].id;
+  assert(epoch);
+  await start();
+  const restarted = await api('state');
+  assert.equal(restarted.job.nextAt, null);
+  assert.equal(restarted.remaining, 1);
+  assert.equal(restarted.dayRemaining, 1);
+  await api('connect', {});
+  const progressed = await until(async () => {
+    const s = await api('state');
+    return s.job.sent === 8 && !s.busy ? s : false;
+  });
+  assert.equal(progressed.remaining, 0);
+  assert.equal(progressed.dayRemaining, 0);
+  assert(progressed.job.nextAt); // New sends resume normal pacing.
+  const afterSend = JSON.parse(await fs.readFile(path.join(dir, 'state.json'), 'utf8'));
+  assert.equal(afterSend.history['owner2@example.com'].pacingEpoch, epoch);
+  assert.deepEqual(afterSend.history['uncertain@example.com'], initial.history['uncertain@example.com']);
+  assert.equal((await fs.readFile(path.join(dir, 'sends.jsonl'), 'utf8')).trim().split('\n').length, 1);
+});
+
+test('hard reset leaves stopped queue stopped and only resets the selected mailbox accounting', async (t) => {
+  const { dir, api, state: initial } = await fixture(t, 14643, (state) => {
+    state.automation.enabled = false;
+    state.profiles.push({ ...structuredClone(state.profiles[0]), id: 'other', email: 'other@example.com' });
+    state.history['other-recipient@example.com'] = { accountEmail: 'other@example.com', at: new Date().toISOString(), status: 'Sent' };
+  });
+  const reset = await api('reset-wait', { hardReset: true, confirmOverride: true });
+  assert.equal(reset.job.enabled, false);
+  assert.equal(reset.job.nextAt, null);
+  assert.match(reset.message, /Outreach remains stopped/);
+  assert.equal((await api('state')).remaining, 1);
+  await api('select-profile', { id: 'other' });
+  assert.equal((await api('state')).remaining, 0);
+  const disk = JSON.parse(await fs.readFile(path.join(dir, 'state.json'), 'utf8'));
+  assert.deepEqual(disk.history, initial.history);
+  assert.deepEqual(disk.suppression, initial.suppression);
+  assert.equal(Object.keys(disk.pacingResets).length, 1);
+  assert.equal(await fs.access(path.join(dir, 'sends.jsonl')).then(() => true, () => false), false);
+});
+
+test('hard reset also resets shared coordinator pacing so a claim can proceed', async (t) => {
+  const ledger = new TeamLedger({ records: {
+    'shared-old@example.com': { accountEmail: 'sender@example.com', status: 'Uncertain', at: new Date().toISOString() },
+  }, suppression: { 'team-optout@example.com': 'Remove' } }, { hourlyCap: 1, dailyCap: 1, minSeconds: 21600 });
+  const token = 'synthetic-hard-reset-team-token';
+  const server = http.createServer(async (req, res) => {
+    let input = '';
+    for await (const chunk of req) input += chunk;
+    try {
+      assert.equal(req.headers.authorization, `Bearer ${token}`);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify(ledger.handle(req.url.split('/').at(-1), JSON.parse(input || '{}'))));
+    } catch (error) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const { dir, api, until } = await fixture(t, 14644, (state) => {
+    state.settings.team = { enabled: true, url: `http://127.0.0.1:${server.address().port}`, workerName: 'Test PC' };
+    Object.assign(state.settings.pacing, { dailyCap: 1, minSeconds: 21600, maxSeconds: 21600 });
+    state.automation.nextAt = new Date(Date.now() + 21600000).toISOString();
+    state.automation.randomTemplates = true;
+    state.settings.eligibility.requireActive = false;
+    state.settings.eligibility.requireNoOutOfService = false;
+  }, { TEAM_TOKEN: token });
+  const workbook = path.join(dir, 'sample.xlsx');
+  execFileSync(process.platform === 'win32' ? 'python' : 'python3', [path.resolve('tests/fixtures/workbook.py'), workbook]);
+  await api('import', { path: workbook });
+  await api('connect', {});
+  const reset = await api('reset-wait', { hardReset: true, confirmOverride: true });
+  assert.equal(reset.job.nextAt, null);
+  await until(async () => { const s = await api('state'); return s.job.sent === 8 && !s.busy; });
+  const epoch = ledger.state.pacingResets['sender@example.com'].id;
+  assert.equal(ledger.state.records['owner2@example.com'].pacingEpoch, epoch);
+  assert.equal(ledger.state.records['owner2@example.com'].status, 'Sent');
+  assert.equal(ledger.state.records['shared-old@example.com'].status, 'Uncertain');
+  assert.equal(ledger.state.suppression['team-optout@example.com'], 'Remove');
+  const disk = JSON.parse(await fs.readFile(path.join(dir, 'state.json'), 'utf8'));
+  assert.equal(disk.history['owner2@example.com'].pacingEpoch, epoch);
 });

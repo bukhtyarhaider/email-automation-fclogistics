@@ -2,6 +2,13 @@ import { randomInt } from "node:crypto";
 export function randomBetween(min, max, rng = randomInt) {
   return rng(min, max + 1);
 }
+// A manual reset starts a new accounting period without deleting send history.
+// Tagging new attempts avoids timestamp/clock-skew and same-millisecond races.
+export function pacingHistory(history, reset) {
+  return reset?.id
+    ? Object.fromEntries(Object.entries(history).filter(([, h]) => h.pacingEpoch === reset.id))
+    : history;
+}
 export function quota(history, email, pacing, now = Date.now()) {
   const attempts = Object.values(history).filter(
     (h) => !h.accountEmail || h.accountEmail === email,

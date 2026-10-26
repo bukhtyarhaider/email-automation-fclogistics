@@ -100,4 +100,15 @@ test("shared server serializes competing PC claims, persists reservations, and b
     body: "{}",
   });
   assert.equal(denied.status, 401);
+  await assert.rejects(call("reset-pacing", { accountEmail: "mailbox@example.com", workerId: "pc-three" }), /Confirm the warning/);
+  const reset = await call("reset-pacing", { accountEmail: "mailbox@example.com", workerId: "pc-three", confirmOverride: true });
+  const fresh = await call("claim", { email: "fresh@example.com", accountEmail: "mailbox@example.com", workerId: "pc-three" });
+  assert(fresh.token);
+  assert.equal(fresh.pacingEpoch, reset.reset.id);
+  await stop();
+  await start();
+  const afterReset = await call("snapshot");
+  assert.equal(afterReset.pacingResets["mailbox@example.com"].id, reset.reset.id);
+  assert.equal(afterReset.records["same@example.com"].status, "Uncertain");
+  assert.match((await call("claim", { email: "same@example.com", accountEmail: "mailbox@example.com", workerId: "pc-four" })).blocked, /Uncertain/);
 });

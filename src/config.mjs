@@ -112,6 +112,7 @@ export function upgrade(state) {
     pauseAfter: 0,
   };
   state.history ||= {};
+  state.pacingResets ||= {};
   state.suppression ||= {};
   state.events ||= [];
   for (const item of Object.values(state.history)) {

@@ -191,7 +191,8 @@ function updateControls() {
   const resetWait = $("resetWait");
   if (resetWait)
     resetWait.disabled = pending || state.busy || !!state.prepared ||
-      !(state.job.nextAt || state.job.sincePause || state.job.pauseAfter);
+      !(state.job.nextAt || state.job.sincePause || state.job.pauseAfter ||
+        state.remaining < state.settings.pacing.hourlyCap || state.dayRemaining < state.settings.pacing.dailyCap);
 
   const startBtn = $("start");
   if (startBtn)
@@ -1417,15 +1418,24 @@ if ($("saveSettings"))
     });
 
 if ($("resetWait"))
-  $("resetWait").onclick = () =>
+  $("resetWait").onclick = () => {
+    const shared = state.settings.team.enabled
+      ? "\nShared mailbox counters will also reset on the team server for all PCs using this mailbox."
+      : "";
+    if (!confirm(
+      "Hard reset this mailbox’s wait and quota counters?\n\n" +
+      "This overrides the current countdown, minimum send interval, hourly/24-hour app quotas, and rest counter. An active queue may send immediately. New sends will count toward the configured limits again." + shared +
+      "\n\nProvider-enforced limits still apply. Send history, uncertain outcomes, duplicate protection, and Do Not Contact records are kept.\n\nContinue with hard reset?"
+    )) return;
     action($("resetWait"), async () => {
-      const result = await api("/api/reset-wait", {});
+      const result = await api("/api/reset-wait", { hardReset: true, confirmOverride: true });
       liveCountdownTotal = null;
       await refresh();
       notice(result.job.nextAt
         ? `${result.message} Next check: ${new Date(result.job.nextAt).toLocaleString()}.`
         : result.message);
     });
+  };
 
 if ($("settingsFirebaseSyncBtn"))
   $("settingsFirebaseSyncBtn").onclick = () =>

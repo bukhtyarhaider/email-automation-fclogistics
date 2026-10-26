@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { EMAIL } from "./core.mjs";
-import { quota } from "./pacing.mjs";
+import { quota, pacingHistory } from "./pacing.mjs";
 export class TeamLedger {
   constructor(
     state = { records: {}, suppression: {} },
@@ -15,7 +15,18 @@ export class TeamLedger {
     const now = this.now(),
       s = this.state;
     if (action === "snapshot")
-      return { records: s.records, suppression: s.suppression };
+      return { records: s.records, suppression: s.suppression, pacingResets: s.pacingResets || {} };
+    if (action === "reset-pacing") {
+      if (input.confirmOverride !== true)
+        throw new Error("Confirm the warning before overriding mailbox pacing.");
+      if (!EMAIL.test(input.accountEmail || "") || !input.workerId)
+        throw new Error("Mailbox and worker required.");
+      const accountEmail = input.accountEmail.toLowerCase().trim();
+      s.pacingResets ||= {};
+      const reset = { id: randomUUID(), at: new Date(now).toISOString(), workerId: input.workerId };
+      s.pacingResets[accountEmail] = reset;
+      return { ok: true, reset };
+    }
     if (action === "seed") {
       for (const [address, record] of Object.entries(input.records || {})) {
         if (
@@ -34,6 +45,7 @@ export class TeamLedger {
             status: record.status === "Sending" ? "Uncertain" : record.status,
             at: record.at,
             accountEmail: record.accountEmail || "",
+            pacingEpoch: record.pacingEpoch,
             workerId: input.workerId,
             source: "Imported local history",
           };
@@ -71,8 +83,10 @@ export class TeamLedger {
         )
       )
         return { blocked: `Team record: ${existing.status}` };
-      const q = quota(s.records, input.accountEmail, this.limits, now);
-      const last = Object.values(s.records)
+      const reset = s.pacingResets?.[input.accountEmail.toLowerCase().trim()];
+      const history = pacingHistory(s.records, reset);
+      const q = quota(history, input.accountEmail, this.limits, now);
+      const last = Object.values(history)
         .filter((r) => r.accountEmail === input.accountEmail)
         .reduce((n, r) => Math.max(n, Date.parse(r.at) || 0), 0);
       const waitMs = Math.max(
@@ -84,11 +98,12 @@ export class TeamLedger {
         ...input,
         email,
         token: randomUUID(),
+        pacingEpoch: reset?.id,
         at: new Date(now).toISOString(),
         status: "Claimed",
       };
       s.records[email] = record;
-      return { token: record.token };
+      return { token: record.token, pacingEpoch: record.pacingEpoch };
     }
     const record = s.records[email];
     if (

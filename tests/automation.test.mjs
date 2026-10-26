@@ -8,7 +8,7 @@ import {
   assess,
   reason,
 } from "../src/core.mjs";
-import { quota, nextPause, requiredWait } from "../src/pacing.mjs";
+import { quota, nextPause, requiredWait, pacingHistory } from "../src/pacing.mjs";
 import { TeamLedger } from "../src/team.mjs";
 const lead = {
   company: "Example Fleet",
@@ -183,6 +183,26 @@ test("team shares account quotas and pacing across different recipients and PCs"
   l.handle("claim", claim("pc2", "two@example.com"));
   advance(1100);
   assert(l.handle("claim", claim("pc3", "three@example.com")).waitMs > 0);
+});
+test("hard team reset starts fresh pacing without removing duplicate, uncertain or suppression records", () => {
+  const { l } = ledger();
+  const first = l.handle("claim", claim("pc1"));
+  l.handle("begin", { ...claim("pc1"), token: first.token });
+  l.handle("suppress", { email: "optout@example.com", reason: "Remove" });
+  const records = structuredClone(l.state.records);
+  assert.throws(() => l.handle("reset-pacing", { accountEmail: "mailbox@example.com", workerId: "pc1" }), /Confirm the warning/);
+  const reset = l.handle("reset-pacing", { accountEmail: "mailbox@example.com", workerId: "pc1", confirmOverride: true }).reset;
+  assert.deepEqual(l.state.records, records);
+  assert.equal(l.handle("snapshot", {}).pacingResets["mailbox@example.com"].id, reset.id);
+  assert.deepEqual(pacingHistory(l.state.records, reset), {});
+  assert.match(l.handle("claim", claim("pc2")).blocked, /Sending/);
+  assert.match(l.handle("claim", claim("pc2", "optout@example.com")).blocked, /Suppressed/);
+  // The old and new attempts share the same clock tick; epochs still separate them.
+  const fresh = l.handle("claim", claim("pc2", "fresh@example.com"));
+  assert(fresh.token);
+  assert.equal(fresh.pacingEpoch, reset.id);
+  assert.equal(Object.keys(pacingHistory(l.state.records, reset)).length, 1);
+  assert(l.handle("claim", claim("pc3", "next@example.com")).waitMs > 0);
 });
 test("only unattempted expired claims may be recovered; Sending never expires", () => {
   const { l, advance } = ledger();

@@ -18,7 +18,7 @@ import {
 } from "./core.mjs";
 import { deliver } from "./delivery.mjs";
 import { upgrade, validateSettings, DEFAULTS } from "./config.mjs";
-import { quota, nextPause, requiredWait } from "./pacing.mjs";
+import { quota, nextPause, requiredWait, pacingHistory } from "./pacing.mjs";
 import { TeamClient } from "./team.mjs";
 import { initTracking, createRecord, syncRecord, addEvent, report, safeRecord, seedConfig, recordPlacement, hash } from "./tracking.mjs";
 import { MailboxMonitor } from "./mailbox-monitor.mjs";
@@ -318,6 +318,7 @@ async function syncTeam() {
             status: r.status,
             at: r.at,
             accountEmail: r.accountEmail || profile()?.email,
+            pacingEpoch: r.pacingEpoch,
           },
         ]),
       );
@@ -412,14 +413,21 @@ function checkTemplate(message, key) {
 function mailboxHistory() {
   return { ...state.history, ...Object.fromEntries(Object.entries(state.seedHistory).map(([id, h]) => [`seed:${id}`, h])) };
 }
+function pacingReset() {
+  const email = profile()?.email?.toLowerCase().trim();
+  return (state.settings.team.enabled && teamSnapshot.pacingResets?.[email]) || state.pacingResets[email];
+}
+function currentPacingHistory() {
+  return pacingHistory(mailboxHistory(), pacingReset());
+}
 function currentQuota() {
-  return quota(mailboxHistory(), profile()?.email, state.settings.pacing);
+  return quota(currentPacingHistory(), profile()?.email, state.settings.pacing);
 }
 function pacingWait(includeTeam = false) {
   const now = Date.now();
-  const local = requiredWait(mailboxHistory(), profile()?.email, state.settings.pacing, now);
+  const local = requiredWait(currentPacingHistory(), profile()?.email, state.settings.pacing, now);
   const shared = includeTeam && state.settings.team.enabled
-    ? requiredWait(teamSnapshot.records, profile()?.email, state.settings.pacing, now, true)
+    ? requiredWait(pacingHistory(teamSnapshot.records, teamSnapshot.pacingResets?.[profile()?.email?.toLowerCase().trim()]), profile()?.email, state.settings.pacing, now, true)
     : null;
   return (shared?.seconds || 0) > (local?.seconds || 0) ? shared : local;
 }
@@ -456,6 +464,7 @@ async function sendPrepared() {
     throw new Error("Mailbox sending allowance reached.");
   await mail.validate();
   let reservation = null;
+  let pacingEpoch = pacingReset()?.id;
   if (state.settings.team.enabled) {
     const claim = await team.call("claim", {
       email: lead.email,
@@ -476,6 +485,7 @@ async function sendPrepared() {
       throw error;
     }
     reservation = claim.token;
+    pacingEpoch = claim.pacingEpoch;
   }
   const c = state.campaigns.find((c) => c.id === lead.campaignId);
   const afterOutcome = reservation
@@ -506,6 +516,7 @@ async function sendPrepared() {
       tracking: track,
       metadata: {
         trackingId: p.message.trackingId,
+        pacingEpoch,
         recipient: lead.email,
         accountEmail: account.email,
         profileId: account.id,
@@ -801,27 +812,51 @@ const server = http.createServer(async (req, res) => {
       busy = true;
       try {
         if (pathname === "/api/reset-wait") {
+          const input = await body(req);
           if (prepared || mail.prepared)
             throw new Error("Close the prepared message before resetting the wait.");
           const a = state.automation;
-          if (a.enabled) await syncTeam();
+          const hardReset = input.hardReset === true;
+          if (hardReset && input.confirmOverride !== true)
+            throw new Error("Confirm the warning before overriding mailbox pacing.");
+          const accountEmail = profile()?.email?.toLowerCase().trim();
+          if (hardReset && !EMAIL.test(accountEmail || ""))
+            throw new Error("Save a valid mailbox email before resetting its quotas.");
+          if (hardReset && state.settings.team.enabled) {
+            let result;
+            try {
+              result = await team.call("reset-pacing", { accountEmail, workerId: state.workerId, confirmOverride: true });
+            } catch (error) {
+              if (/Unknown action/i.test(error.message))
+                throw new Error("Update and restart the shared coordinator to enable hard reset. The local wait and quota counters were not reset.");
+              throw error;
+            }
+            if (!result?.reset?.id) throw new Error("The shared server did not confirm the pacing reset. Update and restart the coordinator before retrying.");
+            state.pacingResets[accountEmail] = result.reset;
+            teamSnapshot.pacingResets ||= {};
+            teamSnapshot.pacingResets[accountEmail] = result.reset;
+          } else if (hardReset) {
+            state.pacingResets[accountEmail] = { id: randomUUID(), at: new Date().toISOString(), workerId: state.workerId };
+          } else if (a.enabled) await syncTeam();
           const previousNextAt = a.nextAt;
           a.nextAt = null;
           a.sincePause = 0;
           a.pauseAfter = 0;
-          const required = a.enabled ? pacingWait(true) : null;
+          const required = !hardReset && a.enabled ? pacingWait(true) : null;
           if (required) {
             await waitFor(required.seconds, required.status, required.message);
           } else if (a.enabled) {
             a.status = "Checking queue";
-            a.message = "Wait reset. Checking the queue now.";
+            a.message = hardReset ? "Hard reset complete. Checking the queue now." : "Wait reset. Checking the queue now.";
           }
-          const message = required
+          const message = hardReset
+            ? `Hard reset complete. Countdown, rest counter, minimum interval and hourly/24-hour quota counters reset. ${a.enabled ? "The queue will recheck now." : "Outreach remains stopped."}`
+            : required
             ? `Optional wait and rest counter reset. ${required.message}`
             : a.enabled
             ? "Wait reset. The queue will recheck now."
             : "Wait and rest counter reset. Outreach remains stopped.";
-          event(message, { kind: "pacing", previousNextAt });
+          event(message, { kind: "pacing", previousNextAt, hardReset, accountEmail, pacingEpoch: hardReset ? pacingReset()?.id : undefined });
           await persist();
           return response(res, { ok: true, message, waitCleared: !a.nextAt, job: job() });
         }
@@ -905,7 +940,7 @@ const server = http.createServer(async (req, res) => {
           if (!seed || record.sender !== profile().email) throw new Error("Seed mailbox or sending profile mismatch.");
           if (record.sendStatus !== "pending" || record.preparationStartedAt || record.attemptedAt)
             throw new Error("This seed is reserved or attempted already. Inspect webmail; create a new test key only for an intentional new test.");
-          const last = Object.values({ ...state.history, ...state.seedHistory }).filter((h) => h.accountEmail === profile().email)
+          const last = Object.values(currentPacingHistory()).filter((h) => h.accountEmail === profile().email)
             .reduce((n, h) => Math.max(n, Date.parse(h.at) || 0), 0);
           if (currentQuota().waitMs || last + state.settings.pacing.minSeconds * 1000 > Date.now())
             throw new Error("Wait for the configured mailbox interval and allowance before the next seed send.");
@@ -930,7 +965,7 @@ const server = http.createServer(async (req, res) => {
             await deliver({ state: { history: state.seedHistory, workbook: { file: "seed-test" } },
               historyKey: record.id, lead: { id: record.id, email: record.recipient, company: seed.id }, message,
               persist, send: () => mail.send(), syncStatus: async () => {}, event, tracking: track,
-              metadata: { trackingId: record.id, recipient: record.recipient, accountEmail: record.sender, campaignId: record.campaignId } });
+              metadata: { trackingId: record.id, recipient: record.recipient, accountEmail: record.sender, campaignId: record.campaignId, pacingEpoch: pacingReset()?.id } });
           } catch (error) {
             if (!record.attemptedAt) { record.sendStatus = "send_failed"; addEvent(record, "send_failed", { reason: "Seed preparation failed" }); await persist(); }
             throw error;

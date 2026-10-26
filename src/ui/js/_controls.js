@@ -40,7 +40,8 @@ function updateControls() {
   const resetWait = $("resetWait");
   if (resetWait)
     resetWait.disabled = pending || state.busy || !!state.prepared ||
-      !(state.job.nextAt || state.job.sincePause || state.job.pauseAfter);
+      !(state.job.nextAt || state.job.sincePause || state.job.pauseAfter ||
+        state.remaining < state.settings.pacing.hourlyCap || state.dayRemaining < state.settings.pacing.dailyCap);
 
   const startBtn = $("start");
   if (startBtn)
