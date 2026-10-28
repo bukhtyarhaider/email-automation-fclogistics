@@ -501,16 +501,11 @@ if ($('trackingFirebaseSync')) {
     action(e.currentTarget, async () => {
       try {
         const res = await api('/api/tracking/sync-firebase', {});
-        if (res.synced > 0) {
-          notice(`Firebase: Synced ${res.synced} new open signal(s)!`, 'success');
-        } else if (res.ok) {
-          notice('Firebase: Open signals are up to date.', 'info');
-        } else {
-          notice(`Firebase: ${res.message || res.error || 'Not configured'}`, 'warn');
-        }
+        notice(`Firebase: ${res.message || res.error || 'Sync finished.'}`);
       } catch (err) {
         notice(`Firebase sync failed: ${err.message}`, 'error');
       }
+      await refresh();
       await loadTracking();
     });
 }

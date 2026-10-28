@@ -397,6 +397,7 @@ async function refresh() {
       .join("");
   }
 
+  renderFirebaseDiagnostics();
   renderLiveActivityView();
 
   renderProfilesTable();
@@ -1258,6 +1259,10 @@ function fillSettings() {
   if ($("firebaseSyncMode")) {
     $("firebaseSyncMode").value = s.tracking?.syncMode || "auto";
   }
+  if ($("trackingPcId")) $("trackingPcId").value = s.tracking?.pcId || "";
+  if ($("trackingPublicUrl")) $("trackingPublicUrl").value = s.tracking?.publicUrl || "";
+  if ($("firebaseBackend")) $("firebaseBackend").value = s.tracking?.firebaseBackend || "both";
+  if ($("firebaseSyncMode")?.onchange) $("firebaseSyncMode").onchange();
   detectActivePreset();
 }
 
@@ -1409,11 +1414,16 @@ if ($("saveSettings"))
         workerName: $("workerName").value,
       };
       s.tracking = {
+        ...s.tracking,
         syncMode: $("firebaseSyncMode")?.value || "auto",
+        pcId: $("trackingPcId")?.value.trim() || "",
+        publicUrl: $("trackingPublicUrl")?.value.trim() || "",
+        firebaseBackend: $("firebaseBackend")?.value || "both",
       };
       const token = $("teamToken").value;
       $("teamToken").value = "";
       await api("/api/settings", { settings: s, teamToken: token });
+      await refresh();
       notice("Sending settings saved.");
     });
 
@@ -1442,13 +1452,7 @@ if ($("settingsFirebaseSyncBtn"))
     action($("settingsFirebaseSyncBtn"), async () => {
       try {
         const res = await api("/api/tracking/sync-firebase", {});
-        if (res.synced > 0) {
-          notice(`Firebase: Synced ${res.synced} new open signal(s)!`, "success");
-        } else if (res.ok) {
-          notice("Firebase: Open signals are up to date.", "info");
-        } else {
-          notice(`Firebase: ${res.message || res.error || "Not configured"}`, "warn");
-        }
+        notice(`Firebase: ${res.message || res.error || "Sync finished."}`);
       } catch (err) {
         notice(`Firebase sync failed: ${err.message}`, "error");
       }
@@ -1480,6 +1484,50 @@ for (const key of pacingFields) {
   if ($(key)) {
     $(key).addEventListener("input", detectActivePreset);
   }
+}
+
+function renderFirebaseDiagnostics() {
+  const d = state?.firebaseSync;
+  if (!d || !$("firebaseDiagnostics")) return;
+  const badge = $("settingsFirebaseStatusBadge");
+  badge.textContent = d.running ? "Syncing" : d.status;
+  badge.className = `status-pill ${d.status === "Active" && !d.warnings.length ? "ready" : ""}`;
+  $("settingsFirebaseDiag").textContent = d.message;
+  $("firebaseWarnings").innerHTML = d.warnings.map((warning) => `<p>${escape(warning)}</p>`).join("");
+  $("firebaseWarnings").hidden = !d.warnings.length;
+  $("trackingPcIdHint").textContent = `Effective PC ID: ${d.pcId} · Source: ${d.pcIdSource}. Save a unique ID on each PC. Blank uses the environment, then the legacy default 1.`;
+  const date = (value) => value ? new Date(value).toLocaleString() : "Not yet";
+  const rows = [
+    ["PC ID / source", `${d.pcId} / ${d.pcIdSource}`],
+    ["Computer / platform", `${d.hostname} / ${d.platform}`],
+    ["Team worker ID", d.workerId || "Not set"],
+    ["Local data folder", d.dataDirectory],
+    ["Sync mode / interval", `${d.mode} / ${d.pollSeconds}s while running`],
+    ["Selected database", d.backend],
+    ["Firebase project", d.projectId || "Not configured"],
+    ["Realtime Database URL", d.databaseURL],
+    ["Database URL source", d.databaseUrlSource],
+    ["Credential source", d.credentialsSource],
+    ["Credentials loaded", d.configured ? "Yes; see connection results below" : "No"],
+    ["Cloud collection / path", d.collection],
+    ["Effective public tracking URL", d.publicUrl || "Not set"],
+    ["Tracking URL source", d.publicUrlSource],
+    ["New-email tracking / consent", `${d.openTrackingEnabled ? "Enabled" : "Disabled"} / ${d.consent ? "Set" : "Not set"}`],
+    ["Local emails / tracking tokens", `${d.localRecords} / ${d.localTokens}`],
+    ["Last attempt", date(d.lastAttemptAt)],
+    ["Last completed cloud scan", date(d.lastSyncAt)],
+    ["New signals this session", d.totalSynced],
+    ["Scan limit per database / run", `${d.pageSize * d.maxPages} records; continues on next sync`],
+    ["Last error", d.lastError || "None reported this session"],
+  ];
+  $("firebaseDiagnostics").innerHTML = rows.map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join("");
+  $("firebaseBackendDiagnostics").innerHTML = Object.entries(d.backends).map(([name, b]) => {
+    const totals = b.sweep || b;
+    return `<div><strong>${escape(name)} · ${b.error ? "Failed" : b.complete ? "Scan complete" : "Scan in progress"}</strong>
+      <p>${b.scanned} checked this run · ${b.matched} matched · ${b.synced} new signals · ${b.alreadyApplied} already applied · ${b.acknowledged} acknowledged</p>
+      <p>${totals.otherPc} other-PC events · ${totals.unmatched} missing local matches · ${totals.invalid} invalid events · ${totals.pcMismatches} PC ID mismatches${b.sweep ? " (completed sweep)" : " (this run)"}</p>
+      ${b.error ? `<p class="firebase-error">${escape(b.error)}</p>` : ""}</div>`;
+  }).join("");
 }
 
 if ($("recovery"))
@@ -2835,16 +2883,11 @@ if ($('trackingFirebaseSync')) {
     action(e.currentTarget, async () => {
       try {
         const res = await api('/api/tracking/sync-firebase', {});
-        if (res.synced > 0) {
-          notice(`Firebase: Synced ${res.synced} new open signal(s)!`, 'success');
-        } else if (res.ok) {
-          notice('Firebase: Open signals are up to date.', 'info');
-        } else {
-          notice(`Firebase: ${res.message || res.error || 'Not configured'}`, 'warn');
-        }
+        notice(`Firebase: ${res.message || res.error || 'Sync finished.'}`);
       } catch (err) {
         notice(`Firebase sync failed: ${err.message}`, 'error');
       }
+      await refresh();
       await loadTracking();
     });
 }

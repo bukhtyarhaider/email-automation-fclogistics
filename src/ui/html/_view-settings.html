@@ -365,10 +365,30 @@
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
                         Firebase Open Telemetry Sync
                       </h2>
-                      <span class="status-pill ready" id="settingsFirebaseStatusBadge">Ready</span>
+                      <span class="status-pill" id="settingsFirebaseStatusBadge">Not checked</span>
                     </div>
                   </div>
-                  <p class="hint">Choose whether open signals captured by your Vercel/Firebase endpoint sync automatically in the background or only when manually requested.</p>
+                  <p class="hint">Give each PC its own ID and keep its original data folder. Cloud opens are matched to the tracking tokens saved on that PC.</p>
+                  <div id="firebaseWarnings" class="firebase-warnings" role="status" aria-live="polite"></div>
+                  <div class="form-group">
+                    <label for="trackingPcId">This PC's tracking ID</label>
+                    <input id="trackingPcId" maxlength="64" placeholder="e.g. 1, 2, 3 or 4" autocomplete="off" />
+                    <p class="hint" id="trackingPcIdHint">Save a unique ID for each PC. Blank uses FC_TRACKING_PC_ID, then the legacy default 1.</p>
+                  </div>
+                  <div class="form-group">
+                    <label for="trackingPublicUrl">Public tracking URL</label>
+                    <input id="trackingPublicUrl" type="url" placeholder="https://www.fclogistics.us/t/1" />
+                    <p class="hint">Use the cloud endpoint for this PC (for example /t/2 for PC 2). Blank uses FC_TRACKING_PUBLIC_URL. Changes apply to future emails; old emails keep their original URL.</p>
+                  </div>
+                  <div class="form-group">
+                    <label for="firebaseBackend">Cloud database to sync</label>
+                    <select id="firebaseBackend">
+                      <option value="both">Realtime Database + Firestore</option>
+                      <option value="rtdb">Realtime Database only</option>
+                      <option value="firestore">Cloud Firestore only</option>
+                    </select>
+                    <p class="hint">Select the database your cloud endpoint writes to. Errors from any selected database are shown below.</p>
+                  </div>
 
                   <div class="form-group">
                     <label for="firebaseSyncMode">Sync Mode</label>
@@ -380,9 +400,17 @@
                   </div>
 
                   <div class="form-group" style="margin-top: 12px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle); padding-top: 10px;">
-                    <small id="settingsFirebaseDiag" style="color: var(--text-muted); font-size: 11.5px;">Auto-detected: data/firebase-service-account.json</small>
+                    <small id="settingsFirebaseDiag" class="hint" role="status" aria-live="polite">Checking sync configuration…</small>
                     <button id="settingsFirebaseSyncBtn" type="button" class="secondary" style="font-size: 11px; padding: 4px 10px;">Sync opens now</button>
                   </div>
+                </div>
+
+                <div class="panel firebase-diagnostics-panel">
+                  <div class="panel-head"><h2 class="panel-title">PC &amp; Firebase diagnostics</h2></div>
+                  <p class="hint">Live values from this running app. Credential keys are hidden. Environment and credential file changes require a restart.</p>
+                  <dl id="firebaseDiagnostics" class="firebase-diagnostics"></dl>
+                  <div id="firebaseBackendDiagnostics" class="firebase-backend-diagnostics" aria-live="polite"></div>
+                  <p class="hint">Open signals are image requests; they do not prove a person read the email. Team coordination uses a separate worker ID and does not synchronize open history.</p>
                 </div>
 
                 <!-- Shared Team Server -->

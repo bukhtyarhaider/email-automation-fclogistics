@@ -132,6 +132,7 @@ async function refresh() {
       .join("");
   }
 
+  renderFirebaseDiagnostics();
   renderLiveActivityView();
 
   renderProfilesTable();

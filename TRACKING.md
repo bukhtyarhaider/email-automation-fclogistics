@@ -75,7 +75,7 @@ node --env-file=.env scripts/launch.mjs
 | `FC_OPEN_TRACKING_CONSENT` | `0`; explicitly authorize telemetry before setting `1` |
 | `FC_TRACKING_PUBLIC_URL` | Public HTTPS base, e.g. `https://tracking.example.com` or Cloud Function URL |
 | `FC_PIXEL_HOST` / `FC_PIXEL_PORT` | `127.0.0.1` / `4319`; separate listener, reverse proxy required for public access |
-| `FC_TRACKING_PC_ID` | `1`; workstation identifier for multi-PC team isolation and Firebase sync filtering |
+| `FC_TRACKING_PC_ID` | `1` legacy fallback with a warning; set a unique ID per PC, or override it in Settings. Token ownership is required before cloud acknowledgement |
 | `FC_FIREBASE_CREDENTIALS_PATH` | Path to Firebase service account JSON (auto-detects `data/firebase-service-account.json` if omitted) |
 | `FC_FIREBASE_SERVICE_ACCOUNT_KEY` | Inlined JSON or base64-encoded Firebase service account credentials |
 | `FC_FIREBASE_PROJECT_ID` | Project ID for discrete Firebase credential configuration |
@@ -129,26 +129,23 @@ Remote-image blocking creates false negatives. Apple privacy proxies and securit
 
 Running a self-hosted pixel server on a local desktop PC has a fundamental limitation: if the PC is shut down, asleep, or disconnected, any emails opened by prospects are missed.
 
-Outreach Desk integrates with Google Firebase via `src/firebase-sync.mjs` to solve this cleanly:
-- A cloud endpoint (such as a Cloud Function, Cloudflare Worker, or Firebase Hosting URL) serves the 1×1 transparent GIF and records opens to Firebase Realtime Database or Cloud Firestore under `email_opens`.
-- Recorded payload: `{ token, tokenHash, pcId, openedAt, synced: false }`.
-- When Outreach Desk is active, `FirebaseSync` automatically reconciles pending opens with the local `state.tracking.openIndex`, records `open_detected` events, updates recipient timelines, and sets `synced: true` in Firebase.
-- Works offline: Turn off your PC over the weekend; when you launch Outreach Desk on Monday, all opens that occurred while offline are synced instantly.
+Outreach Desk integrates with Google Firebase via `src/firebase-sync.mjs`:
+- The cloud endpoint serves a 1×1 GIF and records `{ token, tokenHash, pcId, openedAt, synced: false }` under `email_opens` in Realtime Database or Firestore.
+- The desktop scans by key/document ID in pages of 250, up to 20 pages per database/run. It saves continuation cursors and resumes on the next sync, then starts another sweep so newly inserted keys cannot be permanently missed. Query APIs follow the [Realtime Database documentation](https://firebase.google.com/docs/database/admin/retrieve-data) and [Firestore cursor documentation](https://firebase.google.com/docs/firestore/query-data/query-cursors).
+- A valid original local tracking token or token hash is required. PC ID alone never acknowledges a cloud event. Mismatched PC IDs can be recovered through token ownership and are reported.
+- Local records and durable receipts are saved **before** cloud acknowledgement. Acknowledgement failures retry safely. Acknowledged events are also scanned for recovery from older versions; receipts prevent replay when local timelines have trimmed older hourly buckets.
+- Selected database failures, malformed/unknown local events and incomplete scans are visible; no failed request is labelled up to date. Reads and writes have timeouts. A timed-out acknowledgement may still complete remotely; local evidence is already saved before it is issued.
+- Large databases require repeated sweeps and incur database reads. Per-run limits are visible in Settings. A completed sweep is a point-in-time scan; newly arriving events can be picked up on a later sweep.
 
-### Credentials auto-discovery
+### Credentials and Settings
 
-`FirebaseSync` automatically searches the following locations in order:
-1. `data/firebase-service-account.json` (simply place your downloaded Google Cloud service account key into the `data/` directory).
-2. `FC_FIREBASE_CREDENTIALS_PATH` environment variable.
-3. `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
-4. `FC_FIREBASE_SERVICE_ACCOUNT_KEY` (raw JSON string or Base64-encoded string).
-5. Discrete environment variables (`FC_FIREBASE_PROJECT_ID`, `FC_FIREBASE_CLIENT_EMAIL`, `FC_FIREBASE_PRIVATE_KEY`).
+Credential discovery honors an explicit `FC_FIREBASE_CREDENTIALS_PATH` or `GOOGLE_APPLICATION_CREDENTIALS` first, then the active data folder's `firebase-service-account.json`, then raw/base64 environment credentials, then individual project/email/key variables. Invalid explicit paths are reported without silently selecting another key. Paths relative to the app root work on Windows and macOS; `FC_DATA_DIR` is respected. Environment or file changes require restarting the app.
 
-### Sync modes and controls
+Settings provides editable PC ID, public tracking URL, database selection (`rtdb`, `firestore`, `both`), and sync mode. Saved PC ID/URL override their environment values; blank fields use the environment. Existing installations retain `both` until the operator selects the database their endpoint uses. Automatic mode checks at startup and every 15 seconds while the app runs; Manual mode requires **Sync opens now**.
 
-- **Automatic mode** (`settings.tracking.syncMode = "auto"`): `FirebaseSync` polls Firebase every cycle during the background monitor loop.
-- **Manual mode** (`settings.tracking.syncMode = "manual"`): Automatic polling is paused; the operator clicks **Sync Firebase** in the Email Tracking dashboard header or Settings to fetch pending telemetry on demand.
-- **Worker Status Badge**: The Email Tracking header displays the live state (`Active`, `Manual mode`, `Needs configuration`, or `Needs attention`) with sync count and timestamp.
+The live diagnostics panel shows hostname/platform, effective PC ID and source, team worker UUID, data folder, project/database URL and source, credential location (no keys), telemetry/consent flags, local record/token counts, last attempt/completed scan, errors and per-database scan results. Warnings identify missing IDs/credentials/URLs/tokens, disabled tracking, manual mode, and `/t/PC` route mismatches. Editing a URL affects future messages only.
+
+See [SYNC-REPAIR.md](SYNC-REPAIR.md) for the four-PC incident, safe update instructions, and read-only aggregate audit command. Keep each PC's original data folder; cloud events alone cannot reconstruct a lost local token-to-message mapping.
 
 ## Seed inbox setup and manual workflow
 

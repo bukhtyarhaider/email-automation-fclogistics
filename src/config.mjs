@@ -43,6 +43,9 @@ export const DEFAULTS = {
   },
   tracking: {
     syncMode: "auto",
+    pcId: "",
+    publicUrl: "",
+    firebaseBackend: "both",
   },
   team: { url: "", workerName: "", enabled: false },
 };
@@ -211,6 +214,17 @@ export function validateSettings(input) {
   const tracking = { ...DEFAULTS.tracking, ...s.tracking };
   if (!["auto", "manual"].includes(tracking.syncMode))
     throw new Error("Invalid tracking syncMode. Use auto or manual.");
+  tracking.pcId = String(tracking.pcId || "").trim();
+  if (tracking.pcId && !/^[a-zA-Z0-9_-]{1,64}$/.test(tracking.pcId))
+    throw new Error("PC ID must contain 1–64 letters, digits, dashes or underscores.");
+  if (!["rtdb", "firestore", "both"].includes(tracking.firebaseBackend))
+    throw new Error("Choose Realtime Database, Firestore, or both for Firebase sync.");
+  tracking.publicUrl = String(tracking.publicUrl || "").trim().replace(/\/$/, "");
+  if (tracking.publicUrl) {
+    const u = new URL(tracking.publicUrl);
+    if (u.protocol !== "https:" || u.username || u.password || u.search || u.hash)
+      throw new Error("Use a public HTTPS tracking URL without credentials, query or fragment.");
+  }
   s.tracking = tracking;
   return s;
 }

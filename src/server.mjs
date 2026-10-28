@@ -187,7 +187,7 @@ function persist() {
   return persistTail;
 }
 const monitor = new MailboxMonitor({ state, persist });
-const firebaseSync = new FirebaseSync({ state, persist });
+const firebaseSync = new FirebaseSync({ state, persist, dataDirectory: DATA });
 function track(item) {
   let record = state.tracking.records[item.trackingId];
   if (!record) record = createRecord(state.tracking, { to: item.recipient, subject: item.subject }, {
@@ -200,7 +200,7 @@ async function prepareTracked(message, campaignId) {
   try {
     result = createRecord(state.tracking, message, { sender: profile().email, campaignId }, {
       openEnabled: process.env.FC_OPEN_TRACKING_ENABLED === "1",
-      consent: process.env.FC_OPEN_TRACKING_CONSENT === "1", publicUrl: process.env.FC_TRACKING_PUBLIC_URL,
+      consent: process.env.FC_OPEN_TRACKING_CONSENT === "1", publicUrl: firebaseSync.configuration().publicUrl,
     });
   } catch {
     result = createRecord(state.tracking, message, { sender: profile().email, campaignId });
@@ -915,7 +915,7 @@ const server = http.createServer(async (req, res) => {
               }, {
                 openEnabled: process.env.FC_OPEN_TRACKING_ENABLED === "1",
                 consent: process.env.FC_OPEN_TRACKING_CONSENT === "1",
-                publicUrl: process.env.FC_TRACKING_PUBLIC_URL,
+                publicUrl: firebaseSync.configuration().publicUrl,
               });
             } catch {
               result = createRecord(state.tracking, { to: seed.email, subject }, {
@@ -1100,6 +1100,7 @@ const server = http.createServer(async (req, res) => {
           });
         }
         if (pathname === "/api/settings") {
+          if (firebaseSync.running) throw new Error("Wait for the Firebase sync to finish before changing settings.");
           if (prepared)
             throw new Error(
               "Close the prepared message before changing settings.",
@@ -1496,6 +1497,7 @@ const server = http.createServer(async (req, res) => {
         campaigns: state.campaigns,
         activeCampaign: state.activeCampaign,
         workerId: state.workerId,
+        firebaseSync: firebaseSync.diagnostics(),
         connected: await mail.isConnected(),
         signInOpen: !!mail.page && !mail.page.isClosed(),
         browserSession: mail.session,

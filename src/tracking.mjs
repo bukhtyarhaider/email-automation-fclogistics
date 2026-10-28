@@ -78,7 +78,10 @@ export function syncRecord(r, item) {
 }
 export function recordOpen(t, token, enabled = true, at = now()) {
   if (!enabled || !/^[\w-]{43}$/.test(token)) return false;
-  const digest = hash(token);
+  return recordOpenHash(t, hash(token), enabled, at);
+}
+export function recordOpenHash(t, digest, enabled = true, at = now()) {
+  if (!enabled || !/^[a-f0-9]{64}$/.test(digest)) return false;
   const r = t.records[t.openIndex?.[digest]];
   if (!r || !r.attemptedAt) return false;
   if (r.sendStatus === "send_attempted" && !r.confirmedAt) return false;
@@ -86,8 +89,8 @@ export function recordOpen(t, token, enabled = true, at = now()) {
   if (r.opens.some((e) => e.bucket === bucket)) return false;
   r.opens.push({ bucket, at });
   r.opens = r.opens.slice(-96);
-  r.firstOpenAt ||= at;
-  r.lastOpenAt = at;
+  if (!r.firstOpenAt || at < r.firstOpenAt) r.firstOpenAt = at;
+  if (!r.lastOpenAt || at > r.lastOpenAt) r.lastOpenAt = at;
   addEvent(r, "open_detected", { signal: "Remote image request; human reading unverified" }, at);
   if (r.seedId && (!r.placement || r.placement.status === "awaiting")) {
     recordPlacement(r, "inbox", "Remote open signal received from seed recipient", "open_signal");
