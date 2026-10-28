@@ -7,6 +7,7 @@ function navigate(viewName) {
     "templates",
     "live-activity",
     "activity",
+    "catalog",
     "tracking",
     "suppression",
     "settings",
@@ -21,6 +22,8 @@ function navigate(viewName) {
     link.classList.toggle("active", link.dataset.view === target);
   });
 
+  if (target === "catalog" && state) void loadCatalog().catch((e) => notice(e.message));
+  if (target === "activity" && state) void loadHistory().catch((e) => notice(e.message));
   if (target === "tracking" && state) void loadTracking().catch((e) => notice(e.message));
   if (target === "live-activity") {
     renderLiveActivityView();

@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Outreach Desk 1· Sales Operations</title>
-    <link rel="stylesheet" href="/style.css?v=2.4" />
+    <title>Outreach Desk · Sales Operations</title>
+    <link rel="stylesheet" href="/style.css?v=2.1.0" />
   </head>
   <body>
     <div class="app-shell">
@@ -20,7 +20,7 @@
           <a class="titlebar-brand" href="#dashboard">
             <span class="brand-monogram" id="brandMark">OD</span>
             <span id="brandName">OUTREACH DESK</span>
-            <span class="brand-subtext">Desktop v1.0</span>
+            <span class="brand-subtext" id="appVersion">Desktop</span>
           </a>
         </div>
 
@@ -114,6 +114,7 @@
               </svg>
               <span>Do Not Contact</span>
             </a>
+            <a class="nav-link" href="#catalog" data-view="catalog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"></path></svg><span>Version Catalog</span></a>
             <a class="nav-link" href="#settings" data-view="settings">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
@@ -1322,86 +1323,77 @@
           </section>
 
 
-          <!-- ========================================== -->
-          <!-- VIEW 6B: SEND HISTORY & AUDIT              -->
-          <!-- ========================================== -->
           <section class="view-page" id="view-activity">
             <div class="page-header">
               <div>
-                <p class="page-eyebrow">AUDIT & RECONCILIATION</p>
-                <h1 class="page-title">Send History & Audit</h1>
-                <p class="page-subtitle">Complete durable send log, verified webmail submission history, and recovery action center.</p>
+                <p class="page-eyebrow">SEND INSIGHTS &amp; FOLLOW-UP</p>
+                <h1 class="page-title">Send History &amp; Audit</h1>
+                <p class="page-subtitle">Find who received each email, inspect recorded open signals, and keep your follow-up notes together.</p>
               </div>
               <div class="header-actions">
-                <a class="button secondary" href="/api/export-history">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  Export full history (JSON)
-                </a>
+                <button id="historyRefresh" class="secondary">Refresh</button>
+                <a class="button secondary" id="historyExportCsv" href="/api/export-history?scope=filtered&amp;format=csv">Filtered CSV</a>
+                <a class="button secondary" id="historyExportJson" href="/api/export-history?scope=filtered">Filtered JSON</a>
+                <a class="button secondary" id="historyExportStats" href="/api/export-history?scope=stats&amp;format=csv">Stats CSV</a>
+                <a class="button secondary" href="/api/export-history">Full history backup</a>
               </div>
             </div>
-
-            <!-- Recovery & Reconciliation Center -->
             <div id="recovery"></div>
-
-            <!-- Send History Section -->
-            <div class="panel">
-              <div class="panel-head">
-                <h2 class="panel-title">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  Recorded Send Attempts
-                </h2>
+            <p class="hint history-scope">Statistics and filtered exports cover every matching record, across all pages. This PC's history only. Dates use UTC send confirmation, or attempt date when unconfirmed; timestamps display in your local timezone.</p>
+            <div id="historyMetrics" class="history-metrics" aria-live="polite"></div>
+            <p id="historyTimingNote" class="hint"></p>
+            <p class="history-evidence-note">“Seen” is a recorded remote image request, which can include previews or automated scanners. No signal does not prove an email was unread. Replies and reasons are recorded through your manual review below.</p>
+            <div class="panel history-panel">
+              <div class="panel-head"><h2 class="panel-title">Recorded sends &amp; attempts</h2><span id="historyLoadStatus" class="hint" role="status"></span></div>
+              <div class="history-filters">
+                <label class="history-search">Search<input id="historySearch" type="search" placeholder="Recipient, subject, mailbox or note…" /></label>
+                <label>Send outcome<select id="historyStatus"><option value="">All outcomes</option><option>Sent</option><option>Uncertain</option><option>Sending</option><option>Not sent — manual review</option></select></label>
+                <label>Seen status<select id="historySeen"><option value="">All seen states</option><option value="seen">Seen · image signal</option><option value="no_signal">Tracked · no signal</option><option value="untracked">Tracking not enabled</option></select></label>
+                <label>Mailbox<select id="historyMailbox"><option value="">All mailboxes</option></select></label>
+                <label>Campaign<select id="historyCampaign"><option value="">All campaigns</option></select></label>
+                <label>Template<select id="historyTemplate"><option value="">All templates</option></select></label>
+                <label>Reply review<select id="historyReply"><option value="">All reply reviews</option><option value="unreviewed">Not reviewed</option><option value="replied">Replied · manual</option><option value="no_reply">No reply · manual</option></select></label>
+                <label>Sent from (UTC)<input id="historyFrom" type="date" /></label>
+                <label>Sent through (UTC)<input id="historyUntil" type="date" /></label>
+                <label>Sort<select id="historySort"><option value="newest">Newest sends</option><option value="oldest">Oldest sends</option><option value="first_seen">Latest first seen</option><option value="last_seen">Latest seen activity</option><option value="fastest">Fastest first seen</option><option value="slowest">Slowest first seen</option></select></label>
+                <button id="historyClearFilters" class="secondary">Clear filters</button>
               </div>
-
-              <!-- History Filters -->
-              <div class="toolbar" style="margin-bottom: 12px; background: var(--bg-surface-elevated);">
-                <div class="toolbar-group">
-                  <div class="toolbar-search">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    <input id="historySearch" type="search" placeholder="Search recipient, mailbox, or subject…" />
-                  </div>
-                  <div style="min-width: 170px;">
-                    <select id="historyStatus" aria-label="Outcome filter">
-                      <option value="">All outcomes</option>
-                      <option>Sent</option>
-                      <option>Uncertain</option>
-                      <option>Sending</option>
-                      <option>Not sent — manual review</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <!-- History Data Table -->
               <div class="table-container">
-                <div class="table-wrap" style="max-height: 420px; min-height: 250px;">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Time / Recipient</th>
-                        <th>Mailbox / Template</th>
-                        <th>Subject</th>
-                        <th>Outcome</th>
-                        <th style="text-align: right;">Details</th>
-                      </tr>
-                    </thead>
-                    <tbody id="historyRows"></tbody>
-                  </table>
+                <div class="table-wrap history-table-wrap">
+                  <table><thead><tr><th>Sent / Recipient</th><th>Mailbox / Campaign</th><th>Subject / Template</th><th>Outcome / Reply review</th><th>Seen evidence</th><th>Send → first seen</th><th>Details</th></tr></thead><tbody id="historyRows"></tbody></table>
                 </div>
-
-                <div class="table-footer">
-                  <span id="historyPageInfo">Loading attempts…</span>
-                  <div class="pagination-controls">
-                    <button id="historyPrev" class="secondary">Previous</button>
-                    <button id="historyNext" class="secondary">Next</button>
-                  </div>
-                </div>
+                <div class="table-footer"><span id="historyPageInfo">Loading attempts…</span><div class="pagination-controls"><button id="historyPrev" class="secondary">Previous</button><button id="historyNext" class="secondary">Next</button></div></div>
               </div>
-
-              <!-- Inspector Viewer for selected message -->
-              <div id="historyMessage" class="history-inspector" hidden></div>
+              <section id="historyInspector" class="history-detail" hidden>
+                <div class="panel-head"><h2 class="panel-title">Message &amp; seen evidence</h2><button id="historyCloseDetail" class="secondary">Close details</button></div>
+                <pre id="historyMessage" class="history-inspector"></pre>
+                <div class="form-group"><label for="historyReviewStatus">Reply status · manually reviewed</label><select id="historyReviewStatus"><option value="unreviewed">Not reviewed</option><option value="replied">Replied</option><option value="no_reply">Checked mailbox · no reply</option></select></div>
+                <div class="form-group"><label for="historyReviewNote">Follow-up / reason notes</label><textarea id="historyReviewNote" rows="3" maxlength="2000" placeholder="Record what you checked, a recipient's stated reason, or your next step."></textarea><p class="hint">Only record a reason when you have evidence. The app does not infer why someone did not reply.</p></div>
+                <button id="historySaveReview">Save review</button><span id="historyReviewSaved" class="hint" role="status"></span>
+              </section>
             </div>
           </section>
 
+          <section class="view-page" id="view-catalog">
+            <div class="page-header"><div><p class="page-eyebrow">RELEASES &amp; UPGRADE GUIDE</p><h1 class="page-title">Version Catalog</h1><p class="page-subtitle">See what changed, which version this PC is running, and how to update safely.</p></div><div class="header-actions"><button id="catalogRefresh" class="secondary">Refresh catalog</button><a class="button secondary" href="/api/export-catalog">Export catalog JSON</a></div></div>
+            <div id="catalogMetrics" class="history-metrics"></div>
+            <div class="panel"><h2 class="panel-title">How to update this PC</h2><ol id="catalogUpgradeSteps" class="catalog-upgrade"></ol><p class="hint">Earlier fixes often shipped under package 2.0.0. Dated milestones keep that history visible without inventing patch version numbers. Local notes stay in this PC's data folder and do not install a new build.</p></div>
+            <div class="catalog-layout">
+              <div>
+                <div class="catalog-filters"><label>Find a release or change<input id="catalogSearch" type="search" placeholder="Version, feature, date or change…" /></label><label>Entry type<select id="catalogType"><option value="">All entries</option><option value="release">Numbered package releases</option><option value="milestone">Historical updates</option><option value="local">My local notes</option></select></label></div>
+                <p id="catalogStatus" class="hint" role="status"></p><div id="catalogEntries"></div>
+              </div>
+              <div class="panel catalog-editor">
+                <h2 class="panel-title" id="catalogNoteHeading">Add a local release note</h2>
+                <p class="hint">Keep your own rollout notes or document changes for a version. Saved notes remain when application files are replaced.</p>
+                <div class="form-group"><label for="catalogNoteVersion">Version</label><input id="catalogNoteVersion" placeholder="2.1.0" maxlength="80" /></div>
+                <div class="form-group"><label for="catalogNoteDate">Date</label><input id="catalogNoteDate" type="date" /></div>
+                <div class="form-group"><label for="catalogNoteTitle">Title</label><input id="catalogNoteTitle" maxlength="160" placeholder="What changed or which PC was updated?" /></div>
+                <div class="form-group"><label for="catalogNoteChanges">Changes · one per line</label><textarea id="catalogNoteChanges" rows="7" maxlength="6000" placeholder="Describe each change or deployment note on its own line."></textarea></div>
+                <div class="header-actions"><button id="catalogSaveNote">Save note</button><button id="catalogNewNote" class="secondary">New note</button></div>
+              </div>
+            </div>
+          </section>
 
           <!-- ========================================== -->
           <!-- VIEW 7: EMAIL TRACKING & DELIVERABILITY   -->
@@ -1959,7 +1951,7 @@
     </div>
 
 
-    <script src="/app.js?v=2.4" type="module"></script>
+    <script src="/app.js?v=2.1.0" type="module"></script>
   </body>
 </html>
 

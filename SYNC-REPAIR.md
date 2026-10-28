@@ -20,7 +20,7 @@ The local checkout inspected during the audit uses PC ID **1**, URL `https://www
 ## Install on each PC
 
 1. Stop Outreach Desk on that PC. Back up its `.env` and entire `data` folder before updating.
-2. Extract the new `Outreach-Desk-2.0.0.zip` into the application folder, replacing application files. **Keep that PC's existing `.env` and `data` folder.** The archive contains no customer data or Firebase credentials. Do not copy another PC's `data/state.json` over it: tracking tokens belong to that PC's original emails.
+2. Extract the new `Outreach-Desk-2.1.0.zip` into the application folder, replacing application files. **Keep that PC's existing `.env` and `data` folder.** The archive contains no customer data or Firebase credentials. Do not copy another PC's `data/state.json` over it: tracking tokens belong to that PC's original emails.
 3. Run the normal Setup launcher if needed, then Start. Reload the browser page so the new JavaScript is loaded.
 4. Open **Settings → Firebase Open Telemetry Sync**. Save the appropriate PC ID and its public endpoint URL:
 

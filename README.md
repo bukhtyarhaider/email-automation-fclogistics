@@ -1,10 +1,10 @@
-# Outreach Desk 2
+# Outreach Desk 2.1.0
 
 A configurable local email sales tool for teams using Private Email. Each PC has its own mailbox profiles and browser session. An optional shared coordinator prevents duplicate recipient claims across PCs and enforces team mailbox allowances.
 
 ## Install on Windows and macOS
 
-1. Extract `Outreach-Desk-2.0.0.zip` to a permanent folder on each PC. Give every OS user their own installation/data folder.
+1. Extract `Outreach-Desk-2.1.0.zip` to a permanent folder on each PC. Give every OS user their own installation/data folder.
 2. Install [Node.js 20+](https://nodejs.org/), [Python 3.9+](https://www.python.org/downloads/), and Google Chrome or Microsoft Edge. On Windows select **Add Python to PATH** during installation.
 3. Windows: open `Setup-Windows.cmd` once, then `Start-Windows.cmd`. macOS: open `Setup-Mac.command` once, then `Start-Mac.command`. If macOS strips execute permission from the archive, run `chmod +x *.command` in that folder. Setup installs the locked npm dependencies from the npm registry.
 4. The launcher opens http://127.0.0.1:4317. Keep its terminal open while using the tool. Closing it stops the local server. Linux also works with `npm ci` then `npm run launch`.
@@ -211,3 +211,16 @@ Run `npm run build:ui` to concatenate and build `public/index.html`, `public/sty
 ### Headless browser tests
 
 Run `FC_BROWSER_TESTS=1 npm test` on macOS (PowerShell: `$env:FC_BROWSER_TESTS='1'; npm test`) to run the complete suite including real Chrome tests against synthetic local inboxes and temporary profiles: persistent cookies, restart reuse, profile locks, manual challenge recovery, wrong-account detection, expiry, CDP attach/detach, discovery, tracking dashboard filters, and desktop/mobile responsiveness. Set `FC_TEST_BROWSER_CHANNEL=msedge` to exercise Edge instead. No live Cloudflare/Namecheap outcome is claimed by synthetic tests.
+
+
+## Send insights and version catalog (2.1.0)
+
+**Send History & Audit** now filters by recipient/subject/note search, outcome, seen signal, mailbox, campaign, template, UTC send-date range (confirmation time, or attempt date when unconfirmed) and manual reply-review status. Sort by send dates, first/last seen activity, or fastest/slowest first-seen interval. Counts and filtered exports cover every matching row across pages, using only this PC's history. Refresh is explicit and the open history view also refreshes every 15 seconds while preserving unsaved review notes.
+
+Metrics include confirmed sends, first-seen signals, seen/confirmed-send percentage, tracking coverage, average/median/fastest confirmed-send-to-first-image-request intervals, sample/exclusion counts and manually reviewed replies. Missing tracking is shown separately from a tracked message with no signal. Timing requires a valid confirmed-send timestamp and a first signal at or after it. Remote image requests can come from previews or scanners; they do not prove human reading. Reply state and reasons are entered manually after inspecting the mailbox; the app does not infer replies or why someone has not replied.
+
+Use **Filtered CSV**, **Filtered JSON**, **Stats CSV** or the existing **Full history backup**. CSV includes recipients, mailbox/campaign/template, send timestamps, first/last seen, retained hourly signal count, delay in seconds, bounce evidence and manual reply notes. Stats CSV uses `Ms` suffixes for duration metrics and percentages for rate metrics. CSV cells protect spreadsheet formulas. Full JSON keeps the prior backup sections; filtered JSON includes only matching send/tracking records.
+
+**Version Catalog** shows the installed package version, verified numbered releases, historical updates, upgrade steps and your own editable local release notes. Catalog notes live in `data/state.json` on this PC and survive application-file replacement. Export the catalog as JSON. Earlier updates often retained package 2.0.0; the historical Git label V1.1.0 is explained rather than assigned an invented package version. See [CHANGELOG.md](CHANGELOG.md).
+
+To publish a future version: update `package.json` and the root package entries in `package-lock.json`, add the new release to `src/release-catalog.mjs`, record validation, rebuild the UI, run the regression suite, then run `npm run bundle`. The ZIP filename reads the package version automatically. The title bar reads the same version from the running server. On each PC, stop the app, back up and retain `.env`/`data` (and `team-data` for a coordinator), replace application files, run Setup if dependencies changed, restart/reload, and check the catalog and sync diagnostics. This is a manual distribution workflow, not an online update service.

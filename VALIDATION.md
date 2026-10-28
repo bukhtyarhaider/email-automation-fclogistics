@@ -1,5 +1,15 @@
 # Outreach Desk 2 validation
 
+## Send insights and version catalog — 2.1.0 — October 29, 2026
+
+Version 2.1.0 adds full-filter send-history metrics, mailbox/campaign/template/date/seen/reply-review filters, timing sorts, filtered CSV/JSON and statistics exports, detailed first/last/hourly open evidence, and durable manual reply reviews/notes. Timing averages/median/fastest values use valid confirmed-send-to-first-signal intervals and expose sample/exclusion counts. Send-date filters follow UTC confirmation time (attempt time when unconfirmed). No-signal and tracking-disabled records remain distinct. Reply reasons are not inferred.
+
+The Version Catalog contains three verified package versions (1.0.0, 2.0.0, 2.1.0), six historical milestones with Git/validation evidence, safe upgrade steps, and editable/exportable per-PC release notes saved in the original state file. The historical V1.1.0 Git label is explained because its package still recorded 2.0.0. The title bar/server, package/lockfile and versioned ZIP now agree. State-schema version 2 stays unchanged.
+
+`FC_BROWSER_TESTS=1 FC_UI_SCREENSHOT_DIR=outputs/v2.1.0 npm test`: **115 passed** (108 Node, 7 Python), no failures or skips. After a final UTC midnight-boundary correction, all **6 reporting/catalog unit tests and 2 focused API/browser tests passed** again. New checks cover arithmetic and denominators, invalid/missing timing, distinct tracking states, combined filters, all-pages exports, spreadsheet formula escaping, metadata redaction, manual reviews retaining send protections, restart persistence, local-note edits, and desktop/mobile navigation/layout. Existing sender/signature/uncertainty/pacing/coordinator/workbook/Firebase checks passed. Sixty JavaScript syntax checks, package/lockfile consistency, UI build and `git diff --check` passed. Desktop and narrow-screen screenshots were visually inspected.
+
+No real emails were sent or customer state modified by verification. Tests used synthetic temporary data. Native Windows execution and installation on the other PCs remain unverified. Operator notes and send statistics are local to the current PC; the catalog does not implement remote update checks or distribution.
+
 ## Firebase multi-PC backlog repair and Settings diagnostics — October 29, 2026
 
 A read-only live Realtime Database audit found 716 events, with 162 pending for PC 1, 252 for PC 2, 16 for PC 3 and 1 for PC 4. The old last-100 query returned 99 acknowledged PC 3 events and one pending PC 4 event, proving starvation of the PC 1/2 backlog. Firestore's read check failed. The local installation was PC 1 in Manual mode; the other PCs' local configuration/data was not accessed.

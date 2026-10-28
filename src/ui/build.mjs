@@ -47,6 +47,7 @@ const CSS_FILES = [
   "_templates.css",
   "_settings.css",
   "_animations.css",
+  "_history-catalog.css",
 ];
 
 // === HTML partials (order matters) ===
@@ -61,6 +62,7 @@ const HTML_FILES = [
   "_view-settings.html",
   "_view-live-activity.html",
   "_view-activity.html",
+  "_view-catalog.html",
   "_view-tracking.html",
   "_view-suppression.html",
   "_foot-main.html",
@@ -79,6 +81,7 @@ const JS_FILES = [
   "_campaigns.js",
   "_settings.js",
   "_history.js",
+  "_catalog.js",
   "_drawer.js",
   "_live-activity.js",
   "_tracking.js",

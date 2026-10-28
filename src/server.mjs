@@ -25,6 +25,8 @@ import { MailboxMonitor } from "./mailbox-monitor.mjs";
 import { startPixelServer } from "./pixel-server.mjs";
 import { domainHealth } from "./domain-health.mjs";
 import { FirebaseSync } from "./firebase-sync.mjs";
+import { historyReport, historyCsv, csv, saveFollowUp } from "./history-report.mjs";
+import { APP_VERSION, releaseCatalog, saveReleaseNote } from "./release-catalog.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = path.resolve(process.env.FC_DATA_DIR || path.join(ROOT, "data"));
@@ -878,6 +880,16 @@ const server = http.createServer(async (req, res) => {
           return response(res, { ok: true });
         }
         const input = await body(req);
+        if (pathname === "/api/history/review") {
+          const review = saveFollowUp(state, input);
+          await persist();
+          return response(res, { ok: true, review });
+        }
+        if (pathname === "/api/catalog/note") {
+          const note = saveReleaseNote(state, input, randomUUID());
+          await persist();
+          return response(res, { ok: true, note });
+        }
         if (pathname === "/api/tracking/manual-placement") {
           const record = state.tracking.records[input.trackingId];
           if (!record?.attemptedAt) throw new Error("Choose an attempted seed send.");
@@ -1487,6 +1499,7 @@ const server = http.createServer(async (req, res) => {
       };
       return response(res, {
         version: 2,
+        appVersion: APP_VERSION,
         workbook: activeCampaign()?.workbook,
         sheets: activeData().sheets,
         counts,
@@ -1635,33 +1648,15 @@ const server = http.createServer(async (req, res) => {
         leads: leads.slice(offset, offset + 50),
       });
     }
+    if (pathname === "/api/catalog" || pathname === "/api/export-catalog") {
+      const catalog = releaseCatalog(state);
+      if (pathname === "/api/catalog") return response(res, catalog);
+      res.writeHead(200, { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="outreach-catalog-${APP_VERSION}.json"`, "Cache-Control": "no-store" });
+      return res.end(JSON.stringify({ exportedAt: new Date().toISOString(), ...catalog }, null, 2));
+    }
     if (pathname === "/api/history") {
-      const query = (url.searchParams.get("q") || "").toLowerCase(),
-        status = url.searchParams.get("status");
-      let records = Object.entries(state.history)
-        .map(([to, { teamToken, ...h }]) => {
-          const tRecord = h.trackingId ? state.tracking?.records?.[h.trackingId] : null;
-          return {
-            to,
-            ...h,
-            firstOpenAt: tRecord?.firstOpenAt || null,
-            opensCount: tRecord?.opens?.length || 0,
-            bounceStatus: tRecord?.bounceStatus || null,
-          };
-        })
-        .sort((a, b) => b.at.localeCompare(a.at));
-      if (query)
-        records = records.filter((r) =>
-          `${r.to} ${r.accountEmail || ""} ${r.campaignName || ""} ${r.subject}`
-            .toLowerCase()
-            .includes(query),
-        );
-      if (status) records = records.filter((r) => r.status === status);
-      const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
-      return response(res, {
-        total: records.length,
-        records: records.slice(offset, offset + 25),
-      });
+      const result = historyReport(state, url.searchParams);
+      return response(res, { ...result, records: result.records.slice(result.offset, result.offset + result.pageSize) });
     }
     if (pathname === "/api/preview") {
       const id = url.searchParams.get("id");
@@ -1698,29 +1693,21 @@ const server = http.createServer(async (req, res) => {
       return res.end(bytes);
     }
     if (pathname === "/api/export-history") {
-      const records = Object.entries(state.history).map(
-        ([to, { teamToken, ...r }]) => ({ to, ...r }),
-      );
-      res.writeHead(200, {
-        "Content-Type": "application/json",
-        "Content-Disposition": 'attachment; filename="outreach-history.json"',
-        "Cache-Control": "no-store",
-      });
-      return res.end(
-        JSON.stringify(
-          {
-            exportedAt: new Date().toISOString(),
-            records,
-            tracking: Object.values(state.tracking.records).map(safeRecord),
-            unmatchedBounces: state.tracking.review,
-            seedTests: state.tracking.seedTests,
-            events: state.events,
-            suppression: state.suppression,
-          },
-          null,
-          2,
-        ),
-      );
+      const format = url.searchParams.get("format") || "json";
+      const scope = url.searchParams.get("scope") || (format === "csv" ? "filtered" : "full");
+      if (!["json", "csv"].includes(format) || !["full", "filtered", "stats"].includes(scope)) throw new Error("Choose a valid history export format and scope.");
+      const result = historyReport(state, scope === "full" ? new URLSearchParams() : url.searchParams);
+      const filtered = scope !== "full";
+      const recordIds = new Set(result.records.map((r) => r.trackingId));
+      const data = { exportedAt: new Date().toISOString(), appVersion: APP_VERSION, scope, filters: result.filters, dateBasis: result.dateBasis, timingBasis: result.timingBasis, summary: result.summary,
+        ...(scope === "stats" ? {} : { records: result.records, tracking: Object.values(state.tracking.records).filter((r) => !filtered || recordIds.has(r.id)).map(safeRecord) }),
+        ...(filtered ? {} : { unmatchedBounces: state.tracking.review, seedTests: state.tracking.seedTests, events: state.events, suppression: state.suppression }),
+      };
+      const content = format === "csv" ? scope === "stats"
+        ? csv([["Metric", "Value"], ...Object.entries({ ...result.summary, dateBasis: result.dateBasis, timingBasis: result.timingBasis, ...Object.fromEntries(Object.entries(result.filters).map(([key, value]) => [`filter_${key}`, value])) })])
+        : historyCsv(result) : JSON.stringify(data, null, 2);
+      res.writeHead(200, { "Content-Type": format === "csv" ? "text/csv; charset=utf-8" : "application/json", "Content-Disposition": `attachment; filename="outreach-${scope === "stats" ? "send-stats" : "history"}.${format}"`, "Cache-Control": "no-store" });
+      return res.end(content);
     }
     if (pathname === "/api/export-templates") {
       res.writeHead(200, {

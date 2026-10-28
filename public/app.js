@@ -265,6 +265,7 @@ function updateControls() {
 
 async function refresh() {
   state = await api("/api/state");
+  if ($("appVersion")) $("appVersion").textContent = `Desktop v${state.appVersion}`;
   for (const key of ["total", "ready", "excluded", "sent"]) {
     const el = $(key);
     if (el) el.textContent = state.counts[key].toLocaleString();
@@ -1530,93 +1531,149 @@ function renderFirebaseDiagnostics() {
   }).join("");
 }
 
-if ($("recovery"))
-  $("recovery").onclick = (e) => {
-    if (e.target.dataset.reconcile)
-      action(e.target, () =>
-        api("/api/reconcile", {
-          email: e.target.dataset.reconcile,
-          outcome: e.target.dataset.outcome,
-        }),
-      );
-  };
-
-async function loadHistory() {
-  const qEl = $("historySearch");
-  const statEl = $("historyStatus");
-  if (!qEl || !statEl) return;
-
-  const result = await api(
-    "/api/history?" +
-      new URLSearchParams({
-        q: qEl.value,
-        status: statEl.value,
-        offset: String(historyOffset),
-      }),
-  );
-  historyRecords = result.records;
-
-  const hRows = $("historyRows");
-  if (hRows) {
-    hRows.innerHTML = historyRecords.length
-      ? historyRecords
-          .map(
-            (r, index) =>
-              `<tr><td><strong>${escape(r.to)}</strong><small>${escape(new Date(r.at).toLocaleString())}</small></td><td>${escape(r.accountEmail || "Legacy")}<small>${escape(state.templates[r.templateKey]?.name || r.templateKey || "Variant")}</small></td><td>${escape(r.subject)}</td><td><span class="status-pill ${r.status === "Sent" ? "good" : "blocked"}">${r.status === "Sent" ? "✓ Sent" : escape(r.status)}</span>${r.firstOpenAt ? `<span class="status-pill good" style="margin-left:4px;background:#ecfdf5;color:#047857;border:1px solid #10b981;font-weight:700;">👁️ Seen${r.opensCount > 1 ? ` (${r.opensCount}x)` : ''}</span>` : `<span class="status-pill" style="margin-left:4px;background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;font-weight:500;">✉️ Unopened</span>`}${r.bounceStatus ? `<span class="status-pill blocked" style="margin-left:4px;">⛔ ${escape(r.bounceStatus)}</span>` : ''}</td><td style="text-align: right;"><button class="secondary" style="font-size: 11px; padding: 4px 8px;" data-history="${index}">View</button></td></tr>`,
-          )
-          .join("")
-      : '<tr><td colspan="5" style="text-align: center; padding: 30px; color: var(--text-muted);">No attempts match your filters.</td></tr>';
-  }
-
-  const hInfo = $("historyPageInfo");
-  if (hInfo) {
-    hInfo.textContent = result.total
-      ? `Showing ${historyOffset + 1}–${Math.min(historyOffset + 25, result.total)} of ${result.total} recorded attempts`
-      : "No attempts recorded";
-  }
-
-  if ($("historyPrev")) $("historyPrev").disabled = historyOffset === 0;
-  if ($("historyNext")) $("historyNext").disabled = historyOffset + 25 >= result.total;
+if ($("recovery")) $("recovery").onclick = (e) => {
+  if (e.target.dataset.reconcile) action(e.target, () => api("/api/reconcile", { email: e.target.dataset.reconcile, outcome: e.target.dataset.outcome }));
+};
+const historyFilterIds = { q: "historySearch", status: "historyStatus", seen: "historySeen", mailbox: "historyMailbox", campaign: "historyCampaign", template: "historyTemplate", reply: "historyReply", from: "historyFrom", until: "historyUntil", sort: "historySort" };
+let historyRequest = 0, historySelected = null, historyReviewDirty = false, lastHistoryRefresh = 0;
+function historyParams() { return new URLSearchParams(Object.entries(historyFilterIds).map(([key, id]) => [key, $(id)?.value || ""])); }
+function historyDate(value) { return value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : "Not recorded"; }
+function historyDuration(value) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  const seconds = Math.max(0, Math.round(value / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m`;
+  return `${Math.floor(seconds / 86400)}d ${Math.floor(seconds % 86400 / 3600)}h`;
 }
-
-if ($("historyRows"))
-  $("historyRows").onclick = (e) => {
-    if (e.target.dataset.history === undefined) return;
-    const r = historyRecords[Number(e.target.dataset.history)];
-    const msgEl = $("historyMessage");
-    if (!msgEl) return;
-    msgEl.hidden = false;
-    msgEl.textContent = `To: ${r.to}\nFrom: ${r.accountEmail || "Not recorded"}\nCampaign: ${r.campaignName || "Legacy campaign"}\nTemplate: ${r.templateKey || "Not recorded"}\nOutcome: ${r.status}\nTracking ID: ${r.trackingId || "Legacy"}\nSend status: ${r.sendStatus || "Legacy"}\nConfirmation Evidence: ${r.evidence || "Not confirmed"}\nSubject: ${r.subject}\n\n${r.body || "Message body was not recorded by previous version."}\n\n${r.signature || ""}`;
-    msgEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  };
-
+function historySelectOptions(id, options, title, extra = "") {
+  const el = $(id), previous = el.value;
+  const markup = `<option value="">${title}</option>` + extra + options.map((o) => `<option value="${escape(typeof o === "string" ? o : o.id)}">${escape(typeof o === "string" ? o : o.name)}</option>`).join("");
+  if (el.dataset.options !== markup) { el.innerHTML = markup; el.value = previous; el.dataset.options = markup; }
+}
+function renderHistorySummary(s) {
+  const percent = (v) => v === null ? "—" : `${v.toFixed(1)}%`;
+  const metrics = [
+    ["Confirmed sent", s.sent, `${s.attempts} total attempts · ${s.uncertain} unresolved`],
+    ["Seen signals", s.sentSeen, `Among confirmed sends · ${s.noSignal} tracked with no signal`],
+    ["Sent → seen rate", percent(s.seenRate), `${s.sentSeen} seen / ${s.sent} confirmed sends`],
+    ["Average first seen", historyDuration(s.averageFirstSeenMs), `${s.timingSamples} valid timing sample(s)`],
+    ["Median first seen", historyDuration(s.medianFirstSeenMs), "Middle confirmed-send → first-signal interval"],
+    ["Fastest first seen", historyDuration(s.fastestFirstSeenMs), s.fastestRecipient || "No eligible timing sample"],
+    ["Tracking coverage", `${s.trackedSent} / ${s.sent}`, `${s.untrackedSent} sent without tracking · ${percent(s.trackedSeenRate)} seen among tracked sends`],
+    ["Reply review", `${s.replied} replied`, `${s.noReply} checked, no reply · ${s.unreviewed} not reviewed · manual`],
+  ];
+  $("historyMetrics").innerHTML = metrics.map(([label, value, hint]) => `<div class="history-metric"><span>${escape(label)}</span><strong>${escape(value)}</strong><small>${escape(hint)}</small></div>`).join("");
+  $("historyTimingNote").textContent = `Timing uses confirmed sent time to the first recorded image request. ${s.timingExcluded} seen send(s) excluded because a timestamp is missing or precedes confirmation. ${s.bounced} bounce record(s) in this filtered view.`;
+}
+async function loadHistory() {
+  if (!$("historyRows")) return;
+  const request = ++historyRequest;
+  const params = historyParams(); params.set("offset", String(historyOffset));
+  $("historyLoadStatus").textContent = "Updating history…";
+  try {
+    const result = await api("/api/history?" + params);
+    if (request !== historyRequest) return;
+    historyRecords = result.records; historyOffset = result.offset; lastHistoryRefresh = Date.now();
+    historySelectOptions("historyMailbox", result.options.mailboxes, "All mailboxes");
+    historySelectOptions("historyCampaign", result.options.campaigns, "All campaigns", '<option value="legacy">Legacy / unassigned</option>');
+    historySelectOptions("historyTemplate", result.options.templates, "All templates");
+    renderHistorySummary(result.summary);
+    const exportParams = historyParams();
+    for (const [id, scope, format] of [["historyExportCsv", "filtered", "csv"], ["historyExportJson", "filtered", "json"], ["historyExportStats", "stats", "csv"]]) {
+      const p = new URLSearchParams(exportParams); p.set("scope", scope); p.set("format", format); $(id).href = "/api/export-history?" + p;
+    }
+    $("historyRows").innerHTML = historyRecords.length ? historyRecords.map((r, index) => `<tr>
+      <td><strong>${escape(r.to)}</strong><small>${escape(historyDate(r.confirmedAt || r.at))}</small></td>
+      <td>${escape(r.accountEmail || "Legacy")}<small>${escape(r.campaignName)}</small></td>
+      <td>${escape(r.subject || "No recorded subject")}<small>${escape(r.templateName)}</small></td>
+      <td><span class="status-pill ${r.confirmedSent ? "good" : "blocked"}">${escape(r.status)}</span><small>${r.replyStatus === "unreviewed" ? "Reply not reviewed" : r.replyStatus === "replied" ? "Replied · manual" : "No reply · manual"}</small>${r.bounceStatus ? `<small class="history-warning">${escape(r.bounceStatus)}</small>` : ""}</td>
+      <td>${r.firstOpenAt ? `<span class="status-pill good">Seen · image signal</span><small>First: ${escape(historyDate(r.firstOpenAt))}</small><small>Last: ${escape(historyDate(r.lastOpenAt))}</small><small>${r.opensCount} retained hourly signal(s)</small>` : `<span class="status-pill">${r.trackingEnabled ? "No signal recorded" : "Tracking not enabled"}</span>`}</td>
+      <td>${escape(historyDuration(r.firstSeenDelayMs))}${r.timingExcluded ? '<small>Timestamp excluded</small>' : ""}</td>
+      <td><button class="secondary" data-history="${index}">View</button></td></tr>`).join("") : '<tr><td colspan="7">No records match these filters. Clear filters to see all attempts.</td></tr>';
+    $("historyPageInfo").textContent = result.total ? `Showing ${result.offset + 1}–${Math.min(result.offset + result.pageSize, result.total)} of ${result.total} matching attempts` : "No matching attempts";
+    $("historyPrev").disabled = result.offset === 0;
+    $("historyNext").disabled = result.offset + result.pageSize >= result.total;
+    $("historyLoadStatus").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    const selected = historyRecords.find((r) => r.trackingId === historySelected?.trackingId);
+    if (selected && !historyReviewDirty) showHistoryDetail(selected, false);
+  } catch (error) {
+    if (request === historyRequest) $("historyLoadStatus").textContent = `Could not update: ${error.message}`;
+    throw error;
+  }
+}
+function showHistoryDetail(r, scroll = true) {
+  historySelected = r;
+  const opens = r.opens.length ? r.opens.map((event) => `  ${historyDate(event.at)}`).join("\n") : "  No retained open signals";
+  $("historyMessage").textContent = `To: ${r.to}\nFrom: ${r.accountEmail || "Not recorded"}\nCampaign: ${r.campaignName}\nTemplate: ${r.templateName}\nOutcome: ${r.status}\nTracking ID: ${r.trackingId || "Legacy"}\nSend status: ${r.sendStatus || "Legacy"}\nConfirmation evidence: ${r.evidence || "Not confirmed"}\nAttempt: ${historyDate(r.at)}\nConfirmed send: ${historyDate(r.confirmedAt)}\nFirst seen (image request): ${historyDate(r.firstOpenAt)}\nLast seen: ${historyDate(r.lastOpenAt)}\nSend → first seen: ${historyDuration(r.firstSeenDelayMs)}\nBounce: ${r.bounceStatus || "None recorded"}${r.bounceReason ? ` — ${r.bounceReason}` : ""}\n\nRetained hourly open signals (up to 96; repeated requests within an hour are coalesced):\n${opens}\n\nSubject: ${r.subject || "Not recorded"}\n\n${r.body || "Message body was not recorded by the previous version."}\n\n${r.signature || ""}`;
+  $("historyReviewStatus").value = r.replyStatus;
+  $("historyReviewNote").value = r.followUp.note || "";
+  $("historyReviewSaved").textContent = r.followUp.reviewedAt ? `Last reviewed ${historyDate(r.followUp.reviewedAt)}` : "Not reviewed yet";
+  $("historyInspector").hidden = false;
+  if (scroll) { historyReviewDirty = false; $("historyInspector").scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+}
+$("historyRows").onclick = (e) => { const button = e.target.closest("[data-history]"); if (button) showHistoryDetail(historyRecords[Number(button.dataset.history)]); };
+$("historyCloseDetail").onclick = () => { $("historyInspector").hidden = true; historySelected = null; historyReviewDirty = false; };
+for (const id of ["historyReviewStatus", "historyReviewNote"]) $(id).oninput = () => { historyReviewDirty = true; $("historyReviewSaved").textContent = "Unsaved review"; };
+$("historySaveReview").onclick = () => action($("historySaveReview"), async () => {
+  if (!historySelected) return;
+  const result = await api("/api/history/review", { trackingId: historySelected.trackingId, status: $("historyReviewStatus").value, note: $("historyReviewNote").value });
+  historySelected.followUp = result.review; historySelected.replyStatus = result.review.status;
+  historyReviewDirty = false; showHistoryDetail(historySelected, false); await loadHistory(); notice("Manual reply review saved.");
+});
 let historyTimer;
-if ($("historySearch"))
-  $("historySearch").oninput = () => {
-    clearTimeout(historyTimer);
-    historyTimer = setTimeout(() => {
-      historyOffset = 0;
-      loadHistory().catch((e) => notice(e.message));
-    }, 250);
-  };
+$("historySearch").oninput = () => { clearTimeout(historyTimer); historyTimer = setTimeout(() => { historyOffset = 0; loadHistory().catch((e) => notice(e.message)); }, 250); };
+for (const id of Object.values(historyFilterIds).filter((id) => id !== "historySearch")) $(id).onchange = () => { historyOffset = 0; loadHistory().catch((e) => notice(e.message)); };
+$("historyClearFilters").onclick = () => { for (const id of Object.values(historyFilterIds)) $(id).value = id === "historySort" ? "newest" : ""; historyOffset = 0; loadHistory().catch((e) => notice(e.message)); };
+$("historyRefresh").onclick = () => action($("historyRefresh"), loadHistory);
+$("historyPrev").onclick = () => { historyOffset = Math.max(0, historyOffset - 25); loadHistory().catch((e) => notice(e.message)); };
+$("historyNext").onclick = () => { historyOffset += 25; loadHistory().catch((e) => notice(e.message)); };
 
-if ($("historyStatus"))
-  $("historyStatus").onchange = () => {
-    historyOffset = 0;
-    loadHistory().catch((e) => notice(e.message));
-  };
-
-if ($("historyPrev"))
-  $("historyPrev").onclick = () => {
-    historyOffset = Math.max(0, historyOffset - 25);
-    loadHistory().catch((e) => notice(e.message));
-  };
-
-if ($("historyNext"))
-  $("historyNext").onclick = () => {
-    historyOffset += 25;
-    loadHistory().catch((e) => notice(e.message));
-  };
+let catalogData = null, catalogEditId = null;
+async function loadCatalog() {
+  $("catalogStatus").textContent = "Loading catalog…";
+  try {
+    catalogData = await api("/api/catalog");
+    if (!$("catalogNoteVersion").value) $("catalogNoteVersion").value = catalogData.installedVersion;
+    if (!$("catalogNoteDate").value) $("catalogNoteDate").value = new Date().toLocaleDateString("en-CA");
+    const metrics = [["Installed on this PC", `v${catalogData.installedVersion}`], ["Recorded package versions", catalogData.packageVersions], ["Historical updates", catalogData.milestones], ["My local notes", catalogData.notes.length]];
+    $("catalogMetrics").innerHTML = metrics.map(([label, value]) => `<div class="history-metric"><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join("");
+    $("catalogUpgradeSteps").innerHTML = catalogData.upgradeSteps.map((step) => `<li>${escape(step)}</li>`).join("");
+    renderCatalogEntries();
+  } catch (error) { $("catalogStatus").textContent = `Could not load catalog: ${error.message}`; throw error; }
+}
+function renderCatalogEntries() {
+  if (!catalogData) return;
+  const q = $("catalogSearch").value.trim().toLowerCase(), kind = $("catalogType").value;
+  const entries = [...catalogData.releases, ...catalogData.notes].filter((r) => (!kind || r.kind === kind) && (!q || [r.version, r.date, r.title, ...r.changes].join(" ").toLowerCase().includes(q))).sort((a, b) => b.date.localeCompare(a.date));
+  $("catalogEntries").innerHTML = entries.map((r) => `<article class="panel catalog-entry ${r.kind === "release" && r.version === catalogData.installedVersion ? "catalog-current" : ""}"><div class="catalog-entry-meta"><span class="status-pill">${r.kind === "release" ? "Package release" : r.kind === "milestone" ? "Historical update" : "Local note"}</span><span>v${escape(r.version)} · ${escape(r.date)}</span>${r.kind === "release" && r.version === catalogData.installedVersion ? '<span class="status-pill good">Installed build</span>' : ""}</div><h2>${escape(r.title)}</h2><ul>${r.changes.map((change) => `<li>${escape(change)}</li>`).join("")}</ul>${r.evidence ? `<small class="hint">Source: ${escape(r.evidence)}</small>` : `<button class="secondary" data-catalog-edit="${escape(r.id)}">Edit local note</button>`}</article>`).join("") || '<div class="panel">No catalog entries match your search.</div>';
+  $("catalogStatus").textContent = `${entries.length} matching catalog entries · includes this build's recorded history`;
+}
+function newCatalogNote() {
+  catalogEditId = null;
+  $("catalogNoteHeading").textContent = "Add a local release note";
+  $("catalogNoteVersion").value = catalogData?.installedVersion || state?.appVersion || "";
+  $("catalogNoteDate").value = new Date().toLocaleDateString("en-CA");
+  $("catalogNoteTitle").value = ""; $("catalogNoteChanges").value = "";
+}
+$("catalogSearch").oninput = renderCatalogEntries;
+$("catalogType").onchange = renderCatalogEntries;
+$("catalogRefresh").onclick = () => action($("catalogRefresh"), loadCatalog);
+$("catalogNewNote").onclick = newCatalogNote;
+$("catalogEntries").onclick = (e) => {
+  const button = e.target.closest("[data-catalog-edit]");
+  if (!button) return;
+  const note = catalogData.notes.find((note) => note.id === button.dataset.catalogEdit);
+  if (!note) return;
+  catalogEditId = note.id; $("catalogNoteHeading").textContent = "Edit local release note";
+  $("catalogNoteVersion").value = note.version; $("catalogNoteDate").value = note.date;
+  $("catalogNoteTitle").value = note.title; $("catalogNoteChanges").value = note.changes.join("\n");
+  $("catalogNoteTitle").scrollIntoView({ behavior: "smooth", block: "center" });
+};
+$("catalogSaveNote").onclick = () => action($("catalogSaveNote"), async () => {
+  await api("/api/catalog/note", { id: catalogEditId, version: $("catalogNoteVersion").value.trim(), date: $("catalogNoteDate").value, title: $("catalogNoteTitle").value, changes: $("catalogNoteChanges").value });
+  newCatalogNote(); await loadCatalog(); notice("Local catalog note saved.");
+});
 
 function openPreviewDrawer() {
   const drawer = $("leadPreviewDrawer");
@@ -3723,6 +3780,7 @@ function navigate(viewName) {
     "templates",
     "live-activity",
     "activity",
+    "catalog",
     "tracking",
     "suppression",
     "settings",
@@ -3737,6 +3795,8 @@ function navigate(viewName) {
     link.classList.toggle("active", link.dataset.view === target);
   });
 
+  if (target === "catalog" && state) void loadCatalog().catch((e) => notice(e.message));
+  if (target === "activity" && state) void loadHistory().catch((e) => notice(e.message));
   if (target === "tracking" && state) void loadTracking().catch((e) => notice(e.message));
   if (target === "live-activity") {
     renderLiveActivityView();
@@ -3759,6 +3819,7 @@ navigate(location.hash.replace("#", ""));
 await refresh();
 await loadLeads();
 await loadHistory();
+if (location.hash === "#catalog") await loadCatalog();
 if (location.hash === "#tracking") await loadTracking();
 
 // Background polling loop
@@ -3768,7 +3829,7 @@ setInterval(async () => {
     const previousAttempts = state.attemptCount;
     await refresh();
     if (state.job.current !== previous) await loadLeads();
-    if (state.attemptCount !== previousAttempts) await loadHistory();
+    if (state.attemptCount !== previousAttempts || (location.hash === "#activity" && Date.now() - lastHistoryRefresh > 15000)) await loadHistory();
   } catch (e) {
     notice("Connection to the local tool was lost. Restart it to continue.");
   }

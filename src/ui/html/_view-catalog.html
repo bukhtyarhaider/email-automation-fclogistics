@@ -1,0 +1,20 @@
+          <section class="view-page" id="view-catalog">
+            <div class="page-header"><div><p class="page-eyebrow">RELEASES &amp; UPGRADE GUIDE</p><h1 class="page-title">Version Catalog</h1><p class="page-subtitle">See what changed, which version this PC is running, and how to update safely.</p></div><div class="header-actions"><button id="catalogRefresh" class="secondary">Refresh catalog</button><a class="button secondary" href="/api/export-catalog">Export catalog JSON</a></div></div>
+            <div id="catalogMetrics" class="history-metrics"></div>
+            <div class="panel"><h2 class="panel-title">How to update this PC</h2><ol id="catalogUpgradeSteps" class="catalog-upgrade"></ol><p class="hint">Earlier fixes often shipped under package 2.0.0. Dated milestones keep that history visible without inventing patch version numbers. Local notes stay in this PC's data folder and do not install a new build.</p></div>
+            <div class="catalog-layout">
+              <div>
+                <div class="catalog-filters"><label>Find a release or change<input id="catalogSearch" type="search" placeholder="Version, feature, date or change…" /></label><label>Entry type<select id="catalogType"><option value="">All entries</option><option value="release">Numbered package releases</option><option value="milestone">Historical updates</option><option value="local">My local notes</option></select></label></div>
+                <p id="catalogStatus" class="hint" role="status"></p><div id="catalogEntries"></div>
+              </div>
+              <div class="panel catalog-editor">
+                <h2 class="panel-title" id="catalogNoteHeading">Add a local release note</h2>
+                <p class="hint">Keep your own rollout notes or document changes for a version. Saved notes remain when application files are replaced.</p>
+                <div class="form-group"><label for="catalogNoteVersion">Version</label><input id="catalogNoteVersion" placeholder="2.1.0" maxlength="80" /></div>
+                <div class="form-group"><label for="catalogNoteDate">Date</label><input id="catalogNoteDate" type="date" /></div>
+                <div class="form-group"><label for="catalogNoteTitle">Title</label><input id="catalogNoteTitle" maxlength="160" placeholder="What changed or which PC was updated?" /></div>
+                <div class="form-group"><label for="catalogNoteChanges">Changes · one per line</label><textarea id="catalogNoteChanges" rows="7" maxlength="6000" placeholder="Describe each change or deployment note on its own line."></textarea></div>
+                <div class="header-actions"><button id="catalogSaveNote">Save note</button><button id="catalogNewNote" class="secondary">New note</button></div>
+              </div>
+            </div>
+          </section>

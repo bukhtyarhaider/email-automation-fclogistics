@@ -1,5 +1,6 @@
 async function refresh() {
   state = await api("/api/state");
+  if ($("appVersion")) $("appVersion").textContent = `Desktop v${state.appVersion}`;
   for (const key of ["total", "ready", "excluded", "sent"]) {
     const el = $(key);
     if (el) el.textContent = state.counts[key].toLocaleString();
