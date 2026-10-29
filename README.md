@@ -4,7 +4,7 @@ A configurable local email sales tool for teams using Private Email. Each PC has
 
 ### Experimental sales branch
 
-On `feat/sales-experiments`, `npm run experiment` opens a separate read-only import-review server at `http://127.0.0.1:4327`. Run `npm run build:ui` first after editing UI sources. It reads existing campaign workbooks and previews temporary mappings without saving files, connecting mailboxes or sending mail. See [the experiment checklist and test instructions](docs/SALES-EXPERIMENTS.md). Each feature awaits user testing before the next begins; experimental work is not production approval.
+On `feat/sales-experiments`, `npm run experiment` opens a separate import-repair experiment at `http://127.0.0.1:4327`. Run `npm run build:ui` first after editing UI sources. It previews mappings and saves explicit repair revisions to `experiment-data/`, including source provenance and carrier IDs. Original campaign files remain unchanged; no mailbox is connected and no mail is sent. See [the experiment checklist and test instructions](docs/SALES-EXPERIMENTS.md). Each feature awaits user testing before the next begins; experimental work is not production approval.
 
 ## Install on Windows and macOS
 

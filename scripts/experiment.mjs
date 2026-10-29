@@ -1,13 +1,14 @@
-// Separate read-only process: no sender, state upgrade, credentials or workers.
+// Isolated import experiments: source data stays read-only; repairs live in experiment-data.
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
 import { check } from './doctor.mjs';
+import { ExperimentImports } from '../src/experiment-imports.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export function createExperimentServer({ dataDir, python = check() }) {
+export function createExperimentServer({ dataDir, workspaceDir = path.join(root, 'experiment-data'), python = check() }) {
+  const imports = new ExperimentImports({ dataDir, workspaceDir, python });
   let reviewing = false;
   const send = (res, status, value) => {
     res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -33,48 +34,38 @@ export function createExperimentServer({ dataDir, python = check() }) {
       if (req.headers.origin && !origins.includes(req.headers.origin)) return send(res, 403, { error: 'Invalid origin.' });
       if (url.pathname === '/api/experiment/campaigns' && req.method === 'GET') {
         const state = await readState();
+        const workspace = await imports.load();
         const campaigns = await Promise.all((state.campaigns || []).map(async (c) => {
           let available = true;
           try { await workbookPath(c); } catch { available = false; }
-          return { id: c.id, name: c.name || 'Untitled campaign', available };
+          return { id: c.id, name: c.name || 'Untitled campaign', available, hasWorkspace: Object.values(workspace.imports).some((i) => i.campaignId === c.id) };
         }));
-        return send(res, 200, { campaigns, readOnly: true });
+        return send(res, 200, { campaigns, sourceReadOnly: true, experiment: 2 });
       }
-      if (url.pathname === '/api/experiment/import-review' && req.method === 'POST') {
+      if (url.pathname === '/api/experiment/imports' && req.method === 'GET') {
+        return send(res, 200, await imports.status(url.searchParams.get('campaignId'), url.searchParams));
+      }
+      if (url.pathname === '/api/experiment/import-download' && req.method === 'GET') {
+        const file = await imports.download(url.searchParams.get('revisionId'), url.searchParams.get('kind'));
+        res.writeHead(200, { 'Content-Type': file.type, 'Content-Disposition': `attachment; filename="${file.filename}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+        return res.end(file.bytes);
+      }
+      const routes = ['/api/experiment/import-review', '/api/experiment/import-apply', '/api/experiment/import-restore'];
+      if (routes.includes(url.pathname) && req.method === 'POST') {
         if (req.headers['x-fc-request'] !== '1') return send(res, 403, { error: 'Missing request header.' });
-        if (reviewing) return send(res, 409, { error: 'A review is running. Wait for it to finish.' });
+        if (reviewing) return send(res, 409, { error: 'An experiment operation is running. Wait for it to finish.' });
         let body = '';
         for await (const chunk of req) {
           body += chunk;
           if (Buffer.byteLength(body) > 128_000) return send(res, 413, { error: 'Mapping is too large.' });
         }
         const input = JSON.parse(body || '{}');
-        const state = await readState();
-        const campaign = (state.campaigns || []).find((c) => c.id === input.campaignId);
-        if (!campaign) throw new Error('Choose a configured campaign.');
-        let file;
-        try { file = await workbookPath(campaign); } catch { throw new Error('This campaign workbook is missing or outside the source data folder.'); }
-        if (reviewing) return send(res, 409, { error: 'A review is running. Wait for it to finish.' });
+        if (reviewing) return send(res, 409, { error: 'An experiment operation is running. Wait for it to finish.' });
         reviewing = true;
         try {
-          const result = await new Promise((resolve, reject) => {
-            const child = spawn(python, ['-B', path.join(root, 'src/workbook.py'), 'review', file], { stdio: ['pipe', 'pipe', 'ignore'] });
-            let output = '', settled = false;
-            const finish = (error, result) => { if (settled) return; settled = true; clearTimeout(timer); error ? reject(error) : resolve(result); };
-            const timer = setTimeout(() => { child.kill(); finish(new Error('Workbook review timed out. Try a smaller workbook.')); }, 30_000);
-            child.on('error', () => finish(new Error('Could not start Python for workbook review.')));
-            child.stdin.on('error', () => {});
-            child.stdout.on('data', (b) => { output += b; if (Buffer.byteLength(output) > 8_000_000) { child.kill(); finish(new Error('Review output is too large. Use fewer sheets.')); } });
-            child.on('close', () => {
-              try {
-                const value = JSON.parse(output);
-                if (value.error) throw new Error(value.error);
-                finish(null, value);
-              } catch (error) { finish(new Error(error.message.startsWith('Unexpected') ? 'Cannot parse workbook review. Check the XLSX file and mapping.' : error.message)); }
-            });
-            child.stdin.end(JSON.stringify(Object.hasOwn(input, 'mapping') ? input.mapping : campaign.mapping || {}));
-          });
-          return send(res, 200, { ...result, campaignId: campaign.id, campaignName: campaign.name, mode: Object.hasOwn(input, 'mapping') ? 'preview' : 'saved' });
+          const result = url.pathname.endsWith('import-review') ? await imports.review(input)
+            : url.pathname.endsWith('import-apply') ? await imports.apply(input) : await imports.restore(input);
+          return send(res, 200, result);
         } finally { reviewing = false; }
       }
       const files = { '/': ['experiment.html', 'text/html'], '/experiment.js': ['experiment.js', 'text/javascript'], '/experiment.css': ['experiment.css', 'text/css'], '/style.css': ['style.css', 'text/css'] };
@@ -84,15 +75,15 @@ export function createExperimentServer({ dataDir, python = check() }) {
         res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", 'Referrer-Policy': 'no-referrer' });
         return res.end(content);
       }
-      return send(res, 404, { error: 'Read-only experiment: this action is unavailable.' });
+      return send(res, 404, { error: 'Import experiment: this action is unavailable.' });
     } catch (error) { send(res, 400, { error: error instanceof SyntaxError ? 'Use valid JSON for the mapping.' : error.message }); }
   });
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const dataDir = path.resolve(process.env.FC_EXPERIMENT_SOURCE || path.join(root, 'data'));
   const port = Number(process.env.FC_EXPERIMENT_PORT || 4327);
-  const server = createExperimentServer({ dataDir });
+  const server = createExperimentServer({ dataDir, workspaceDir: path.resolve(process.env.FC_EXPERIMENT_DATA_DIR || path.join(root, 'experiment-data')) });
   server.on('error', (error) => { console.error(error.code === 'EADDRINUSE' ? 'Experiment port is already in use. Stop the old preview or set FC_EXPERIMENT_PORT.' : 'Cannot start experiment server.'); process.exitCode = 1; });
-  server.listen(port, '127.0.0.1', () => console.log(`Read-only import experiment: http://127.0.0.1:${port}\nNo workbook writes, mailbox connections or sending. Ctrl+C stops this preview.`));
+  server.listen(port, '127.0.0.1', () => console.log(`Import repair experiment: http://127.0.0.1:${port}\nSource files stay unchanged. Repairs save to experiment copies only. No mailboxes or sending. Ctrl+C stops this preview.`));
   for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => server.close());
 }

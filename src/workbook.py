@@ -4,6 +4,7 @@ import json
 import os
 import posixpath
 import re
+import shutil
 import sys
 import tempfile
 import zipfile
@@ -62,12 +63,14 @@ def read(path, mapping=None, review=False):
                     "emailColumn": email_col, "statusColumn": status_col, "headers": headers, "rows": 0}
             if review:
                 meta["review"] = {"emailColumns": {}, "samples": []}
+                used_columns = set(headers)
             sheets.append(meta)
             if not email_col and not review:
                 continue
             for row in rows[1:]:
                 values = cells(row)
                 if review:
+                    used_columns.update(values)
                     for col, text in values.items():
                         if re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", text):
                             counts = meta["review"]["emailColumns"]
@@ -108,6 +111,19 @@ def read(path, mapping=None, review=False):
                                         "issue": layout_issue,
                                         "cells": {k: v[:200] for k, v in list(values.items())[:80]}})
                 meta["rows"] += 1
+            if review:
+                def col_number(col):
+                    n = 0
+                    for char in col:
+                        n = n * 26 + ord(char) - 64
+                    return n
+                next_number = max((col_number(c) for c in used_columns), default=0) + 1
+                next_column = ""
+                if next_number <= 16384:
+                    while next_number:
+                        next_number, mod = divmod(next_number - 1, 26)
+                        next_column = chr(65 + mod) + next_column
+                meta["review"]["unusedStatusColumn"] = next_column or None
         return {"sheets": sheets, "leads": leads}
 
 
@@ -146,6 +162,91 @@ def review_import(path, mapping=None):
                 seen.add(email)
     return {"summary": summary, "sheets": parsed["sheets"], "mapping": mapping or {},
             "readOnly": True, "basis": "Parsed workbook rows, not verified prospects or sending eligibility. Email counts use syntax only; issue categories can overlap."}
+
+
+def add_status_columns(path, additions):
+    """Add only a header in a completely unused column of an experiment copy."""
+    if not isinstance(additions, dict):
+        raise ValueError("Status additions must be keyed by worksheet name")
+    info = review_import(path)
+    sheets = {s["name"]: s for s in info["sheets"]}
+    changes = {}
+    with zipfile.ZipFile(path) as source:
+        for name, col in additions.items():
+            if name not in sheets or not isinstance(col, str) or not re.fullmatch(r"[A-Z]{1,3}", col):
+                raise ValueError("Choose a known sheet and valid unused Status column")
+            number = 0
+            for char in col:
+                number = number * 26 + ord(char) - 64
+            if number > 16384:
+                raise ValueError("Status column is outside Excel's column range")
+            sheet = sheets[name]
+            if sheet["statusColumn"]:
+                raise ValueError("This sheet already has a Status header; map it explicitly instead")
+            xml = source.read(sheet["part"]).decode("utf-8")
+            if re.search(rf'<(?:\w+:)?c\b[^>]*\br="{col}\d+"', xml):
+                raise ValueError("Status must use a completely unused column; existing cells cannot be overwritten")
+            document = ET.fromstring(xml)
+            # Avoid altering merged headers or inserting into a merged range.
+            if document.find("m:mergeCells", NS) is not None:
+                raise ValueError("Merged worksheet headers need manual source review")
+            row = re.search(r'(<row\b[^>]*\br="(\d+)"[^>]*>)(.*?)(</row>)', xml, re.S)
+            if not row:
+                raise ValueError("Cannot safely locate the worksheet header row")
+            header = f'<c r="{col}{row.group(2)}" t="inlineStr"><is><t>Status</t></is></c>'
+            body = row.group(3)
+            def col_number(value):
+                n = 0
+                for char in value:
+                    n = n * 26 + ord(char) - 64
+                return n
+            later = next((m for m in re.finditer(r'<c\b[^>]*\br="([A-Z]+)\d+"', body) if col_number(m.group(1)) > number), None)
+            at = later.start() if later else len(body)
+            xml = xml[:row.start(3)] + body[:at] + header + body[at:] + xml[row.end(3):]
+            dimension = re.search(r'<dimension\b[^>]*ref="([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?"[^>]*/>', xml)
+            if dimension:
+                start_col = dimension.group(1)
+                end_col = dimension.group(3) or dimension.group(1)
+                start_col = col if number < col_number(start_col) else start_col
+                end_col = col if number > col_number(end_col) else end_col
+                value = f'{start_col}{dimension.group(2)}:{end_col}{dimension.group(4) or dimension.group(2)}'
+                updated = re.sub(r'\bref="[^"]*"', f'ref="{value}"', dimension.group(0), count=1)
+                xml = xml[:dimension.start()] + updated + xml[dimension.end():]
+            ET.fromstring(xml)
+            changes[sheet["part"]] = xml.encode("utf-8")
+        parts = [(item, changes.get(item.filename, source.read(item.filename))) for item in source.infolist()]
+    if changes:
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), suffix=".xlsx")
+        try:
+            with os.fdopen(fd, "wb") as out, zipfile.ZipFile(out, "w") as dest:
+                for item, content in parts:
+                    dest.writestr(item, content)
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+
+
+def experiment_import(path, payload):
+    mapping = payload.get("mapping", {})
+    # Validate before modifying even a temporary copy.
+    review_import(path, mapping)
+    baseline = read(path, payload.get("sourceMapping", {}))["leads"]
+    additions = payload.get("addStatusColumns", {})
+    with tempfile.TemporaryDirectory() as directory:
+        target = payload.get("output") or os.path.join(directory, "working.xlsx")
+        shutil.copyfile(path, target)
+        if additions:
+            add_status_columns(target, additions)
+        effective = json.loads(json.dumps(mapping))
+        for name, col in additions.items():
+            fields = effective.setdefault(name, {})
+            mapped_status = next((value for key, value in fields.items() if key.lower() == "status"), col)
+            if mapped_status != col:
+                raise ValueError("Proposed Status mapping conflicts with the new Status column")
+            fields["status"] = col
+        report = review_import(target, effective)
+        return {"report": report, "leads": read(target, effective)["leads"], "baselineLeads": baseline}
 
 
 def patch(path, changes, mapping=None):
@@ -235,7 +336,9 @@ def delete_leads(path, ids, mapping=None):
 if __name__ == "__main__":
     try:
         command, path = sys.argv[1:3]
-        if command == "review":
+        if command == "experiment":
+            print(json.dumps(experiment_import(path, json.load(sys.stdin))))
+        elif command == "review":
             raw = sys.stdin.read()
             print(json.dumps(review_import(path, json.loads(raw) if raw else None)))
         elif command == "read":

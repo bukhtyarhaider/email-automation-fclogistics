@@ -41,3 +41,12 @@ body.experiment-body { height: auto; min-height: 100vh; overflow: visible; user-
   .experiment-form { align-items: stretch; flex-direction: column; }
   .experiment-form button { align-self: start; }
 }
+.experiment-repair, .experiment-workspace { margin-top: 28px; }
+.experiment-source-fields { display: grid; grid-template-columns: 1.2fr .8fr 1fr; gap: 16px; margin: 20px 0; }
+.experiment-repair .check { margin-bottom: 16px; }
+.experiment-identity-summary { margin: 20px 0 10px; color: var(--text-primary); font-size: 15px; }
+.experiment-workspace .experiment-form { margin: 18px 0; flex-wrap: wrap; }
+.experiment-workspace td code { font-size: 11px; }
+.experiment-workspace td { min-width: 160px; }
+.experiment-mapping textarea { resize: vertical; }
+@media (max-width: 760px) { .experiment-source-fields { grid-template-columns: 1fr; } }

@@ -11,3 +11,4 @@ outputs/
 team-data/
 dist/
 .DS_Store
+experiment-data/
