@@ -34,7 +34,10 @@ export function applyReply(state, mail, account, source, clock = Date.now, known
     return { duplicate: true, messageId: existing.id };
   }
   const sourceId = mail.messageId && Object.values(state.roots).find((r) => r.account === account && r.messageIds.includes(mail.messageId));
-  if (sourceId && mail.from.length === 1 && mail.from[0] === account && mail.to.includes(sourceId.recipient) && mail.subject === sourceId.subject && !mail.references.length) return { sourceCopy: true };
+  if (sourceId && mail.from.length === 1 && mail.from[0] === account && mail.to.includes(sourceId.recipient) && mail.subject === sourceId.subject && !mail.references.length) {
+    if(source.type==='imap'&&source.folderRole==='sent'&&!mail.bodyUnavailable&&(sourceId.bodyUnavailable||!sourceId.body)){sourceId.body=mail.text;sourceId.bodyTruncated=Boolean(mail.textTruncated);sourceId.bodyUnavailable=false;sourceId.bodyRecovered=true;sourceId.bodyEvidence={...source,date:mail.date};}
+    return { sourceCopy: true };
+  }
   let match = matchReply(state, mail, account, knownEmails, toolSentOnly);
   if (match.match === 'ignore') return { ignored: true };
   if (mail.bodyUnavailable) match = { match: 'review', reason: 'Message body was oversized or unparseable. Inspect the mailbox before linking/classifying.' };

@@ -1,4 +1,22 @@
-# Shared Conversations design QA — 2.2.0-rc.5
+# Carrier history and shared Conversations design QA — 2.2.0-rc.6
+
+final result: passed
+
+Current direction: retain the established application shell and free-writing conversation reader while adding complete captured carrier context, Active/In review queues and editable workflow status. No new shell or visual concept was introduced.
+
+Source: the existing Templates page at `http://127.0.0.1:4317/#templates`, captured as `outputs/carrier-rc6-qa/reference-templates-final.jpg`. Implementation: the actual authorized carrier view at `http://127.0.0.1:4317/#conversations`, captured as `live-active-carrier-final.jpg` in the same directory. Both are **1048 × 910 native screenshot pixels**, without stretching. `shared-shell-comparison.jpg` places them side by side and was inspected as a combined input. The earlier rc.5 reference used 1089px width; it was not stretched to judge this capture. Actual business branding and mailbox status are identical between the current source and implementation.
+
+The common titlebar, navigation spacing, active-item treatment, mailbox footer, developer information, colors and typography match the source shell. New queue tabs use the existing selected underline/count treatment. The carrier status bar sits above the message; earlier email chains use a compact disclosure so the latest message remains readable. Long subjects truncate in the heading and remain available in message details. The bounded reader scrolls to the free reply editor on this narrower desktop viewport. This is intentional scrolling, without a replacement navigation shell. Automated desktop/mobile checks retain bounds, native Back navigation and draft text through route changes.
+
+The actual carrier shows three incoming replies, six captured mailbox emails and one original tool send. Its last message, Earlier emails disclosure and carrier status dialog were inspected without approving or sending a reply. Status controls provide stage, date, note, save feedback and local read/unread tracking. Local screenshots `live-earlier-history.jpg` and `live-status-dialog.jpg` show a second real carrier's captured context and status controls. Customer screenshots remain private development evidence and are not shipped.
+
+The final suite passed **200/200 JavaScript and 12/12 Python tests**, with no failures/skips; the integrated API/browser suite passed **10/10**. It exercises status save/persistence, earlier history, read markers, no send, stale evidence and existing approval/wording interactions. Native browser warning/error logs were empty. Manual verification covered the desktop actual mailbox; mobile verification in this iteration used synthetic automated browser fixtures. Source/implementation content differs as expected between a template editor and a conversation reader; the comparison assesses shared design and consistent control treatment. No actionable P0/P1/P2 visual issue remains in this scope.
+
+The rc.5 shared-shell and rc.4 concept comparisons below remain historical evidence. The live scan establishes coverage only for folders available in the one authorized mailbox, not deleted mail, other accounts, delivery, Windows installation or team rollout.
+
+---
+
+# Previous shared Conversations design QA — 2.2.0-rc.5
 
 final result: passed
 

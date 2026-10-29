@@ -60,7 +60,7 @@ test('CSV protects spreadsheet formulas, quotes and multiline notes; manual revi
 test('release catalog distinguishes verified package versions, historical milestones and persistent editable local notes', () => {
   const state = {};
   const initial = releaseCatalog(state);
-  assert.equal(APP_VERSION, '2.2.0-rc.5'); assert.equal(initial.packageVersions, 8);
+  assert.equal(APP_VERSION, '2.2.0-rc.6'); assert.equal(initial.packageVersions, 9);
   assert(initial.releases.some((r) => r.kind === 'milestone' && r.changes.some((text) => text.includes('V1.1.0'))));
   const note = saveReleaseNote(state, { version: '2.1.0', date: '2026-10-29', title: 'PC 2 updated', changes: 'Kept local data\nChecked sync' }, 'local-note-1');
   assert.equal(note.changes.length, 2);

@@ -67,10 +67,13 @@ export class ReplyCapture {
       uid=next;processed++;
     };
     const isGone = async(next) => !((await client.search({uid:String(next)},{uid:true}))||[]).includes(next);
-    for (const next of uids.slice(0,config.batch)) {
+    const pageUids=uids.slice(0,config.batch),metadata=new Map();
+    // One bounded metadata request per page avoids a network round-trip for every unrelated email.
+    if(pageUids.length&&typeof client.fetchAll==='function')try{for(const m of await client.fetchAll(pageUids.join(','),{size:true,envelope:true,flags:true,headers:['references','in-reply-to']},{uid:true}))if(Number.isSafeInteger(m.uid))metadata.set(m.uid,m);}catch{/* Per-UID fallback retains the established failure/cursor behavior. */}
+    for (const next of pageUids) {
       if(this.stopped)throw new Error('Capture stopped.');
       const evidence={type:'imap',folder,folderRole:sent?'sent':'inbox',uid:next,uidValidity:validity};
-      const meta=await client.fetchOne(String(next),{size:true,envelope:true,flags:true,headers:['references','in-reply-to']},{uid:true});
+      const meta=metadata.get(next)||await client.fetchOne(String(next),{size:true,envelope:true,flags:true,headers:['references','in-reply-to']},{uid:true});
       if(!meta){if(await isGone(next)){await advance(next,null,evidence);vanished++;continue;}throw new Error('Metadata unavailable; cursor retained.');}
       if(!Number.isFinite(meta.size))throw new Error('Metadata size unavailable; cursor retained.');
       if(new Set(meta.flags||[]).has('\\Draft')){await advance(next,null,evidence);continue;}
@@ -82,6 +85,8 @@ export class ReplyCapture {
         ? !envelope || relatedToolRoots(state,{from,to,references:reference},c.email).length>0 || /mailer-daemon|postmaster/.test(from.join(' '))
         : !envelope||from.some((e)=>known.has(e))||(sent&&to.some((e)=>known.has(e)))||roots.some((r)=>from.includes(r.recipient)||(sent&&to.includes(r.recipient))||r.messageIds.some((id)=>reference.includes(id)))||/mailer-daemon|postmaster/.test(from.join(' '))||/undeliverable|delivery fail|returned mail/i.test(envelope.subject||'');
       if(!relevant){await advance(next,null,evidence);continue;}
+      const original=sent&&!reference.length&&messageIds(envelope?.messageId)[0]&&roots.find(r=>r.body&&!r.bodyUnavailable&&r.messageIds.includes(messageIds(envelope.messageId)[0])&&from.length===1&&from[0]===c.email&&to.includes(r.recipient)&&envelope.subject===r.subject);
+      if(original){await advance(next,null,evidence);continue;} // The existing tool body/Message-ID already represents this original send.
       let parsed,raw;
       if(meta.size<=2_000_000){const fetched=await client.fetchOne(String(next),{source:true},{uid:true});raw=fetched?.source;if(!raw){if(await isGone(next)){await advance(next,null,evidence);vanished++;continue;}throw new Error('Message unavailable; cursor retained.');}try{parsed=await parseReply(raw);}catch{}}
       if(!parsed){
@@ -119,22 +124,26 @@ export class ReplyCapture {
             const sent=draftPaths.has(selectedSent)?null:selectedSent;
             const targets=[...new Set([...(sent?[sent]:[]),c.inboxFolder||'INBOX',...(config.allFolders?available.filter((f)=>f.specialUse!=='\\Drafts'&&!new Set(f.flags||[]).has('\\Noselect')).map((f)=>f.path):[])])].filter((folder)=>!draftPaths.has(folder));
             let partial=listingFailed||draftPaths.has(c.inboxFolder)||draftPaths.has(c.sentFolder)||Boolean(config.historical&&!sent);
-            for(const folder of targets){
+            const tasks=targets.map(folder=>({folder,count:0,page:0,ceiling:null,done:false}));
+            do{for(const task of tasks.filter(t=>!t.done)){
+              const {folder}=task;
               const scope=native?(history?`tool-v3:${history.id}:${pass}`:captureScopeSignature(await this.replies.load(),c.email,'anchors')):null;
-              let count=0,ceiling=null;
+              let count=task.count,ceiling=task.ceiling;
               try{
-                for(let page=0;config.historical||page<(config.pages||1);page++){
+                for(let turn=0;turn<(config.historical?1:(config.pages||1));turn++){
+                  const page=task.page++;
                   if(this.stopped)throw new Error('Capture stopped.');
                   if(config.historical&&this.clock()-started>15*60*1000){incomplete=true;throw new Error('Continue from saved cursors.');}
                   await this.replies.transaction((s)=>{s.monitors[c.id]={status:'Checking',folders,checkedAt:previous.checkedAt||null};if(history)saveHistory(s,{currentMailbox:c.email,currentFolder:folder});});
-                  const result=await this.scanFolder(client,c,folder,folder===sent,config,snapshot,scope,ceiling);ceiling=result.highWater;count+=result.processed;
+                  const result=await this.scanFolder(client,c,folder,folder===sent,config,snapshot,scope,ceiling);ceiling=result.highWater;count+=result.processed;task.ceiling=ceiling;task.count=count;
                   const progress={...result,processed:count,pages:page+1},index=folders.findIndex((f)=>f.folder===folder);if(index<0)folders.push(progress);else folders[index]=progress;
                   await this.replies.transaction((s)=>{s.monitors[c.id]={status:'Checking',checkedAt:previous.checkedAt||null,folders,sentUnavailable:!sent,attemptedAt:new Date(this.clock()).toISOString()};if(history)saveHistory(s,{currentMailbox:c.email,currentFolder:folder});});
-                  if(!result.more)break;
+                  if(!result.more){task.done=true;break;}
                   await new Promise((resolve)=>setTimeout(resolve,0));
                 }
-              }catch{if(this.stopped)throw new Error('Capture stopped.');partial=true;const p=folders.find((f)=>f.folder===folder);if(p)Object.assign(p,{error:true,more:true});else folders.push({folder,processed:0,error:true,more:true});}
+              }catch{task.done=true;if(this.stopped)throw new Error('Capture stopped.');partial=true;const p=folders.find((f)=>f.folder===folder);if(p)Object.assign(p,{error:true,more:true});else folders.push({folder,processed:0,error:true,more:true});}
             }
+            }while(config.historical&&tasks.some(t=>!t.done)&&!this.stopped);
             incomplete||=partial;
             await this.replies.transaction((s)=>{s.monitors[c.id]={status:partial?'Needs attention':folders.some((f)=>f.more)?'Backfill in progress':sent?'Checked':'Inbox checked; Sent unavailable',sentUnavailable:!sent,checkedAt:partial?(previous.checkedAt||null):new Date(this.clock()).toISOString(),attemptedAt:new Date(this.clock()).toISOString(),folders,failures:partial?(previous.failures||0)+1:0,message:partial?'Partial capture. A folder, listing, or time limit needs attention. Successful pages are saved; run the scan again to resume.':null,nextAt:new Date(this.clock()+(partial?120000:60000)).toISOString()};});
           }catch{

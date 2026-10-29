@@ -1,8 +1,16 @@
 # Outreach Desk changelog
 
-Current candidate: **2.2.0-rc.5**. Previous stable package: **2.1.0**.
+Current candidate: **2.2.0-rc.6**. Previous stable package: **2.1.0**.
 
 The repository records package versions 1.0.0 and 2.0.0 before this release. Later updates often kept the same package version; they appear as dated milestones below. The historical Git label V1.1.0 did not change the recorded package version from 2.0.0.
+
+## 2.2.0-rc.6 — 2026-10-30 (release candidate)
+
+- Grouped carriers by mailbox and confirmed tool-contacted email. Captured older Inbox/Sent chains remain readable as contact context, even with different or missing thread references; unlinked latest messages require review before drafting.
+- Added Active / In review queues, carrier workflow statuses, dated follow-up notes, consistent carrier/thread read markers and retained status-change history. The individual-thread view remains available in Filters.
+- Added reuse of existing delivery-monitor credential references for the matching saved mailbox profile, with explicit read-only capture authorization. Monitoring credentials and browser sign-in alone do not silently enable capture.
+- Alternated historical folder pages so a large Sent folder does not starve Inbox, batched bounded metadata reads with safe per-UID fallback, and recovered missing original Sent bodies without duplicating tool sends.
+- Bound draft approval to new carrier evidence across threads; retained independent opt-out, uncertainty and native mailbox Send safeguards. Carrier statuses never send email or release protections.
 
 ## 2.2.0-rc.5 — 2026-10-30 (release candidate)
 

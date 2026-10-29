@@ -128,3 +128,15 @@
  .mailroom-message-heading .mailroom-avatar{flex-shrink:0;}
 }
 @media(max-width:360px){.mailroom-header{grid-template-columns:1fr;}.mailroom-mailbox{grid-column:1;}}
+/* Carrier-level history stays inside the shared conversation workspace. */
+.mailroom-toolbar{flex-wrap:wrap;}
+.mailroom-tabs{flex-wrap:wrap;}
+.carrier-record{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--border-subtle);font-size:13px;}
+.carrier-record .hint{margin:5px 0;font-size:12px;line-height:1.5;}
+.carrier-record>div{min-width:0;overflow-wrap:anywhere;}
+.carrier-record button{flex-shrink:0;font-size:12px;}
+.carrier-stage-label{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+.carrier-status-panel{padding-bottom:16px;margin-bottom:18px;border-bottom:1px solid var(--border-medium);}
+.reply-config-reuse{padding:12px;border:1px solid var(--border-medium);border-radius:var(--radius-md);margin:16px 0;}
+#replyThread .mailroom-older .mailroom-message-evidence{display:block;}
+@media(max-width:520px){.carrier-record{align-items:flex-start;flex-wrap:wrap;}.mailroom-tabs{gap:0;}.mailroom-tabs button{font-size:12px;}.mailroom-tabs button span{padding:2px 6px;}.mailroom-tools{flex-wrap:wrap;}}

@@ -84,3 +84,13 @@ test('upgrading untouched starter wording preserves edited/archived templates an
  await f.ops.replies.transaction((s)=>{s.assistant.templates.interest={id:'interest',name:'Interested carrier',category:'interested',body:oldBody,version:1,active:true};s.assistant.templates.mine={id:'mine',name:'My exact wording',category:'interested',body:'Keep my words.',version:1,active:true};s.assistant.templates.acknowledge.active=false;});
  const library=await f.ops.assistant.library();assert.equal(library.templates.find((x)=>x.id==='interest').version,2);assert.equal(library.templates.find((x)=>x.id==='interest').previousVersions[0].body,oldBody);assert.equal(library.templates.find((x)=>x.id==='mine').body,'Keep my words.');assert.equal(library.templates.find((x)=>x.id==='acknowledge').active,false);assert.equal((await f.ops.assistant.approved(draft.draft.id)).draft.body,body);
 });
+
+test('historical capture gives Inbox a page before draining a long Sent backlog',async(t)=>{
+ const sent=Array.from({length:8},(_,i)=>({raw:eml({id:`<native-sent-${i}@example.com>`,from:account,to:recipient,reference:originalId,text:'Earlier outbound mailbox context.'})}));
+ const f=await scanner(t,{Sent:sent,INBOX:[{raw:eml({text:'Carrier response should be visible before all Sent pages finish.'})}]},{batch:1});await f.scan();const inboxAt=f.calls.findIndex(c=>c.folder==='INBOX'),endSentAt=f.calls.findIndex(c=>c.folder==='Sent'&&c.uid===8);assert(inboxAt>=0&&inboxAt<endSentAt);assert.equal((await f.ops.assistant.list()).summary.humanMessages,1);
+});
+
+test('original Sent bodies missing from tracking history are recovered and retained across source refreshes',async(t)=>{
+ const raw=eml({from:account,to:recipient,id:'<older-sent-body@example.com>',reference:null,subject:'Older dispatch introduction',text:'Original introduction recovered from the Sent folder.'});const f=await scanner(t,{Sent:[{raw}],INBOX:[]});
+ const id='c2345678-1234-1234-1234-123456789abc';f.state.tracking.records[id]={...f.state.tracking.records[f.trackingId],id,sendStatus:'webmail_sent',subject:'Older dispatch introduction',messageIds:['<older-sent-body@example.com>']};await f.persist();await f.ops.replies.refreshHistory();await f.scan();await f.ops.replies.refreshHistory();const root=Object.values((await f.ops.replies.load()).roots).find(r=>r.trackingId===id);assert.equal(root.bodyUnavailable,false);assert.match(root.body,/recovered from the Sent/);assert.equal(root.bodyEvidence.folderRole,'sent');
+});

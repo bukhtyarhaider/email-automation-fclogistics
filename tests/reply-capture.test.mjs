@@ -106,3 +106,9 @@ test('a failed durable commit cannot advance cursor; capture locks prevent concu
  await capture.run(replyCaptureConfig(env,()=>fixed));assert((await capture.status()).captureError);
  await fs.unlink(path.join(f.workspaceDir,'reply-capture.lock'));
 });
+
+test('batched metadata avoids reading unrelated bodies and falls back safely if a batch fails',async(t)=>{
+ for(const failBatch of [false,true]){const {replies}=await fixture(t),calls=[],env={...envFor(),FC_EXPERIMENT_REPLY_BATCH:'2'},items=[{uid:1,source:eml()},{uid:2,source:eml({from:'unrelated@example.net',reference:null}),envelope:{from:[{address:'unrelated@example.net'}],to:[{address:account}],subject:'Unrelated'}}];let batches=0;
+ const capture=new ReplyCapture({replies,env,clock:()=>fixed,clientFactory:()=>{const c=fakeClient(items,calls);c.fetchAll=async(range,query)=>{batches++;assert.equal(range,'1,2');assert.equal(query.source,undefined);if(failBatch)throw new Error('Synthetic metadata batch failure');return items.map(m=>({uid:m.uid,size:m.source.length,flags:new Set(),headers:Buffer.from(''),envelope:m.envelope||{from:[{address:recipient}],to:[{address:account}],subject:'Re: Dispatch support'}}));};return c;}});
+ await capture.run(replyCaptureConfig(env,()=>fixed));assert.equal(batches,1);assert.equal(calls.filter(c=>c==='fetch-source').length,1);assert.equal((await replies.list()).summary.humanMessages,1);}
+});

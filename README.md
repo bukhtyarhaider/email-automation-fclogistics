@@ -1,6 +1,6 @@
-> **2.2.0-rc.5 candidate:** reviewed import activation/recovery and the Mailroom conversation workspace are integrated into the normal sidebar. See [Import and conversation release guide](IMPORTS-AND-CONVERSATIONS.md). Team work is excluded; production rollout is pending review.
+> **2.2.0-rc.6 candidate:** reviewed import activation/recovery and the Mailroom conversation workspace are integrated into the normal sidebar. See [Import and conversation release guide](IMPORTS-AND-CONVERSATIONS.md). Team work is excluded; production rollout is pending review.
 
-# Outreach Desk 2.2.0-rc.5
+# Outreach Desk 2.2.0-rc.6
 
 A configurable local email sales tool for teams using Private Email. Each PC has its own mailbox profiles and browser session. An optional shared coordinator prevents duplicate recipient claims across PCs and enforces team mailbox allowances.
 
@@ -8,13 +8,13 @@ A configurable local email sales tool for teams using Private Email. Each PC has
 
 Use **Import review & repairs** and **Carrier conversations** in the normal sidebar. Browser uploads remain paused until a reviewed copy is activated. Guided mappings, immutable revisions, Undo last activation, source provenance and carrier IDs connect to the existing campaign and lead screens. Captured opt-outs protect the normal sender and enter the existing coordinator’s suppression retry flow. Live capture remains opt-in; see [the release and recovery guide](IMPORTS-AND-CONVERSATIONS.md).
 
-Carrier conversations uses the same header, sidebar, footer and responsive navigation as the other pages, with the Mailroom workspace inside: Needs reply / All / Waiting queues, direct search across captured threads, a free reply editor and optional saved lines. Details keeps the full thread and source evidence. Review reply saves your current text for explicit approval; final Send remains in your existing mailbox. See [visual QA](design-qa.md) and the release guide for the full flow.
+Carrier conversations uses the same header, sidebar, footer and responsive navigation as the other pages, with the Mailroom workspace inside: Active / In review / Needs reply / All / Waiting queues, carrier-wide Inbox/Sent history, editable follow-up statuses, a free reply editor and optional saved lines. Existing IMAP credential references can be reused through authorized capture setup. Details keeps the full thread and source evidence. Review reply saves your current text for explicit approval; final Send remains in your existing mailbox. See [visual QA](design-qa.md) and the release guide for the full flow.
 
 The earlier `feat/sales-experiments` branch is preserved for later research. Team work is excluded from this candidate. Existing `experiment-data/` is not silently copied into the real workspace.
 
 ## Install on Windows and macOS
 
-1. Extract `Outreach-Desk-2.2.0-rc.5.zip` to a permanent folder on each PC. Give every OS user their own installation/data folder.
+1. Extract `Outreach-Desk-2.2.0-rc.6.zip` to a permanent folder on each PC. Give every OS user their own installation/data folder.
 2. Install [Node.js 20+](https://nodejs.org/), [Python 3.9+](https://www.python.org/downloads/), and Google Chrome or Microsoft Edge. On Windows select **Add Python to PATH** during installation.
 3. Windows: open `Setup-Windows.cmd` once, then `Start-Windows.cmd`. macOS: open `Setup-Mac.command` once, then `Start-Mac.command`. If macOS strips execute permission from the archive, run `chmod +x *.command` in that folder. Setup installs the locked npm dependencies from the npm registry.
 4. The launcher opens http://127.0.0.1:4317. Keep its terminal open while using the tool. Closing it stops the local server. Linux also works with `npm ci` then `npm run launch`.

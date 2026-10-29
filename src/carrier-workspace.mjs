@@ -10,6 +10,8 @@ import { collectProtections } from './carrier-identity.mjs';
 import { isToolConversation, relatedToolRoots, confirmedToolSend } from './tool-conversation-scope.mjs';
 import { ConversationAssistant } from './conversation-assistant.mjs';
 import { digest } from './reply-parser.mjs';
+import { CarrierInbox } from './carrier-inbox.mjs';
+import { mailboxConfigs } from './mailbox-monitor.mjs';
 const copy = (value) => structuredClone(value);
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const prefix = 'Captured carrier opt-out: ';
@@ -29,7 +31,7 @@ class CarrierReplies extends ExperimentReplies {
   }
   contactEmails() { return []; } // Imported contacts alone are not evidence of a tool-started email.
   allowedAccounts() { return this.accountsAllowed(); }
-  mergeRoots(state,roots){for(const root of Object.values(roots)){const prior=state.roots[root.id];root.anchorMessageIds=[...new Set([...(prior?.anchorMessageIds||prior?.messageIds||[]),...root.messageIds])];}super.mergeRoots(state,roots);}
+  mergeRoots(state,roots){for(const root of Object.values(roots)){const prior=state.roots[root.id];if(prior?.bodyRecovered&&(root.bodyUnavailable||!root.body))Object.assign(root,{body:prior.body,bodyUnavailable:false,bodyTruncated:prior.bodyTruncated,bodyRecovered:true,bodyEvidence:prior.bodyEvidence});root.anchorMessageIds=[...new Set([...(prior?.anchorMessageIds||prior?.messageIds||[]),...root.messageIds])];}super.mergeRoots(state,roots);}
   async rootsFromSource() {
     const snapshot = await super.rootsFromSource();
     // Keep every confirmed tracking send, including older sends no longer at history[email].
@@ -69,6 +71,7 @@ export class CarrierWorkspace {
     this.capture = new ReplyCapture({ replies: this.replies, env: this.captureEnv(), clientFactory });
     this.holds = new Map(); this.error = null;
     this.assistant = new ConversationAssistant({ replies:this.replies, state, guard:(email)=>this.guard(email)||replyGuard(email), contacts });
+    this.inbox = new CarrierInbox({replies:this.replies,assistant:this.assistant,state});this.assistant.inbox=this.inbox;
   }
   captureEnv(config = this.state.replyCapture) {
     const environment = { ...this.env };
@@ -93,6 +96,9 @@ export class CarrierWorkspace {
       });
     }
     return environment;
+  }
+  setupCandidates(){
+    try{return mailboxConfigs(this.env).flatMap((m)=>{const email=(m.email||m.user||'').toLowerCase(),p=this.state.profiles?.find(p=>p.email?.toLowerCase()===email);if(!p)return [];return [{id:'capture_'+m.id,email,user:m.user||email,host:m.host||'mail.privateemail.com',provider:m.provider||'custom',authMode:m.authMode||(m.accessTokenEnv?'oauth':'password'),inboxFolder:m.inboxFolder||'INBOX',sentFolder:m.sentFolder||'',passwordEnv:m.passwordEnv||'',accessTokenEnv:m.accessTokenEnv||'',name:p.name||email,credentialsConfigured:Boolean((m.passwordEnv&&this.env[m.passwordEnv])||(m.accessTokenEnv&&this.env[m.accessTokenEnv]))}];});}catch{return [];}
   }
   configuredAccounts() { try { return replyCaptureConfig(this.capture.env).mailboxes.map((m)=>m.email); } catch { return []; } }
   async initialize() {
@@ -133,7 +139,7 @@ export class CarrierWorkspace {
   async status() {
     const capture = await this.capture.status();
     let config; try { config = replyCaptureConfig(this.capture.env); } catch { config = { enabled:false, auto:false, since:new Date(Date.now()-30*86400000).toISOString().slice(0,10), batch:50, mailboxes:[] }; }
-    return { ...capture, configurationSource: this.state.replyCapture ? 'Saved on this PC' : 'Environment / defaults',
+    return { ...capture, setupCandidates:this.setupCandidates(), configurationSource: this.state.replyCapture ? 'Saved on this PC' : 'Environment / defaults',
       configuration: { enabled: config.enabled, auto: config.auto, since: config.since, batch: config.batch, allHistory:config.allHistory, allFolders:config.allFolders, pages:config.pages, mailboxes: config.mailboxes },
       protectionHealth: this.error || 'Local protection guard active',
       sharedProtection: this.state.settings.team.enabled ? { enabled: true, pending: Object.keys(this.state.replySuppressionOutbox || {}).length } : { enabled: false, pending: 0 } };
