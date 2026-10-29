@@ -14,7 +14,7 @@ NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
 
 
-def read(path, mapping=None):
+def read(path, mapping=None, review=False):
     with zipfile.ZipFile(path) as z:
         if sum(i.file_size for i in z.infolist()) > 150_000_000:
             raise ValueError("Workbook exceeds the 150 MB uncompressed limit")
@@ -60,11 +60,24 @@ def read(path, mapping=None):
             meta = {"name": sheet.attrib["name"], "part": part,
                     "hidden": sheet.attrib.get("state", "visible") != "visible",
                     "emailColumn": email_col, "statusColumn": status_col, "headers": headers, "rows": 0}
+            if review:
+                meta["review"] = {"emailColumns": {}, "samples": []}
             sheets.append(meta)
-            if not email_col:
+            if not email_col and not review:
                 continue
             for row in rows[1:]:
                 values = cells(row)
+                if review:
+                    for col, text in values.items():
+                        if re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", text):
+                            counts = meta["review"]["emailColumns"]
+                            counts[col] = counts.get(col, 0) + 1
+                    samples = meta["review"]["samples"]
+                    if sum(s["kind"] == "sample" for s in samples) < 3:
+                        samples.append({"row": int(row.attrib["r"]), "kind": "sample", "issue": "",
+                                        "cells": {k: v[:200] for k, v in list(values.items())[:80]}})
+                if not email_col:
+                    continue
                 company_col = fields.get("carrier legal name") or ("A" if not headers.get("A") else None)
                 company = values.get(company_col, "")
                 if not company:
@@ -88,8 +101,51 @@ def read(path, mapping=None):
                               "emailCell": f"{email_col}{number}", "email": email,
                               "company": company, "status": values.get(status_col, ""),
                               "layoutIssue": layout_issue, "fields": data})
+                if review:
+                    samples = meta["review"]["samples"]
+                    if layout_issue and sum(s["kind"] == "flagged" for s in samples) < 3:
+                        samples.append({"row": number, "kind": "flagged",
+                                        "issue": layout_issue,
+                                        "cells": {k: v[:200] for k, v in list(values.items())[:80]}})
                 meta["rows"] += 1
         return {"sheets": sheets, "leads": leads}
+
+
+def review_import(path, mapping=None):
+    """Read-only review. Never patches a workbook or changes sending eligibility."""
+    if mapping is not None:
+        if not isinstance(mapping, dict):
+            raise ValueError("Mapping must be a JSON object keyed by worksheet name")
+        for name, fields in mapping.items():
+            if not isinstance(name, str) or not isinstance(fields, dict):
+                raise ValueError("Each worksheet mapping must be a JSON object")
+            for field, col in fields.items():
+                if not isinstance(field, str) or not isinstance(col, str) or not re.fullmatch(r"[A-Z]{1,3}", col):
+                    raise ValueError("Column mappings must use Excel column letters")
+    parsed = read(path, mapping, review=True)
+    names = {s["name"] for s in parsed["sheets"]}
+    if set(mapping or {}) - names:
+        raise ValueError("Mapping refers to an unknown worksheet")
+    summary = {"rows": len(parsed["leads"]), "flaggedRows": 0,
+               "missingStatusSheets": 0, "invalidEmailRows": 0,
+               "duplicateEmailRows": 0, "sheets": len(parsed["sheets"])}
+    seen = set()
+    for sheet in parsed["sheets"]:
+        leads = [l for l in parsed["leads"] if l["sheet"] == sheet["name"]]
+        sheet["flaggedRows"] = sum(bool(l["layoutIssue"]) for l in leads)
+        sheet["invalidEmailRows"] = sum(not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", l["email"]) for l in leads)
+        sheet["missingStatus"] = not bool(sheet["statusColumn"])
+        summary["flaggedRows"] += sheet["flaggedRows"]
+        summary["invalidEmailRows"] += sheet["invalidEmailRows"]
+        summary["missingStatusSheets"] += sheet["missingStatus"]
+        for lead in leads:
+            email = lead["email"]
+            if re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+                if email in seen:
+                    summary["duplicateEmailRows"] += 1
+                seen.add(email)
+    return {"summary": summary, "sheets": parsed["sheets"], "mapping": mapping or {},
+            "readOnly": True, "basis": "Parsed workbook rows, not verified prospects or sending eligibility. Email counts use syntax only; issue categories can overlap."}
 
 
 def patch(path, changes, mapping=None):
@@ -179,7 +235,10 @@ def delete_leads(path, ids, mapping=None):
 if __name__ == "__main__":
     try:
         command, path = sys.argv[1:3]
-        if command == "read":
+        if command == "review":
+            raw = sys.stdin.read()
+            print(json.dumps(review_import(path, json.loads(raw) if raw else None)))
+        elif command == "read":
             raw = sys.stdin.read()
             print(json.dumps(read(path, json.loads(raw) if raw else None)))
         elif command == "patch":

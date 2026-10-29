@@ -108,6 +108,39 @@ class WorkbookTests(unittest.TestCase):
             self.assertNotIn('r="2"', xml)
             self.assertIn('r="1"', xml)
 
+    def test_import_review_and_mapping_preview_leave_every_source_byte_unchanged(self):
+        with zipfile.ZipFile(self.path) as z:
+            parts = {i: z.read(i) for i in z.namelist()}
+        parts["xl/worksheets/sheet1.xml"] = self.xml.replace(cell("H2", "owner@example.com"), cell("H2", "3 months") + cell("O2", "owner@example.com")).encode()
+        with zipfile.ZipFile(self.path, "w") as z:
+            for part, content in parts.items():
+                z.writestr(part, content)
+        original = Path(self.path).read_bytes()
+        saved = workbook.review_import(self.path)
+        self.assertEqual(saved["summary"]["flaggedRows"], 1)
+        self.assertEqual(saved["sheets"][0]["review"]["emailColumns"], {"O": 1})
+        preview = workbook.review_import(self.path, {"Leads": {"email": "O"}})
+        self.assertEqual(preview["summary"]["flaggedRows"], 0)
+        self.assertTrue(preview["readOnly"])
+        self.assertEqual(Path(self.path).read_bytes(), original)
+        self.assertNotIn("review", workbook.read(self.path)["sheets"][0])
+
+    def test_import_review_validates_mappings_and_reports_unmapped_sheet_samples(self):
+        for mapping in [[], {"Leads": []}, {"Leads": {"email": "../H"}}, {"Missing": {"email": "H"}}]:
+            with self.assertRaises(ValueError):
+                workbook.review_import(self.path, mapping)
+        with zipfile.ZipFile(self.path) as z:
+            parts = {i: z.read(i) for i in z.namelist()}
+        parts["xl/worksheets/sheet1.xml"] = self.xml.replace(cell("H1", "Email"), cell("H1", "Unknown")).replace(cell("G1", "Status"), cell("G1", "Unknown status")).encode()
+        with zipfile.ZipFile(self.path, "w") as z:
+            for part, content in parts.items():
+                z.writestr(part, content)
+        report = workbook.review_import(self.path)
+        self.assertEqual(report["summary"]["rows"], 0)
+        self.assertEqual(report["summary"]["missingStatusSheets"], 1)
+        self.assertEqual(report["sheets"][0]["review"]["emailColumns"], {"H": 1})
+        self.assertEqual(report["sheets"][0]["review"]["samples"][0]["row"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

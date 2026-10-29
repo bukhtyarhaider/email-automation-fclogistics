@@ -104,6 +104,11 @@ async function build() {
     fs.writeFile(path.join(PUBLIC, "style.css"), css),
     fs.writeFile(path.join(PUBLIC, "index.html"), html),
     fs.writeFile(path.join(PUBLIC, "app.js"), js),
+    ...[
+      ["html/experiment.html", "experiment.html"],
+      ["styles/_experiment.css", "experiment.css"],
+      ["js/_experiment.js", "experiment.js"],
+    ].map(async ([source, target]) => fs.writeFile(path.join(PUBLIC, target), await fs.readFile(path.join(UI_DIR, source)))),
   ]);
 
   const elapsed = (performance.now() - t0).toFixed(0);

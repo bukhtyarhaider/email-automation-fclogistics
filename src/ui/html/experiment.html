@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Outreach Desk · Import experiment</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/experiment.css" />
+  <script src="/experiment.js" defer></script>
+</head>
+<body class="experiment-body">
+  <main class="experiment-shell">
+    <header class="experiment-header"><div><p class="page-eyebrow">OUTREACH DESK / EXPERIMENT 01</p><h1>Review your lead imports</h1></div><span class="experiment-badge">Read-only preview</span></header>
+    <p class="experiment-intro">Inspect worksheet issues and try column mappings. Nothing here saves to your workbook, changes sending eligibility, or connects a mailbox.</p>
+    <section class="panel">
+      <div class="experiment-form"><label for="reviewCampaign">Campaign<select id="reviewCampaign"><option value="">Loading campaigns…</option></select></label><button id="reviewLoad" disabled>Review saved mapping</button></div>
+      <p id="reviewStatus" class="hint" role="status" aria-live="polite">Loading campaigns…</p>
+      <p id="reviewError" class="experiment-error" role="alert" hidden></p>
+    </section>
+    <section id="reviewResults" hidden>
+      <div class="experiment-result-heading"><h2 id="reviewHeading">Saved mapping</h2><span id="reviewChange" class="hint"></span></div>
+      <div id="reviewMetrics" class="experiment-metrics"></div>
+      <p id="reviewBasis" class="hint"></p>
+      <div class="experiment-layout">
+        <section class="panel experiment-mapping"><h2>Try a mapping</h2><p class="hint">Use exact sheet names, field names and Excel columns. Example: {"Leads":{"email":"B","status":"C"}}. Status must point to the actual outreach status column.</p><label for="reviewMapping">Proposed mapping (JSON)</label><textarea id="reviewMapping" rows="10" spellcheck="false"></textarea><div class="experiment-buttons"><button id="reviewPreview">Preview changes</button><button id="reviewReset" class="secondary">Restore saved mapping</button></div><p class="hint">Previewed mappings are temporary. Reloading this page discards them. Applying repairs is a later experiment.</p></section>
+        <section class="experiment-sheets"><h2>Worksheet evidence</h2><p class="hint">Email-column candidates are syntax counts, not verified addresses. Mixed layouts may need separate source sheets. Counts alone are not a safe reason to remap a whole worksheet.</p><div id="reviewSheets"></div></section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
