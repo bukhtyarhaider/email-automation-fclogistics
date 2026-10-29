@@ -10,13 +10,14 @@ const hash = (s) => createHash('sha256').update(s).digest('hex');
 const inside = (base, target) => { const rel = path.relative(base, target); return !rel || (!rel.startsWith('..') && !path.isAbsolute(rel)); };
 
 export class ExperimentImports {
-  constructor({ dataDir, workspaceDir, python }) {
+  constructor({ dataDir, workspaceDir, python, managed = false, stateReader = null }) {
     this.dataDir = path.resolve(dataDir); this.workspaceDir = path.resolve(workspaceDir); this.python = python;
-    if (inside(this.dataDir, this.workspaceDir) || inside(this.workspaceDir, this.dataDir)) throw new Error('Experiment workspace must be separate from the source data folder.');
+    if ((!managed && inside(this.dataDir, this.workspaceDir)) || inside(this.workspaceDir, this.dataDir)) throw new Error('Experiment workspace must be separate from the source data folder.');
+    this.managed = managed; this.stateReader = stateReader;
     this.previews = new Map(); this.busy = false;
   }
   async source(campaignId) {
-    const stateBytes = await fs.readFile(path.join(this.dataDir, 'state.json'));
+    const stateBytes = this.stateReader ? JSON.stringify(this.stateReader()) : await fs.readFile(path.join(this.dataDir, 'state.json'));
     const state = JSON.parse(stateBytes);
     const c = (state.campaigns || []).find((c) => c.id === campaignId);
     if (!c) throw new Error('Choose a configured campaign.');
@@ -24,7 +25,7 @@ export class ExperimentImports {
     const file = await fs.realpath(path.resolve(base, c.workbook?.file || '')).catch(() => null);
     if (!file || file === base || !inside(base, file)) throw new Error('Campaign workbook is unavailable or outside the source folder.');
     const bytes = await fs.readFile(file);
-    return { c, state, bytes, sourceHash: hash(bytes), stateHash: hash(stateBytes), importId: hash(`${base}:${c.id}`).slice(0, 24) };
+    return { c, state, bytes, sourceHash: hash(bytes), stateHash: hash(this.managed ? JSON.stringify(c) : stateBytes), importId: hash(`${base}:${c.id}`).slice(0, 24) };
   }
   async load() {
     try { return JSON.parse(await fs.readFile(path.join(this.workspaceDir, 'imports.json'), 'utf8')); }
@@ -55,7 +56,7 @@ export class ExperimentImports {
     let result;
     try {
       const file = path.join(temp, 'source.xlsx'); await fs.writeFile(file, source.bytes, { mode: 0o600 });
-      result = await this.pythonRun(file, { mapping, sourceMapping: source.c.mapping || {}, addStatusColumns });
+      result = await this.pythonRun(file, { mapping, sourceMapping: source.c.mapping || {}, addStatusColumns, strictStatus:this.managed && Object.hasOwn(input, 'mapping') });
     } finally { await fs.rm(temp, { recursive: true, force: true }); }
     const previewId = randomUUID();
     const importedAt = new Date().toISOString();
@@ -78,7 +79,7 @@ export class ExperimentImports {
         catch (error) { if (error.code !== 'ENOENT') throw error; suffix.unshift(path.basename(ancestor)); ancestor = path.dirname(ancestor); }
       }
       const resolved = path.join(ancestor, ...suffix), source = await fs.realpath(this.dataDir);
-      if (inside(source, resolved) || inside(resolved, source)) throw new Error('Experiment workspace overlaps source data. Choose a separate folder.');
+      if ((!this.managed && inside(source, resolved)) || inside(resolved, source) || (this.managed && !inside(source, resolved))) throw new Error('Experiment workspace overlaps source data. Choose a separate folder.');
       await fs.mkdir(this.workspaceDir, { recursive: true, mode: 0o700 });
       lock = await fs.open(path.join(this.workspaceDir, 'write.lock'), 'wx', 0o600).catch(() => { throw new Error('Another experiment writer or interrupted save holds write.lock. Stop that process and inspect the lock before recovery.'); });
       await lock.writeFile(String(process.pid));
@@ -121,7 +122,7 @@ export class ExperimentImports {
       await fs.mkdir(directory, { recursive: true, mode: 0o700 });
       const original = path.join(directory, 'original.xlsx'), working = path.join(directory, 'working.xlsx');
       await fs.writeFile(original, source.bytes, { mode: 0o600 });
-      const result = await this.pythonRun(original, { mapping: preview.mapping, sourceMapping: source.c.mapping || {}, addStatusColumns: preview.addStatusColumns, output: working });
+      const result = await this.pythonRun(original, { mapping: preview.mapping, sourceMapping: source.c.mapping || {}, addStatusColumns: preview.addStatusColumns, strictStatus:this.managed, output: working });
       await fs.chmod(working, 0o600);
       store.protections = collectProtections(source.state, [...result.baselineLeads, ...result.leads], await this.replyProtections(store.protections));
       const context = { importId: source.importId, revisionId, campaignId: source.c.id, sourceHash: source.sourceHash, importedAt,
@@ -180,7 +181,7 @@ export class ExperimentImports {
     const identitySummary = { ...active.identitySummary, protectedRows: records.filter((r) => r.protection.length).length };
     const q = (params.get('q') || '').trim().toLowerCase();
     if (q) records = records.filter((r) => [r.company, r.email, r.dot, r.carrierId, r.provenance.sourceLabel].some((s) => String(s || '').toLowerCase().includes(q)));
-    const offset = Math.max(0, Math.floor(Number(params.get('offset')) || 0));
+    const offset = Math.min(Math.max(0, Math.floor(Number(params.get('offset')) || 0)), Math.max(0, Math.floor((records.length - 1) / 25) * 25));
     return { revisions: entry.revisions.slice().reverse(), activeRevision: active.revisionId, records: records.slice(offset, offset + 25), total: records.length, offset, pageSize: 25, actions: entry.actions.slice(-20), sourceChanged: source ? active.sourceHash !== source.sourceHash : null, sourceUnavailable: !source, identitySummary };
   }
   async download(revisionId, kind) {

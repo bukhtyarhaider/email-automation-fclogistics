@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parseReply, digest, categories, messageIds } from './reply-parser.mjs';
 import { reconcileSent } from './mailbox-monitor.mjs';
+export const replyReviewVersion = (m) => digest(JSON.stringify({ category:m.category, kind:m.kind, match:m.match, rootId:m.rootId, note:m.reviewNote, reviewedAt:m.reviewedAt }));
 export const DEMO_ACCOUNT = 'demo.dispatch@example.invalid';
 const validEmail = (s) => typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length <= 254;
 const newState = () => ({ version: 1, roots: {}, messages: {}, cursors: {}, monitors: {}, protections: {}, events: [] });
@@ -82,6 +83,7 @@ export class ExperimentReplies {
     const task = this.tail.then(run, run); this.tail = task.catch(() => {}); return task;
   }
   async sourceState() {
+    if (this.imports.stateReader) return structuredClone(this.imports.stateReader());
     try { return JSON.parse(await fs.readFile(path.join(this.imports.dataDir, 'state.json'), 'utf8')); }
     catch (error) { if (error.code === 'ENOENT') return {}; throw new Error('Source sent history is unavailable. Check the experiment source data folder.'); }
   }
@@ -89,7 +91,8 @@ export class ExperimentReplies {
     const source = await this.sourceState();
     const imported = await this.imports.load(), identities = new Map();
     for (const entry of Object.values(imported.imports)) {
-      const revision = entry.revisions.find((r) => r.revisionId === entry.activeRevision);
+      const revisionId = this.imports.managed ? source.campaigns?.find((c) => c.id === entry.campaignId)?.importRevision?.revisionId : entry.activeRevision;
+      const revision = entry.revisions.find((r) => r.revisionId === revisionId);
       if (!revision) continue;
       try {
         const bytes = await fs.readFile(path.join(this.imports.workspaceDir, 'revisions', revision.revisionId, 'records.json'));
@@ -163,6 +166,7 @@ export class ExperimentReplies {
     if (!/^[a-f0-9]{64}$/.test(input.messageId || '')) throw new Error('Choose a captured reply message.');
     if (['ignore','restore'].includes(input.action)) return this.transaction((state) => {
       const message = state.messages[input.messageId];
+      if (this.imports.managed && message && input.expectedReview !== replyReviewVersion(message)) throw Object.assign(new Error('This reply review changed. Refresh the thread before saving.'), { status:409 });
       if (!message || !['review','ignored'].includes(message.match) || typeof input.note !== 'string' || input.note.trim().length < 5 || input.note.length > 2000) throw new Error('Record an evidence note before ignoring or restoring a review item.');
       message.match = input.action === 'ignore' ? 'ignored' : 'review';
       message.reviewNote = input.note.trim(); message.reviewedAt = input.action === 'ignore' ? new Date(this.clock()).toISOString() : null;
@@ -172,6 +176,7 @@ export class ExperimentReplies {
     if (!categories.includes(input.category) || typeof input.note !== 'string' || input.note.length > 2000) throw new Error('Choose a category and a note up to 2,000 characters.');
     return this.transaction((state) => {
       const message = state.messages[input.messageId];
+      if (this.imports.managed && message && input.expectedReview !== replyReviewVersion(message)) throw Object.assign(new Error('This reply review changed. Refresh the thread before saving.'), { status:409 });
       if (!message) throw new Error('Reply message not found. Refresh the inbox.');
       if (message.match === 'ignored') throw new Error('Return this item to review before linking or classifying it.');
       if (message.match === 'review') {

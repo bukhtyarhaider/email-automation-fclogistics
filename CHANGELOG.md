@@ -1,12 +1,21 @@
 # Outreach Desk changelog
 
-Current package: **2.1.0**.
+Current candidate: **2.2.0-rc.1**. Previous stable package: **2.1.0**.
 
 The repository records package versions 1.0.0 and 2.0.0 before this release. Later updates often kept the same package version; they appear as dated milestones below. The historical Git label V1.1.0 did not change the recorded package version from 2.0.0.
 
+## 2.2.0-rc.1 — 2026-10-29 (release candidate)
+
+- Integrated import review, guided mappings, source provenance and stable carrier/contact identities into the normal campaign/lead flow.
+- New browser uploads stay paused until a reviewed copy is activated. Immutable revisions, prior working files and Undo last activation support recovery; raw campaign settings cannot bypass mapping review.
+- Added the normal Carrier conversations view, EML imports, read-only capture configuration, guarded reviews and links from leads/Send History.
+- Captured opt-outs protect normal sending/Do Not Contact, with durable coordinator retries and a final pre-click check. Evidence faults fail closed.
+- Serialized campaign publication with other state writes; redacted reservation tokens from lead responses and recovered partial queue defaults.
+- Team work remains on the experiment branch. Live provider and team-PC rollout checks remain pending; see IMPORTS-AND-CONVERSATIONS.md.
+
 ## 2026-10-29 — 2.1.0 — Send insights and version catalog
 
-Numbered package release. Source: Current application release.
+Previous stable package release.
 
 - Send-history filters for seen status, mailbox, campaign, template, UTC send dates and manual reply review.
 - Confirmed sent/seen counts, seen rates, average/median/fastest first-seen intervals with explicit sample counts.

@@ -341,7 +341,7 @@ export class MailBrowser {
     if (addresses.length !== 1 || addresses[0] !== p.message.to)
       throw new Error("Unexpected recipient list. Sending blocked.");
   }
-  async send() {
+  async send({ beforeSubmit } = {}) {
     try { await this.validate(); }
     catch (error) { error.sendNotAttempted = true; throw error; }
     const { composer } = this.prepared;
@@ -354,6 +354,7 @@ export class MailBrowser {
       error.sendNotAttempted = true;
       throw error;
     }
+    try { await beforeSubmit?.(); } catch (error) { error.sendNotAttempted = true; throw error; }
     await composer.getByRole("button", { name: "Send", exact: true }).click();
     await confirmation.waitFor({ state: "visible", timeout: 20000 });
     const evidence = await confirmation.innerText();

@@ -1,14 +1,18 @@
-# Outreach Desk 2.1.0
+> **2.2.0-rc.1 candidate:** reviewed import activation/recovery and carrier conversations are integrated into the normal sidebar. See [Import and conversation release guide](IMPORTS-AND-CONVERSATIONS.md). Team work is excluded; production rollout is pending review.
+
+# Outreach Desk 2.2.0-rc.1
 
 A configurable local email sales tool for teams using Private Email. Each PC has its own mailbox profiles and browser session. An optional shared coordinator prevents duplicate recipient claims across PCs and enforces team mailbox allowances.
 
-### Experimental sales branch
+## Reviewed imports and carrier conversations
 
-On `feat/sales-experiments`, `npm run experiment` opens a separate import-repair experiment at `http://127.0.0.1:4327`. Run `npm run build:ui` first after editing UI sources. It previews mappings and saves explicit repair revisions to `experiment-data/`, including source provenance and carrier IDs. Original campaign files remain unchanged. `/conversations` adds a consolidated reply inbox with sample data, EML import, and separately opted-in read-only IMAP capture; it cannot send mail. See `.env.experiment.example` for the disabled-by-default live configuration. See [the experiment checklist and test instructions](docs/SALES-EXPERIMENTS.md). Each feature awaits user testing before the next begins; experimental work is not production approval.
+Use **Import review & repairs** and **Carrier conversations** in the normal sidebar. Browser uploads remain paused until a reviewed copy is activated. Guided mappings, immutable revisions, Undo last activation, source provenance and carrier IDs connect to the existing campaign and lead screens. Captured opt-outs protect the normal sender and enter the existing coordinator’s suppression retry flow. Live capture remains opt-in; see [the release and recovery guide](IMPORTS-AND-CONVERSATIONS.md).
+
+The earlier `feat/sales-experiments` branch is preserved for later research. Team work is excluded from this candidate. Existing `experiment-data/` is not silently copied into the real workspace.
 
 ## Install on Windows and macOS
 
-1. Extract `Outreach-Desk-2.1.0.zip` to a permanent folder on each PC. Give every OS user their own installation/data folder.
+1. Extract `Outreach-Desk-2.2.0-rc.1.zip` to a permanent folder on each PC. Give every OS user their own installation/data folder.
 2. Install [Node.js 20+](https://nodejs.org/), [Python 3.9+](https://www.python.org/downloads/), and Google Chrome or Microsoft Edge. On Windows select **Add Python to PATH** during installation.
 3. Windows: open `Setup-Windows.cmd` once, then `Start-Windows.cmd`. macOS: open `Setup-Mac.command` once, then `Start-Mac.command`. If macOS strips execute permission from the archive, run `chmod +x *.command` in that folder. Setup installs the locked npm dependencies from the npm registry.
 4. The launcher opens http://127.0.0.1:4317. Keep its terminal open while using the tool. Closing it stops the local server. Linux also works with `npm ci` then `npm run launch`.

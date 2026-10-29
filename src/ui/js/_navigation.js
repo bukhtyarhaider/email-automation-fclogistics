@@ -4,6 +4,8 @@ function navigate(viewName) {
     "dashboard",
     "leads",
     "campaigns",
+    "imports",
+    "conversations",
     "templates",
     "live-activity",
     "activity",
@@ -22,6 +24,8 @@ function navigate(viewName) {
     link.classList.toggle("active", link.dataset.view === target);
   });
 
+  if (target === "imports" && state) window.dispatchEvent(new CustomEvent("fc-import-view", { detail: state.activeCampaign }));
+  if (target === "conversations" && state) window.dispatchEvent(new Event("fc-conversation-view"));
   if (target === "catalog" && state) void loadCatalog().catch((e) => notice(e.message));
   if (target === "activity" && state) void loadHistory().catch((e) => notice(e.message));
   if (target === "tracking" && state) void loadTracking().catch((e) => notice(e.message));

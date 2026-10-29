@@ -105,7 +105,7 @@ export function upgrade(state) {
     : [];
   state.activeCampaign ||= state.campaigns[0]?.id || null;
   state.workerId ||= randomUUID();
-  state.automation ||= {
+  state.automation = {
     enabled: false,
     status: "Stopped",
     message: "Start continuous outreach when ready.",
@@ -113,6 +113,7 @@ export function upgrade(state) {
     sent: 0,
     sincePause: 0,
     pauseAfter: 0,
+    ...(state.automation || {}),
   };
   state.history ||= {};
   state.pacingResets ||= {};

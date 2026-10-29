@@ -127,7 +127,7 @@ def read(path, mapping=None, review=False):
         return {"sheets": sheets, "leads": leads}
 
 
-def review_import(path, mapping=None):
+def review_import(path, mapping=None, strict_status=False):
     """Read-only review. Never patches a workbook or changes sending eligibility."""
     if mapping is not None:
         if not isinstance(mapping, dict):
@@ -139,6 +139,16 @@ def review_import(path, mapping=None):
                 if not isinstance(field, str) or not isinstance(col, str) or not re.fullmatch(r"[A-Z]{1,3}", col):
                     raise ValueError("Column mappings must use Excel column letters")
     parsed = read(path, mapping, review=True)
+    if strict_status:
+        for sheet in parsed["sheets"]:
+            status_col = sheet.get("statusColumn")
+            if not status_col:
+                continue
+            label = sheet["headers"].get(status_col, "").strip().lower()
+            if not re.fullmatch(r"(?:(?:outreach|email|proposal|contact)[ _-]+)?status", label):
+                raise ValueError("Status mapping must use a labelled outreach Status column. Add a new Status header in an unused column instead.")
+            if status_col == sheet.get("emailColumn") or any(key.lower() != "status" and col == status_col for key, col in (mapping or {}).get(sheet["name"], {}).items()):
+                raise ValueError("Status column cannot also map another field")
     names = {s["name"] for s in parsed["sheets"]}
     if set(mapping or {}) - names:
         raise ValueError("Mapping refers to an unknown worksheet")
@@ -245,7 +255,7 @@ def experiment_import(path, payload):
             if mapped_status != col:
                 raise ValueError("Proposed Status mapping conflicts with the new Status column")
             fields["status"] = col
-        report = review_import(target, effective)
+        report = review_import(target, effective, strict_status=payload.get("strictStatus", False))
         return {"report": report, "leads": read(target, effective)["leads"], "baselineLeads": baseline}
 
 

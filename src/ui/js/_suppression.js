@@ -18,7 +18,7 @@ function renderSuppressionList() {
             `<li>
               <div>
                 <strong>${escape(e)}</strong>
-                <div class="hint" style="margin: 2px 0 0 0;">${escape(r)}</div>
+                <div class="hint" style="margin: 2px 0 0 0;">${escape(String(r).replace(/Captured carrier opt-out: [a-f0-9]{64}/g, "Captured carrier opt-out — review in Carrier conversations"))}</div>
               </div>
               <button class="secondary danger-hover" style="font-size: 11px; padding: 4px 10px;" data-unsuppress="${escape(e)}" title="Remove from Do Not Contact list">Remove</button>
             </li>`,

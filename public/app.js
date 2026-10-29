@@ -265,6 +265,7 @@ function updateControls() {
 
 async function refresh() {
   state = await api("/api/state");
+  if ($("releasePreviewBanner")) $("releasePreviewBanner").hidden = !state.previewMode;
   if ($("appVersion")) $("appVersion").textContent = `Desktop v${state.appVersion}`;
   for (const key of ["total", "ready", "excluded", "sent"]) {
     const el = $(key);
@@ -929,7 +930,9 @@ if ($("upload"))
       await refresh();
       fillCampaign();
       $("upload").value = "";
-      notice("Campaign imported successfully.");
+      window.dispatchEvent(new CustomEvent("fc-import-view", { detail: state.activeCampaign }));
+      location.hash = "imports";
+      notice("Workbook uploaded. Review the mapping, save a revision and activate it before enabling outreach.");
     });
 
 
@@ -1629,6 +1632,8 @@ $("historyRefresh").onclick = () => action($("historyRefresh"), loadHistory);
 $("historyPrev").onclick = () => { historyOffset = Math.max(0, historyOffset - 25); loadHistory().catch((e) => notice(e.message)); };
 $("historyNext").onclick = () => { historyOffset += 25; loadHistory().catch((e) => notice(e.message)); };
 
+$("historyConversations").onclick = () => { if (!historySelected) return; location.hash="conversations"; window.dispatchEvent(new CustomEvent("fc-conversation-search", { detail:historySelected.to })); };
+
 let catalogData = null, catalogEditId = null;
 async function loadCatalog() {
   $("catalogStatus").textContent = "Loading catalog…";
@@ -1815,6 +1820,7 @@ function renderLeadDetails(lead, message, warnings) {
     </div>
 
     ${warningsHtml}
+    <section class="carrier-evidence"><h4>Carrier identity &amp; source</h4>${lead.carrier ? `<p>${escape(lead.carrier.identityStatus)} · USDOT ${escape(lead.carrier.dot || 'unresolved')} · ${escape(lead.carrier.id)}</p><p>Source: ${escape(lead.carrier.provenance.sourceLabel)} · Acquired: ${escape(lead.carrier.provenance.acquiredAt || 'unknown')} · Contact permission: ${escape(lead.carrier.provenance.permission)}</p><p>Source-reported identity; authority has not been verified.</p>` : '<p>Legacy / unreviewed import. Review and activate a revision to attach stable identity and source evidence.</p>'}<button class="secondary" data-conversation-email="${escape(lead.email)}">View captured conversations</button></section>
 
     <!-- Core Contact Information Card -->
     <div class="lead-details-card">
@@ -3730,7 +3736,7 @@ function renderSuppressionList() {
             `<li>
               <div>
                 <strong>${escape(e)}</strong>
-                <div class="hint" style="margin: 2px 0 0 0;">${escape(r)}</div>
+                <div class="hint" style="margin: 2px 0 0 0;">${escape(String(r).replace(/Captured carrier opt-out: [a-f0-9]{64}/g, "Captured carrier opt-out — review in Carrier conversations"))}</div>
               </div>
               <button class="secondary danger-hover" style="font-size: 11px; padding: 4px 10px;" data-unsuppress="${escape(e)}" title="Remove from Do Not Contact list">Remove</button>
             </li>`,
@@ -3777,6 +3783,8 @@ function navigate(viewName) {
     "dashboard",
     "leads",
     "campaigns",
+    "imports",
+    "conversations",
     "templates",
     "live-activity",
     "activity",
@@ -3795,6 +3803,8 @@ function navigate(viewName) {
     link.classList.toggle("active", link.dataset.view === target);
   });
 
+  if (target === "imports" && state) window.dispatchEvent(new CustomEvent("fc-import-view", { detail: state.activeCampaign }));
+  if (target === "conversations" && state) window.dispatchEvent(new Event("fc-conversation-view"));
   if (target === "catalog" && state) void loadCatalog().catch((e) => notice(e.message));
   if (target === "activity" && state) void loadHistory().catch((e) => notice(e.message));
   if (target === "tracking" && state) void loadTracking().catch((e) => notice(e.message));
@@ -3813,6 +3823,325 @@ document.querySelectorAll(".nav-link").forEach((link) => {
     link.blur();
   });
 });
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const production = !!$('view-imports');
+  const route = (url) => production ? url.replace('/api/experiment/', '/api/') : url;
+  let busy = false, saved = null, baseline = null, reviewedCampaign = null, previewId = null, workspace = null, workspaceOffset = 0;
+  async function request(url, data) {
+    const response = await fetch(route(url), data === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FC-Request': '1' }, body: JSON.stringify(data) });
+    const value = await response.json();
+    if (!response.ok) throw new Error(value.error || 'Review failed.');
+    return value;
+  }
+  function controls() {
+    $('reviewCampaign').disabled = busy;
+    $('reviewLoad').disabled = busy || !$('reviewCampaign').value;
+    $('reviewPreview').disabled = busy || !saved;
+    $('reviewReset').disabled = busy || !saved;
+    $('reviewMapping').disabled = busy;
+    $('reviewStatusColumns').disabled = busy;
+    for (const id of ['repairSource', 'repairAcquired', 'repairPermission', 'repairConfirm', 'workspaceSearch']) $(id).disabled = busy;
+    $('repairApply').disabled = busy || !previewId || !$('repairConfirm').checked || !$('repairSource').value.trim();
+    for (const id of ['workspaceRefresh', 'workspaceFind', 'workspaceDraft']) $(id).disabled = busy;
+    $('workspaceDraft').disabled = busy || !workspace?.activeRevision;
+    $('workspaceFind').disabled = busy || !workspace?.activeRevision;
+    $('workspaceRevision').disabled = busy || !workspace?.activeRevision;
+    $('workspaceRestore').disabled = busy || !workspace?.activeRevision || (production ? !workspace?.activationToken : $('workspaceRevision').value === workspace.activeRevision);
+    if (production) $('workspaceUndo').disabled=busy || workspace?.activations?.at(-1)?.kind!=='activated';
+    $('workspacePrev').disabled = busy || workspaceOffset === 0;
+    $('workspaceNext').disabled = busy || workspaceOffset + 25 >= (workspace?.total || 0);
+  }
+  async function run(button, fn) {
+    if (busy) return;
+    busy = true; const label = button.textContent;
+    button.textContent = 'Working…'; $('reviewError').hidden = true;
+    $('reviewStatus').textContent = 'Reading the workbook and checking columns…'; controls();
+    try { const note = await fn(); $('reviewStatus').textContent = note || (production ? (button.id === 'workspaceRestore' ? 'Revision activated. Campaign is paused; inspect leads before enabling it.' : (button.id === 'repairApply' ? 'Revision saved. Activation is a separate step; outreach has not started.' : 'Review complete. Outreach has not started.')) : button.id === 'repairApply' ? 'Experiment revision saved. Original data and sending settings are unchanged.' : button.id === 'workspaceRestore' ? 'Experiment revision restored. Original data and sending settings are unchanged.' : 'Review complete. Source files and sending settings are unchanged.'); }
+    catch (error) { $('reviewError').textContent = error.message; $('reviewError').hidden = false; $('reviewStatus').textContent = 'Review needs attention. Your mapping draft is retained.'; }
+    finally { busy = false; button.textContent = label; controls(); }
+  }
+  function render(report) {
+    $('reviewResults').hidden = false; $('repairPanel').hidden = false;
+    previewId = report.mode === 'preview' ? report.previewId : null;
+    $('repairConfirm').checked = false;
+    $('repairPreviewNote').textContent = previewId ? production ? 'This exact preview is ready to save as a reviewed revision.' : 'This exact preview is ready to save to an experiment copy.' : 'Preview your proposal before saving.';
+    $('reviewHeading').textContent = report.mode === 'preview' ? 'Proposed mapping · preview only' : 'Saved mapping · review only';
+    $('reviewBasis').textContent = report.basis;
+    const identity = report.identitySummary;
+    $('reviewIdentity').textContent = identity ? `Identity preview: ${identity.sourceDotCarriers} carriers grouped by source USDOT; ${identity.provisionalRows} provisional rows; ${identity.conflictRows} identifier conflicts; ${identity.layoutRows} layout-review rows. Source identifiers are not externally verified.` : '';
+    const metrics = [['Parsed rows', 'rows'], ['Rows with layout issues', 'flaggedRows'], ['Sheets without status', 'missingStatusSheets'], ['Invalid / missing email', 'invalidEmailRows'], ['Extra rows sharing email', 'duplicateEmailRows']];
+    if (production) renderMappingWizard(report);
+    $('reviewMetrics').innerHTML = metrics.map(([label, key]) => `<div class="experiment-metric"><span>${escape(label)}</span><strong>${report.summary[key].toLocaleString()}</strong></div>`).join('');
+    const delta = report.summary.flaggedRows - baseline.flaggedRows;
+    $('reviewChange').textContent = report.mode === 'preview' ? `${delta > 0 ? '+' : ''}${delta} flagged rows versus saved mapping. Nothing applied.` : 'Raw samples are bounded; issue counts cover all parsed rows.';
+    $('reviewSheets').innerHTML = report.sheets.map((sheet) => {
+      const issues = [sheet.flaggedRows ? `${sheet.flaggedRows} row/header mismatches` : '', sheet.missingStatus ? 'Missing Status column' : '', !sheet.emailColumn ? 'Missing Email mapping; rows not imported' : '', sheet.hidden ? 'Hidden worksheet' : ''].filter(Boolean);
+      const candidates = Object.entries(sheet.review.emailColumns).sort((a,b) => b[1] - a[1]).map(([col,n]) => `${col}: ${n} email-shaped values`).join(' · ') || 'None found';
+      const headers = Object.entries(sheet.headers).map(([col,value]) => `<tr><th>${escape(col)}</th><td>${escape(value)}</td></tr>`).join('');
+      const samples = sheet.review.samples.map((sample) => `<p class="experiment-sample">Row ${sample.row}${sample.issue ? ` · ${escape(sample.issue)}` : ''}</p><div class="experiment-scroll"><table><thead><tr><th>Column</th><th>Original header</th><th>Original cell value (up to 200 characters)</th></tr></thead><tbody>${Object.entries(sample.cells).map(([col,value]) => `<tr><th>${escape(col)}</th><td>${escape(sheet.headers[col] || '(unlabelled)')}</td><td>${escape(value)}</td></tr>`).join('')}</tbody></table></div>`).join('');
+      return `<article class="experiment-sheet"><h3>${escape(sheet.name)}</h3><p>${sheet.rows} parsed rows · Email: ${escape(sheet.emailColumn || 'unmapped')} · Status: ${escape(sheet.statusColumn || 'unmapped')}</p><p class="experiment-issues">${escape(issues.join(' · ') || 'No layout/status issues detected. This is not a full eligibility check.')}</p><p class="hint">Email-column candidates: ${escape(candidates)}</p>${sheet.missingStatus && sheet.review.unusedStatusColumn ? `<p class="hint">Unused column for a new Status header: ${escape(sheet.review.unusedStatusColumn)}</p>` : ''}<details><summary>Original headers</summary><div class="experiment-scroll"><table><thead><tr><th>Column</th><th>Header</th></tr></thead><tbody>${headers}</tbody></table></div></details><details><summary>Sample source rows</summary>${samples || '<p class="hint">No source rows available.</p>'}</details></article>`;
+    }).join('') || '<p>No worksheets found.</p>';
+  }
+  async function loadSaved() {
+    const report = await request('/api/experiment/import-review', { campaignId: $('reviewCampaign').value });
+    reviewedCampaign = report.campaignId; saved = report.mapping; baseline = report.summary;
+    $('reviewMapping').value = JSON.stringify(saved, null, 2); $('reviewStatusColumns').value = '{}'; render(report);
+    workspaceOffset = 0; await loadWorkspace();
+  }
+  $('reviewLoad').onclick = () => run($('reviewLoad'), loadSaved);
+  $('reviewReset').onclick = () => run($('reviewReset'), loadSaved);
+  $('reviewPreview').onclick = () => run($('reviewPreview'), async () => {
+    const mapping = JSON.parse($('reviewMapping').value);
+    render(await request('/api/experiment/import-review', { campaignId: reviewedCampaign, mapping, addStatusColumns: JSON.parse($('reviewStatusColumns').value) }));
+  });
+  $('reviewCampaign').onchange = () => {
+    saved = null; baseline = null; reviewedCampaign = null; previewId = null; workspace = null;
+    workspaceOffset = 0; $('workspaceSearch').value = ''; $('repairSource').value = ''; $('repairAcquired').value = ''; $('repairPermission').value = 'unknown'; $('repairConfirm').checked = false;
+    $('reviewResults').hidden = true; $('reviewError').hidden = true; $('repairPanel').hidden = true; $('workspacePanel').hidden = true;
+    $('reviewStatus').textContent = 'Choose Review saved mapping to inspect this campaign.'; controls();
+    if ($('reviewCampaign').value) run($('workspaceRefresh'), loadWorkspace);
+  };
+  function invalidate() {
+    previewId = null; $('repairConfirm').checked = false;
+    $('repairPreviewNote').textContent = 'Proposal changed. Preview again before saving.'; controls();
+  }
+  $('reviewMapping').oninput = invalidate; $('reviewStatusColumns').oninput = invalidate;
+  $('repairSource').oninput = controls; $('repairConfirm').onchange = controls;
+  async function loadWorkspace() {
+    const campaignId = $('reviewCampaign').value;
+    if (!campaignId) return;
+    const query = new URLSearchParams({ campaignId, offset: workspaceOffset, q: $('workspaceSearch').value });
+    workspace = await request('/api/experiment/imports?' + query);
+    $('workspacePanel').hidden = false;
+    $('workspaceNote').textContent = !workspace.activeRevision ? 'No experiment revisions yet. Preview a mapping, enter its source details and save a revision.' : workspace.sourceUnavailable ? 'Source workbook is unavailable. Your saved experiment revision is retained.' : workspace.sourceChanged ? 'Source workbook changed since this revision. Review the source again before a new repair.' : 'Saved in the separate experiment workspace. Original campaign files are unchanged.';
+    if (production) $('workspaceNote').textContent = workspace.publishedRevision ? `Campaign uses revision ${workspace.publishedRevision}. ${workspace.campaignEnabled ? 'Campaign enabled.' : 'Campaign paused.'} Saved revisions remain separate until activated.` : 'No reviewed revision has been activated for this campaign. Save and activate one to connect its identity and provenance to leads.';
+    const selected = $('workspaceRevision').value;
+    $('workspaceRevision').innerHTML = workspace.revisions.map((r) => `<option value="${escape(r.revisionId)}">${escape(new Date(r.importedAt).toLocaleString())} · ${escape(r.sourceLabel)}${r.revisionId === (production ? workspace.publishedRevision : workspace.activeRevision) ? ' · campaign uses this' : ''}</option>`).join('');
+    if (workspace.revisions.some((r) => r.revisionId === selected)) $('workspaceRevision').value = selected;
+    else if (workspace.activeRevision) $('workspaceRevision').value = workspace.activeRevision;
+    downloadLinks();
+    const summary = workspace.identitySummary;
+    $('workspaceIdentity').textContent = summary ? `${summary.carriers} recorded identities · ${summary.sourceDotCarriers} grouped by source USDOT · ${summary.provisionalRows} provisional rows · ${summary.conflictRows} identifier conflicts · ${summary.layoutRows} layout-review rows · ${summary.protectedRows} protected rows` : '';
+    $('workspaceRows').innerHTML = workspace.records.map((r) => `<tr><td>${escape(r.company)}<br>${escape(r.email)}</td><td>${escape(r.identityStatus)}<br>USDOT: ${escape(r.dot || 'unresolved')}<br><code>${escape(r.carrierId)}</code></td><td>${escape(r.provenance.sourceLabel)}<br>${escape(r.provenance.sheet)} · row ${r.provenance.row}<br>Acquired: ${escape(r.provenance.acquiredAt || 'unknown')}<br>Permission: ${escape(r.provenance.permission)}<br>Import: <code>${escape(r.provenance.importId)}</code></td><td>${escape((production ? [...new Set(r.protection.map((reason) => reason.replace(/Captured carrier opt-out: [a-f0-9]{64}/g, 'Captured carrier opt-out (see Conversations)')))] : r.protection).join('; ') || 'No prior-contact marker captured. This is not permission to send.')}</td></tr>`).join('') || '<tr><td colspan="4">No saved records match this view.</td></tr>';
+    $('workspacePage').textContent = `${workspace.total ? workspace.offset + 1 : 0}–${Math.min(workspace.offset + workspace.records.length, workspace.total)} of ${workspace.total} records in the active revision`;
+    controls();
+  }
+  $('repairApply').onclick = () => run($('repairApply'), async () => {
+    await request('/api/experiment/import-apply', { previewId, confirmExperiment: $('repairConfirm').checked,
+      provenance: { label: $('repairSource').value, acquiredAt: $('repairAcquired').value, permission: $('repairPermission').value } });
+    previewId = null; $('repairConfirm').checked = false;
+    $('repairPreviewNote').textContent = production ? 'Revision saved. Select it below and activate it when ready.' : 'Experiment revision saved. To save another repair, preview again.';
+    workspaceOffset = 0; $('workspaceRevision').value = ''; await loadWorkspace();
+  });
+  $('workspaceRefresh').onclick = () => run($('workspaceRefresh'), loadWorkspace);
+  $('workspaceFind').onclick = () => { workspaceOffset = 0; run($('workspaceFind'), loadWorkspace); };
+  function downloadLinks() {
+    const id = $('workspaceRevision').value;
+    $('workspaceDownloads').hidden = !id;
+    for (const [element, kind] of [['workspaceWorking', 'working'], ['workspaceOriginal', 'original'], ['workspaceMapping', 'mapping']]) $(element).href = route('/api/experiment/import-download') + '?' + new URLSearchParams({ revisionId: id, kind });
+  }
+  $('workspaceRevision').onchange = () => { controls(); downloadLinks(); };
+  $('workspaceDraft').onclick = () => run($('workspaceDraft'), async () => {
+    const revision = workspace?.revisions.find((r) => r.revisionId === $('workspaceRevision').value);
+    if (!revision) return;
+    if (!saved) await loadSaved();
+    $('reviewMapping').value = JSON.stringify(revision.mapping, null, 2);
+    $('reviewStatusColumns').value = JSON.stringify(revision.addStatusColumns, null, 2);
+    $('repairSource').value = revision.sourceLabel; $('repairAcquired').value = revision.acquiredAt || '';
+    $('repairPermission').value = revision.permission;
+    invalidate(); $('reviewMapping').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  $('workspaceRestore').onclick = () => {
+    if (production) {
+      if (!confirm('Use this reviewed revision for the campaign? A separate working workbook will be created. Previous workbooks and contact protections are retained. Outreach will stay paused.')) return;
+      return run($('workspaceRestore'), async () => { const value = await request('/api/import-activate', { campaignId:$('reviewCampaign').value, revisionId:$('workspaceRevision').value, expectedToken:workspace.activationToken, confirmActivation:true }); await loadWorkspace(); window.dispatchEvent(new Event('fc-import-activated')); return value.message; });
+    }
+    if (!confirm('Restore this saved revision in the experiment workspace? All revisions and contact protections will be retained. Original campaign data will stay unchanged.')) return;
+    run($('workspaceRestore'), async () => { await request('/api/experiment/import-restore', { revisionId: $('workspaceRevision').value, confirmExperiment: true }); previewId = null; workspaceOffset = 0; await loadWorkspace(); });
+  };
+  $('workspacePrev').onclick = () => { workspaceOffset = Math.max(0, workspaceOffset - 25); run($('workspacePrev'), loadWorkspace); };
+  $('workspaceNext').onclick = () => { workspaceOffset += 25; run($('workspaceNext'), loadWorkspace); };
+  async function loadCampaigns(preselect) {
+    const { campaigns, activeCampaign } = await request('/api/experiment/campaigns');
+    const chosen = preselect || $('reviewCampaign').value || (production ? activeCampaign : '');
+    $('reviewCampaign').innerHTML = '<option value="">Choose a campaign…</option>' + campaigns.map((c) => `<option value="${escape(c.id)}" ${c.available || c.hasWorkspace ? '' : 'disabled'}>${escape(c.name)}${c.available ? '' : ' · workbook unavailable'}</option>`).join('');
+    if (campaigns.some((c) => c.id === chosen)) $('reviewCampaign').value = chosen;
+    $('reviewStatus').textContent = campaigns.length ? 'Choose a campaign and review its mapping. Unavailable source files cannot be reviewed.' : 'Upload a workbook in Leads Workspace to begin.';
+    controls();
+  }
+  function renderMappingWizard(report) {
+    let mapping; try { mapping = JSON.parse($('reviewMapping').value || '{}'); } catch { return; }
+    $('reviewMappingWizard').innerHTML = report.sheets.map((sheet) => {
+      const columns = Object.entries(sheet.headers);
+      const select = (field, label, automatic) => `<label>${label}<select data-map-sheet="${escape(sheet.name)}" data-map-field="${field}"><option value="">Automatic (${escape(automatic || 'not detected')})</option>${columns.map(([col,header]) => `<option value="${col}" ${mapping[sheet.name]?.[field]===col?'selected':''}>${col} · ${escape(header || '(unlabelled)')}</option>`).join('')}</select></label>`;
+      return `<div class="mapping-sheet"><h3>${escape(sheet.name)}</h3>${select('email','Email column',sheet.emailColumn)}${select('carrier legal name','Company column',columns.find(([,h]) => /^(company|company name|carrier legal name|legal name)$/i.test(h))?.[0])}${select('status','Outreach status column',sheet.statusColumn)}${sheet.review.unusedStatusColumn?`<button type="button" class="secondary" data-status-sheet="${escape(sheet.name)}" data-status-column="${sheet.review.unusedStatusColumn}">Add Status header in unused column ${sheet.review.unusedStatusColumn}</button>`:''}</div>`;
+    }).join('');
+  }
+  if (production) {
+    $('workspaceUndo').onclick=()=>{if(!confirm('Restore the previous campaign workbook and pause outreach? Saved revisions, send history and contact protections remain.'))return;run($('workspaceUndo'),async()=>{const value=await request('/api/import-undo',{campaignId:$('reviewCampaign').value,expectedToken:workspace.activationToken,confirmActivation:true});await loadWorkspace();window.dispatchEvent(new Event('fc-import-activated'));return value.message;});};
+    $('reviewMappingWizard').onchange = (event) => { const select=event.target.closest('[data-map-sheet]'); if (!select) return; try { const value=JSON.parse($('reviewMapping').value || '{}'); const fields=value[select.dataset.mapSheet] ||= {}; if(select.value)fields[select.dataset.mapField]=select.value;else delete fields[select.dataset.mapField]; $('reviewMapping').value=JSON.stringify(value,null,2); invalidate(); } catch { $('reviewError').hidden=false;$('reviewError').textContent='Fix the advanced JSON before changing column selections.'; } };
+    $('reviewMappingWizard').onclick = (event) => { const b=event.target.closest('[data-status-sheet]');if(!b)return;try{const value=JSON.parse($('reviewStatusColumns').value || '{}');value[b.dataset.statusSheet]=b.dataset.statusColumn;$('reviewStatusColumns').value=JSON.stringify(value,null,2);const mapping=JSON.parse($('reviewMapping').value||'{}');(mapping[b.dataset.statusSheet]||={}).status=b.dataset.statusColumn;$('reviewMapping').value=JSON.stringify(mapping,null,2);invalidate();}catch{$('reviewError').hidden=false;$('reviewError').textContent='Fix the Status header JSON before adding a header.';} };
+    window.addEventListener('fc-import-view', (event) => { if (busy) return; void loadCampaigns(event.detail).then(() => { if ($('reviewCampaign').value !== reviewedCampaign) $('reviewCampaign').onchange(); }).catch((e) => { $('reviewError').hidden=false;$('reviewError').textContent=e.message; }); });
+  }
+  loadCampaigns().catch((error) => { $('reviewStatus').textContent = 'Source data could not be loaded.'; $('reviewError').textContent = error.message; $('reviewError').hidden = false; });
+})();
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
+  const production = !!$('view-conversations');
+  const route = (url) => production ? url.replace('/api/experiment/reply-detail', '/api/conversation-detail').replace('/api/experiment/replies', '/api/conversations') : url;
+  const labels = { unclassified:'Not classified', interested:'Interested', pricing:'Pricing question', how_it_works:'How it works', later:'Later', already_has_dispatcher:'Has dispatcher', wrong_contact:'Wrong contact', not_fit:'Not a fit', opt_out:'Opt-out', out_of_office:'Out of office', automated:'Automated', bounce:'Bounce notice' };
+  const options = Object.entries(labels).map(([value,label]) => `<option value="${value}">${label}</option>`).join('');
+  $('replyCategory').insertAdjacentHTML('beforeend', options); $('replyReviewCategory').innerHTML = options;
+  let busy = false, offset = 0, report = null, selection = null, detail = null, selectedMessage = null, lastLoad = 0, loadSequence = 0;
+  const drafts = new Map();
+  let captureToolsInitialized = false;
+  const time = (s) => s ? new Date(s).toLocaleString() : 'unknown';
+  async function request(url, data) {
+    const response = await fetch(route(url), data === undefined ? {} : { method:'POST', headers:{ 'Content-Type':'application/json', 'X-FC-Request':'1' }, body:JSON.stringify(data) });
+    const value = await response.json(); if (!response.ok) throw new Error(value.error || 'Reply action failed.'); return value;
+  }
+  function error(message) { $('replyError').hidden = !message; $('replyError').textContent = message; }
+  function controls() {
+    for (const id of ['replyHistory','replyDemo','replyImport','replyRefresh','replyThreadRefresh','replyReviewSave','replyBackfill','replyIgnore','replyUnignore']) $(id).disabled = busy;
+    $('replyReviewSave').disabled = busy || !selectedMessage || detail?.messages.find((m) => m.id === selectedMessage)?.match === 'ignored';
+    $('replyScan').disabled = busy || !report?.capture.enabled || report.capture.running;
+    $('replyBackfill').disabled = busy || report?.capture.running;
+    for (const id of ['replyReviewCategory','replyReviewNote','replyLink','replyLinkConfirm']) $(id).disabled = busy;
+    for (const id of ['replyMode','replyMailbox','replyCategory','replySearch']) $(id).disabled = busy;
+    document.querySelectorAll('[data-reply], [data-review-message]').forEach((button) => { button.disabled = busy; });
+    $('replyPrev').disabled = busy || offset === 0; $('replyNext').disabled = busy || offset + 25 >= (report?.total || 0);
+  }
+  async function action(button, fn) {
+    if (busy) return;
+    busy = true; const text = button.textContent; button.textContent = 'Working…'; controls(); error('');
+    $('replyStatus').textContent = 'Processing reply evidence…';
+    try { const note = await fn(); await load(); $('replyStatus').textContent = note || 'Reply action complete. No email was sent.'; }
+    catch (e) { error(e.message); $('replyStatus').textContent = 'Needs attention. Your review draft/file selection is retained.'; }
+    finally { busy = false; button.textContent = text; controls(); }
+  }
+  function syncSelect(id, entries) {
+    const value = $(id).value;
+    $(id).innerHTML = (id === 'replyMailbox' ? '<option value="">All mailboxes</option>' : '<option value="">Choose a mailbox…</option>') + entries.map((a) => `<option value="${escape(a.email)}">${escape(a.email)}${a.demo ? ' · sample' : ''}</option>`).join('');
+    if (entries.some((a) => a.email === value) || !value) $(id).value = value;
+  }
+  async function load() {
+    const sequence = ++loadSequence;
+    const params = new URLSearchParams({ mode:$('replyMode').value, mailbox:$('replyMailbox').value, category:$('replyCategory').value, q:$('replySearch').value, offset });
+    const value = await request('/api/experiment/replies?' + params); if (sequence !== loadSequence) return;
+    report = value; offset = report.offset; lastLoad = Date.now();
+    syncSelect('replyMailbox', report.accounts.filter((a) => a.demo === ($('replyMode').value === 'demo')));
+    syncSelect('replyImportAccount', report.accounts);
+    const metrics = [['Human reply candidates','humanMessages'],['Needs conversation match','needsMatch'],['Automatic replies','automatedMessages'],['Bounce notices','bounceNotices'],['Protected opt-out contacts','protectedContacts']];
+    $('replyMetrics').innerHTML = metrics.map(([label,key]) => `<div class="experiment-metric"><span>${label}</span><strong>${report.summary[key]}</strong></div>`).join('');
+    $('replyMetricNote').textContent = report.note;
+    $('replyProtection').hidden = !report.protectionNote; $('replyProtection').textContent = report.protectionNote || '';
+    $('replyCoverage').textContent = `${report.coverage.rootsWithMessageIds} of ${report.coverage.roots} loaded source conversations have outbound Message-IDs. Missing IDs need Sent reconciliation or explicit manual review.`;
+    const capture = report.capture;
+    if (production) { if(!captureToolsInitialized){$('replyCaptureTools').open=report.total===0;captureToolsInitialized=true;} $('replyCaptureSummary').textContent='Capture & mailbox setup · ' + (capture.configurationError || capture.captureError || capture.mailboxes.some((m)=>m.status==='Needs attention') ? 'Needs attention' : capture.running ? 'Checking mailboxes…' : capture.enabled ? 'Live capture enabled' : 'Live capture off'); window.dispatchEvent(new CustomEvent('fc-capture-status', { detail:capture })); $('replyProtectionDelivery').textContent = `${capture.protectionHealth}. ${capture.sharedProtection.enabled ? 'Coordinator protection updates pending: ' + capture.sharedProtection.pending + '. Shared sending protections are checked before each send.' : 'Independent PC: captured opt-outs protect this PC. Other PCs need the shared coordinator.'}`; }
+    $('replyCaptureNote').textContent = capture.configurationError || `${capture.enabled ? 'Live read-only capture enabled' : 'Live capture off'} · ${capture.auto ? 'Automatic checks enabled' : 'Manual checks only'}${capture.running ? ' · Checking mailboxes…' : ''}${capture.since ? ` · Initial backfill since ${capture.since}` : ''}. ${production ? 'EML imports do not connect to a provider.' : 'Samples and EML imports do not connect to a provider.'}`;
+    $('replyMonitor').innerHTML = (capture.captureError ? `<div class="reply-monitor">${escape(capture.captureError.message)}</div>` : '') + capture.mailboxes.map((m) => `<div class="reply-monitor"><strong>${escape(m.email)} · ${escape(m.status)}</strong><p class="hint">Credentials: ${m.credentialsConfigured ? 'configured' : 'missing'} · Last successful check: ${escape(time(m.checkedAt))} · Next eligible check: ${escape(time(m.nextAt))}</p>${m.message ? `<p>${escape(m.message)}</p>` : ''}${(m.folders || []).map((f) => `<p class="hint">${escape(f.folder)} · ${f.processed} scanned this check · ${f.more ? 'Backfill incomplete; more messages remain' : 'Current search page completed'} · UID ${f.lastUid}</p>`).join('')}</div>`).join('');
+    $('replyRows').innerHTML = report.rows.map((r) => `<tr><td>${escape(r.recipient)}</td><td>${escape(r.subject)}<br>${escape(r.account)}<br>${escape(time(r.at))}</td><td>${r.classificationSource === 'manual' ? 'Reviewed' : 'Suggested'}: ${escape(labels[r.category] || r.category)}</td><td>${escape(r.match)}${r.paused ? (production ? '<br>Carrier reply captured' : '<br>Experiment follow-up paused') : ''}${r.reason ? '<br>' + escape(r.reason) : ''}<br>${r.count} captured message(s)</td><td><button class="secondary" data-reply="${escape(r.id)}" data-type="${r.type}">View</button></td></tr>`).join('') || (production ? '<tr><td colspan="5">No captured conversations match. Import an authorized EML reply or configure read-only capture. Missing capture is not proof of no reply.</td></tr>' : '<tr><td colspan="5">No captured conversations match. Load the sample inbox, import an authorized EML reply, or configure read-only live capture.</td></tr>');
+    $('replyPage').textContent = `${report.total ? offset + 1 : 0}–${Math.min(offset + report.rows.length, report.total)} of ${report.total} matching conversations/review items`;
+    controls();
+  }
+  function rememberDraft() { if (selectedMessage) drafts.set(selectedMessage, { category:$('replyReviewCategory').value, note:$('replyReviewNote').value, rootId:$('replyLink').value, confirm:$('replyLinkConfirm').checked }); }
+  function selectReview(id) {
+    rememberDraft(); selectedMessage = id;
+    const message = detail.messages.find((m) => m.id === id), draft = drafts.get(id);
+    $('replyReviewPanel').hidden = false; $('replyReviewCategory').value = draft?.category || message.category; $('replyReviewNote').value = draft?.note ?? message.reviewNote;
+    $('replyReviewEvidence').textContent = `${message.classificationSource === 'manual' ? 'Manually reviewed' : 'Rule suggestion'} · ${message.reason} · ${message.suggestion.reason}`;
+    $('replyMatchPanel').hidden = message.match !== 'review';
+    $('replyLink').innerHTML = '<option value="">Select a conversation…</option>' + detail.candidates.map((r) => `<option value="${r.id}">${escape(r.recipient)} · ${escape(r.subject)}</option>`).join('');
+    $('replyLink').value = draft?.rootId || ''; $('replyLinkConfirm').checked = draft?.confirm || false;
+    $('replyIgnore').hidden = message.match !== 'review'; $('replyUnignore').hidden = message.match !== 'ignored'; controls();
+  }
+  async function loadDetail(preserve = true) {
+    if (preserve) rememberDraft();
+    detail = await request('/api/experiment/reply-detail?' + new URLSearchParams(selection));
+    $('replyInspector').hidden = false; $('replyThreadTitle').textContent = detail.root?.subject || 'Message needs a conversation match';
+    const initial = detail.root ? `<article class="reply-message outbound"><h3>Original send · source history</h3><p class="hint">${escape(detail.root.account)} → ${escape(detail.root.recipient)} · ${escape(time(detail.root.sentAt))}</p><p class="hint">${detail.root.carrierId ? 'Source carrier ID: ' + escape(detail.root.carrierId) : 'Carrier identity unresolved / not linked'} · ${detail.root.demo ? 'Sample data' : escape(detail.root.campaignName)}</p><pre>${escape(detail.root.body)}</pre>${detail.root.bodyTruncated ? '<p class="hint">Source body truncated for this view.</p>' : ''}</article>` : '';
+    $('replyThread').innerHTML = initial + detail.messages.map((m) => `<article class="reply-message ${m.direction === 'outbound' ? 'outbound' : ''}"><h3>${escape(m.from.join(', ') || 'Unknown sender')} · ${escape(m.kind)}</h3><p class="hint">${escape(m.subject)} · ${escape(m.match)} · ${escape(m.classificationSource === 'manual' ? 'Reviewed' : 'Suggested')}: ${escape(labels[m.category])}</p><p class="hint">Header date: ${escape(time(m.date))} · Captured: ${escape(time(m.capturedAt))} · ${escape(m.source.type)}${m.source.folder ? ' / ' + escape(m.source.folder) + ' / UID ' + m.source.uid : ''}</p><pre>${escape(m.bodyUnavailable ? 'Body unavailable. Inspect the original mailbox before linking or classifying.' : m.text || '(No new text extracted; inspect the original message.)')}</pre>${m.textTruncated ? '<p class="hint">New-text view truncated at 24,000 characters.</p>' : ''}<details><summary>Message reference evidence</summary><pre>${escape(m.messageId || '(No Message-ID)')}\n${escape(m.references.join('\n'))}</pre></details><button class="secondary" data-review-message="${m.id}">Review message</button></article>`).join('');
+    if(detail.messages.length) selectReview(detail.messages.some((m) => m.id === selectedMessage) ? selectedMessage : detail.messages.at(-1).id);else { selectedMessage=null;$('replyReviewPanel').hidden=true;controls(); }
+  }
+  $('replyRows').onclick = (event) => { const button = event.target.closest('[data-reply]'); if (!button) return; rememberDraft(); selectedMessage = null; $('replyInspector').hidden = true; $('replyReviewPanel').hidden = true; selection = { id:button.dataset.reply, type:button.dataset.type }; action(button, () => loadDetail(false)); };
+  $('replyThread').onclick = (event) => { const button = event.target.closest('[data-review-message]'); if (button) { selectReview(button.dataset.reviewMessage); $('replyReviewPanel').scrollIntoView({ behavior:'smooth', block:'center' }); } };
+  $('replyClose').onclick = () => { rememberDraft(); $('replyInspector').hidden = true; };
+  $('replyThreadRefresh').onclick = () => action($('replyThreadRefresh'), () => loadDetail());
+  $('replyReviewSave').onclick = () => action($('replyReviewSave'), async () => {
+    await request('/api/experiment/replies/review', { messageId:selectedMessage, expectedReview:detail.messages.find((m)=>m.id===selectedMessage)?.reviewVersion, category:$('replyReviewCategory').value, note:$('replyReviewNote').value, rootId:$('replyLink').value, confirmLink:$('replyLinkConfirm').checked });
+    drafts.delete(selectedMessage); await loadDetail(false); return 'Reply review saved. Captured opt-outs protect normal outreach. No message was sent.';
+  });
+  for (const [id, method] of [['replyIgnore','ignore'],['replyUnignore','restore']]) $(id).onclick = () => action($(id), async () => {
+    await request('/api/experiment/replies/review', { messageId:selectedMessage, expectedReview:detail.messages.find((m)=>m.id===selectedMessage)?.reviewVersion, action:method, note:$('replyReviewNote').value });
+    drafts.delete(selectedMessage); await loadDetail(false); return method === 'ignore' ? 'Review item ignored with history/protections retained.' : 'Item returned to the matching review queue.';
+  });
+  $('replyHistory').onclick = () => action($('replyHistory'), async () => { const r = await request('/api/experiment/replies/history', {}); return `Loaded ${r.roots} source conversations; ${r.withMessageIds} currently have Message-IDs in source history.`; });
+  $('replyDemo').onclick = () => action($('replyDemo'), async () => { await request('/api/experiment/replies/demo', {}); $('replyMode').value = 'demo'; $('replyMailbox').value = ''; $('replyCategory').value = ''; $('replySearch').value = ''; offset = 0; return 'Sample inbox loaded. No real email was sent or fetched.'; });
+  $('replyScan').onclick = () => action($('replyScan'), async () => { await request('/api/experiment/replies/scan', {}); $('replyMode').value = 'real'; $('replyMailbox').value = ''; $('replyCategory').value = ''; $('replySearch').value = ''; offset = 0; return 'Read-only capture started. Monitor progress and errors below.'; });
+  $('replyBackfill').onclick = () => action($('replyBackfill'), async () => { await request('/api/experiment/replies/backfill', {}); return 'Reply cursors reset. Existing messages/reviews/protections retained; the next enabled check rescans the configured lookback.'; });
+  $('replyImport').onclick = () => action($('replyImport'), async () => {
+    const file = $('replyEml').files[0], mailbox = $('replyImportAccount').value;
+    if (!file || !mailbox) throw new Error('Choose a mailbox and EML file.');
+    if (file.size > 2_000_000) throw new Error('Use an EML file up to 2 MB.');
+    const response = await fetch(route('/api/experiment/replies/import') + '?' + new URLSearchParams({ mailbox }), { method:'POST', headers:{ 'X-FC-Request':'1', 'Content-Type':'message/rfc822' }, body:file });
+    const r = await response.json(); if (!response.ok) throw new Error(r.error);
+    $('replyMode').value = mailbox === 'demo.dispatch@example.invalid' ? 'demo' : 'real'; $('replyMailbox').value = ''; $('replyCategory').value = ''; $('replySearch').value = ''; offset = 0;
+    return r.ignored ? 'No known contact/reference matched. Message was not retained.' : r.duplicate ? 'This message was already captured; no duplicate added.' : 'EML evidence imported. Inspect its match and suggested category.';
+  });
+  $('replyRefresh').onclick = () => action($('replyRefresh'), async () => {});
+  for (const id of ['replyMode','replyMailbox','replyCategory']) $(id).onchange = () => { if (id === 'replyMode') $('replyMailbox').value = ''; offset = 0; action($('replyRefresh'), async () => {}); };
+  $('replySearch').onkeydown = (e) => { if (e.key === 'Enter') { offset = 0; $('replyRefresh').click(); } };
+  $('replyPrev').onclick = () => { offset = Math.max(0,offset - 25); action($('replyPrev'), async () => {}); };
+  $('replyNext').onclick = () => { offset += 25; action($('replyNext'), async () => {}); };
+  if (production) window.addEventListener('fc-conversation-search', (event) => { $('replySearch').value=event.detail;offset=0;void load().catch((e)=>error(e.message)); });
+  if (production) window.addEventListener('fc-conversation-view', () => { if(!busy) void request('/api/experiment/replies/history',{}).then(load).catch((e)=>error(e.message)); });
+  load().then(() => { $('replyStatus').textContent = production ? 'Ready. Import a reply or configure authorized read-only capture.' : 'Ready. Choose samples, an EML import, or explicitly enabled live capture.'; }).catch((e) => error(e.message));
+  setInterval(() => { if (!document.hidden && (!production || location.hash==='#conversations') && !busy && (report?.capture.running || Date.now() - lastLoad >= 15000)) void load().catch((e) => error(e.message)); }, 1500);
+})();
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  if (!$('view-conversations')) return;
+  const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let loaded = false, dirty = false, saving = false, mailboxes = [];
+  const field = (key,label,value='',type='text') => `<label>${label}<input data-config-field="${key}" type="${type}" value="${escape(value)}" ${key==='port'?'min="1" max="65535"':''}></label>`;
+  function renderMailboxes() {
+    $('replyConfigMailboxes').innerHTML = mailboxes.map((c,index) => `<article class="reply-config-mailbox" data-config-index="${index}"><h3>Mailbox ${index+1}</h3><div class="reply-config-grid">${field('id','Unique mailbox ID',c.id)}${field('email','Sending identity / email',c.email,'email')}${field('host','IMAP host',c.host)}${field('user','Login user (blank uses email)',c.user)}${field('port','TLS port',c.port||993,'number')}${field('inboxFolder','Inbox folder',c.inboxFolder||'INBOX')}${field('sentFolder','Sent folder (blank auto-detects)',c.sentFolder)}${field('passwordEnv','Password environment variable',c.passwordEnv)}${field('accessTokenEnv','OAuth token environment variable',c.accessTokenEnv)}<label>Provider<select data-config-field="provider">${[['custom','Private Email / other'],['gmail','Gmail'],['yahoo','Yahoo'],['outlook','Outlook']].map(([v,l])=>`<option value="${v}" ${(c.provider||'custom')===v?'selected':''}>${l}</option>`).join('')}</select></label><label>Authentication<select data-config-field="authMode">${[['password','Provider password'],['app_password','Provider app password'],['oauth','OAuth token']].map(([v,l])=>`<option value="${v}" ${(c.authMode||'password')===v?'selected':''}>${l}</option>`).join('')}</select></label></div><button type="button" class="secondary" data-config-remove="${index}">Remove from capture configuration</button><p class="hint">Removing configuration retains captured messages and opt-outs. Gmail/Yahoo password access requires an approved app password; Outlook requires OAuth. Tokens must be enrolled/refreshed through the provider.</p></article>`).join('') || '<p class="hint">No live mailboxes configured. You can still import an authorized EML export.</p>';
+  }
+  function readMailboxes() {
+    return Array.from(document.querySelectorAll('[data-config-index]'), (element) => {
+      const config = {};
+      for (const input of element.querySelectorAll('[data-config-field]')) {
+        const value = input.value.trim(); if(value)config[input.dataset.configField]=input.dataset.configField==='port'?Number(value):value;
+      }
+      return config;
+    });
+  }
+  window.addEventListener('fc-capture-status', ({detail}) => {
+    const shared = detail.sharedProtection;
+    $('replyConfigNote').textContent = `${detail.configurationSource || ''} · ${detail.protectionHealth || ''}. ${shared?.enabled ? `${shared.pending} opt-out(s) awaiting coordinator sync.` : 'Independent PC: opt-outs are local. Configure the team coordinator for shared sending protection.'}`;
+    if(loaded||dirty||!detail.configuration)return;
+    loaded=true;const c=detail.configuration;mailboxes=c.mailboxes;
+    $('replyConfigEnabled').checked=c.enabled;$('replyConfigAuto').checked=c.auto;$('replyConfigSince').value=c.since;$('replyConfigBatch').value=c.batch;renderMailboxes();
+  });
+  $('replyConfigPanel').oninput=()=>{dirty=true;};
+  $('replyConfigAdd').onclick=()=>{if(saving)return;mailboxes=readMailboxes();if(mailboxes.length>=20){notice('Up to 20 mailboxes are supported.');return;}mailboxes.push({id:'mailbox'+(mailboxes.length+1)});dirty=true;renderMailboxes();};
+  $('replyConfigMailboxes').onclick=(event)=>{const b=event.target.closest('[data-config-remove]');if(!b||saving)return;mailboxes=readMailboxes();mailboxes.splice(Number(b.dataset.configRemove),1);dirty=true;renderMailboxes();};
+  $('replyConfigSave').onclick=async()=>{
+    if(saving)return;saving=true;const b=$('replyConfigSave');b.textContent='Saving…';b.disabled=true;
+    try {await api('/api/conversations/config',{enabled:$('replyConfigEnabled').checked,auto:$('replyConfigAuto').checked,since:$('replyConfigSince').value,batch:Number($('replyConfigBatch').value),mailboxes:readMailboxes(),confirmReadOnly:$('replyConfigConfirm').checked});loaded=false;dirty=false;$('replyConfigConfirm').checked=false;window.dispatchEvent(new Event('fc-conversation-view'));notice('Read-only capture configuration saved. Secret values were not stored.');}
+    catch(e){notice(e.message);$('replyConfigNote').textContent=e.message+' Your settings draft is retained.';}
+    finally{saving=false;b.textContent='Save capture settings';b.disabled=false;}
+  };
+  $('openImportReview').onclick=()=>{location.hash='imports';window.dispatchEvent(new CustomEvent('fc-import-view',{detail:state.activeCampaign}));};
+  window.addEventListener('fc-import-activated',async()=>{selected.clear();previewId=null;offset=0;await refresh();fillCampaign();await loadLeads();});
+  document.addEventListener('click',(event)=>{const button=event.target.closest('[data-conversation-email]');if(!button)return;closePreviewDrawer();location.hash='conversations';window.dispatchEvent(new CustomEvent('fc-conversation-search',{detail:button.dataset.conversationEmail}));});
+})();
 
 // Initial boot
 navigate(location.hash.replace("#", ""));

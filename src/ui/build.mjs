@@ -48,6 +48,9 @@ const CSS_FILES = [
   "_settings.css",
   "_animations.css",
   "_history-catalog.css",
+  "_experiment.css",
+  "_conversations.css",
+  "_carrier-workspace.css",
 ];
 
 // === HTML partials (order matters) ===
@@ -58,6 +61,8 @@ const HTML_FILES = [
   "_view-dashboard.html",
   "_view-leads.html",
   "_view-campaigns.html",
+  "_view-imports.html",
+  "_view-conversations.html",
   "_view-templates.html",
   "_view-settings.html",
   "_view-live-activity.html",
@@ -87,6 +92,9 @@ const JS_FILES = [
   "_tracking.js",
   "_suppression.js",
   "_navigation.js",
+  "_experiment.js",
+  "_conversations.js",
+  "_carrier-workspace.js",
   "_boot.js",
 ];
 

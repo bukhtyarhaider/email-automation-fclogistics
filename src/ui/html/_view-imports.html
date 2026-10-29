@@ -1,0 +1,41 @@
+<section class="view-page" id="view-imports"><div class="page-header"><div><p class="page-eyebrow">LEAD DATA</p><h1 class="page-title">Review &amp; repair imports</h1><p class="page-subtitle">Check original rows, correct mappings, and activate a recoverable campaign workbook.</p></div></div>    <section class="panel">
+      <div class="experiment-form"><label for="reviewCampaign">Campaign<select id="reviewCampaign"><option value="">Loading campaigns…</option></select></label><button id="reviewLoad" disabled>Review saved mapping</button></div>
+      <p id="reviewStatus" class="hint" role="status" aria-live="polite">Loading campaigns…</p>
+      <p id="reviewError" class="experiment-error" role="alert" hidden></p>
+    </section>
+    <section id="reviewResults" hidden>
+      <div class="experiment-result-heading"><h2 id="reviewHeading">Saved mapping</h2><span id="reviewChange" class="hint"></span></div>
+      <div id="reviewMetrics" class="experiment-metrics"></div>
+      <p id="reviewBasis" class="hint"></p>
+      <p id="reviewIdentity" class="hint"></p>
+      <div class="experiment-layout">
+        <section class="panel experiment-mapping"><h2>Choose columns</h2><p class="hint">Choose columns that match the original worksheet. Keep outreach Status separate from operating status. Preview before saving.</p><div id="reviewMappingWizard"></div><details><summary>Advanced mapping JSON</summary><label for="reviewMapping">Proposed mapping (JSON)</label><textarea id="reviewMapping" rows="10" spellcheck="false"></textarea><label for="reviewStatusColumns">Add missing Status headers (JSON)</label><textarea id="reviewStatusColumns" rows="3" spellcheck="false">{}</textarea><p class="hint">Example: {"Leads":"D"}. The column must be entirely unused. Only saved copies receive new headers; existing cells are never overwritten.</p></details><div class="experiment-buttons"><button id="reviewPreview">Preview changes</button><button id="reviewReset" class="secondary">Restore saved mapping</button></div><p class="hint">Mapping drafts stay temporary until you explicitly save a reviewed revision. Original files stay unchanged.</p></section>
+        <section class="experiment-sheets"><h2>Worksheet evidence</h2><p class="hint">Email-column candidates are syntax counts, not verified addresses. Mixed layouts may need separate source sheets. Counts alone are not a safe reason to remap a whole worksheet.</p><div id="reviewSheets"></div></section>
+      </div>
+    </section>
+    <section id="repairPanel" class="panel experiment-repair" hidden>
+      <h2>Save this reviewed repair</h2>
+      <p class="hint">Save the exact preview as a new reviewed revision. Each revision keeps its original workbook, repaired copy, mapping and source details. Save first, then explicitly activate the selected revision below. Activation keeps the campaign paused.</p>
+      <div class="experiment-source-fields">
+        <label for="repairSource">Where did these leads come from?<input id="repairSource" maxlength="200" placeholder="Export, supplier, or existing contact list" /></label>
+        <label for="repairAcquired">Source acquisition date (optional)<input id="repairAcquired" type="date" /></label>
+        <label for="repairPermission">Contact permission stated by operator<select id="repairPermission"><option value="unknown">Unknown / not established</option><option value="requested_contact">Carrier requested contact</option><option value="existing_relationship">Existing relationship</option></select></label>
+      </div>
+      <label class="check"><input id="repairConfirm" type="checkbox" />Save this reviewed copy without starting outreach.</label>
+      <button id="repairApply" disabled>Save reviewed revision</button>
+      <p id="repairPreviewNote" class="hint">Preview your proposal before saving.</p>
+    </section>
+    <section id="workspacePanel" class="panel experiment-workspace" hidden>
+      <div class="experiment-result-heading"><h2>Saved revisions</h2><button id="workspaceRefresh" class="secondary">Refresh revisions</button></div>
+      <p id="workspaceNote" class="hint" role="status"></p>
+      <div class="experiment-form"><label for="workspaceRevision">Revision<select id="workspaceRevision"></select></label><button id="workspaceDraft" class="secondary">Use revision as draft</button><button id="workspaceUndo" class="secondary">Undo last activation</button><button id="workspaceRestore" class="secondary">Use selected revision for campaign</button></div>
+      <p class="hint">Activation creates a separate campaign workbook. Previous workbooks, saved revisions, carrier IDs and contact protections are retained. Outreach stays paused until you enable the campaign.</p>
+      <div id="workspaceDownloads" class="experiment-buttons" hidden><a id="workspaceWorking" class="button secondary">Download workbook copy</a><a id="workspaceOriginal" class="button secondary">Download original snapshot</a><a id="workspaceMapping" class="button secondary">Download mapping &amp; provenance</a></div>
+      <p class="hint">Workbook copies retain the source field layout. The saved mapping controls how rows are read; only explicitly added Status headers change workbook cells.</p>
+      <div id="workspaceIdentity" class="experiment-identity-summary"></div>
+      <p class="hint">USDOT grouping is based on source data and has not been verified with FMCSA. Conflicts and layout issues stay in review. No sending eligibility is granted here.</p>
+      <div class="experiment-form"><label for="workspaceSearch">Find a carrier, email, USDOT, or carrier ID<input id="workspaceSearch" type="search" /></label><button id="workspaceFind" class="secondary">Find records</button></div>
+      <div class="experiment-scroll"><table><thead><tr><th>Carrier / contact</th><th>Identity</th><th>Source evidence</th><th>Contact protections</th></tr></thead><tbody id="workspaceRows"></tbody></table></div>
+      <div class="experiment-result-heading"><p id="workspacePage" class="hint"></p><div class="experiment-buttons"><button id="workspacePrev" class="secondary">Previous</button><button id="workspaceNext" class="secondary">Next</button></div></div>
+    </section>
+</section>

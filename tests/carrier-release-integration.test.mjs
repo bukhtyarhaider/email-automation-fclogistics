@@ -1,0 +1,59 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { workspace } from './fixtures/carrier-workspace.mjs';
+import { eml, account, recipient } from './fixtures/replies.mjs';
+import { loadPlaywright, MailBrowser } from '../src/browser.mjs';
+async function serve(t,port,extraEnv={}){const f=await workspace(t);let child;const stop=async()=>{if(child?.exitCode===null){const done=once(child,'exit');child.kill('SIGTERM');await done;}};const start=async()=>{child=spawn(process.execPath,[path.resolve('src/server.mjs')],{cwd:path.resolve('.'),env:{...process.env,FC_DATA_DIR:f.dataDir,PORT:String(port),FC_FIREBASE_DISABLE:'1',FC_MONITOR_ENABLED:'0',FC_OPEN_TRACKING_ENABLED:'0',FC_REPLY_CAPTURE_ENABLED:'0',FC_REPLY_AUTO:'0',FC_REPLY_MAILBOXES:'[]',...extraEnv},stdio:['ignore','ignore','pipe']});let error='';child.stderr.on('data',(b)=>error+=b);for(let n=0;n<150;n++){if(child.exitCode!==null)throw new Error(error);try{if((await fetch(`http://127.0.0.1:${port}/api/state`)).ok)return;}catch{}await new Promise((r)=>setTimeout(r,50));}throw new Error('Release server startup timed out: '+error);};t.after(stop);await start();const url=`http://127.0.0.1:${port}`,raw=(route,data)=>fetch(url+'/api/'+route,data===undefined?{}:{method:'POST',headers:{'X-FC-Request':'1','Content-Type':'application/json'},body:JSON.stringify(data)});const api=async(route,data)=>{const r=await raw(route,data),value=await r.json();if(!r.ok)throw new Error(value.error);return value;};return {...f,url,api,raw,start,stop};}
+async function save(f){const p=await f.api('import-review',{campaignId:'c1',mapping:{},addStatusColumns:{Leads:'D'}});return f.api('import-apply',{previewId:p.previewId,confirmExperiment:true,provenance:{label:'Authorized export',permission:'unknown'}});}
+
+test('normal HTTP flow publishes reviewed copies, enriches leads, blocks stale edits/opt-outs and restores prior workbook without changing history',async(t)=>{
+ const f=await serve(t,14686);let s=await f.api('state');assert.equal(s.campaigns[0].reviewRequired,true);assert.equal(s.counts.ready,0);
+ await assert.rejects(f.api('campaign',{id:'c1',enabled:true,mapping:{}}),/activate/);await assert.rejects(f.api('campaign',{id:'c1',enabled:false,mapping:{Leads:{email:'C'}}}),/Preview/);
+ const r=await save(f),status=await f.api('imports?campaignId=c1');await f.api('import-activate',{campaignId:'c1',revisionId:r.revisionId,expectedToken:status.activationToken,confirmActivation:true});
+ s=await f.api('state');assert.equal(s.campaigns[0].enabled,false);assert.equal(s.counts.ready,1);const leads=await f.api('leads');assert.equal(leads.leads[0].carrier.id,leads.leads[1].carrier.id);assert.equal(leads.leads[1].carrier.provenance.sourceLabel,'Authorized export');assert(!JSON.stringify(leads).includes('PRIVATE_TEAM_SECRET'));
+ await assert.rejects(f.api('import-activate',{campaignId:'c1',revisionId:r.revisionId,expectedToken:status.activationToken,confirmActivation:true}),/changed/);
+ await f.api('conversations/history',{});const imported=await fetch(f.url+'/api/conversations/import?mailbox='+encodeURIComponent(account),{method:'POST',headers:{'X-FC-Request':'1'},body:eml({text:'Please remove me from your list.'})});assert.equal(imported.status,200);
+ s=await f.api('state');assert.match(s.suppression[recipient],/Captured carrier opt-out/);await assert.rejects(f.api('unsuppress',{email:recipient}),/captured opt-out/);
+ const inbox=await f.api('conversations'),detail=await f.api('conversation-detail?id='+inbox.rows[0].id+'&type=conversation'),message=detail.messages[0];assert(message.reviewVersion);await f.api('conversations/review',{messageId:message.id,expectedReview:message.reviewVersion,category:'pricing',note:'Reviewing the original message evidence'});await assert.rejects(f.api('conversations/review',{messageId:message.id,expectedReview:message.reviewVersion,category:'interested',note:'Stale tab'}),/changed/);
+ const current=await f.api('imports?campaignId=c1');await f.api('import-undo',{campaignId:'c1',expectedToken:current.activationToken,confirmActivation:true});assert.deepEqual(await fs.readFile(path.join(f.dataDir,'leads.xlsx')),f.original);s=await f.api('state');assert.equal(s.campaigns[0].reviewRequired,true);assert.match(s.suppression[recipient],/opt-out/);
+ await f.stop();await f.start();assert.match((await f.api('state')).suppression[recipient],/opt-out/);assert.equal((await f.api('conversations')).total,1);const disk=JSON.parse(await fs.readFile(path.join(f.dataDir,'state.json'),'utf8'));assert.equal(disk.history[recipient].teamToken,'PRIVATE_TEAM_SECRET');assert.equal(disk.history[recipient].sendStatus,'webmail_sent');
+ assert.equal((await fetch(f.url+'/api/conversations/demo',{method:'POST',headers:{'X-FC-Request':'1'},body:'{}'})).status,400);
+});
+
+test('production upload defaults to review and enforces CSRF, size and source-file boundaries',async(t)=>{
+ const f=await serve(t,14687);const noHeader=await fetch(f.url+'/api/upload',{method:'POST',headers:{'X-Filename':'new.xlsx'},body:f.original});assert.equal(noHeader.status,403);
+ const uploaded=await fetch(f.url+'/api/upload',{method:'POST',headers:{'X-Filename':'new.xlsx','X-FC-Request':'1'},body:f.original});assert.equal(uploaded.status,200);const s=await f.api('state'),c=s.campaigns.find((c)=>c.id===s.activeCampaign);assert.equal(c.enabled,false);assert.equal(c.reviewRequired,true);assert.equal(s.counts.ready,0);
+ await assert.rejects(f.api('import-review',{campaignId:c.id,mapping:{Leads:{status:'A',email:'B'}}}),/Status|status|column/i);
+ assert.equal((await fetch(f.url+'/carrier-workspace/imports.json')).status,404);
+});
+
+test('a new contact hold is checked inside the sender immediately before the Send control is clicked',async()=>{
+ const mail=new MailBrowser({dataDirectory:'/private/tmp/fc-guard-unit'});let clicks=0;mail.validate=async()=>{};mail.prepared={composer:{getByRole:()=>({click:async()=>{clicks++;}})}};mail.page={getByText:()=>({isVisible:async()=>false})};
+ await assert.rejects(mail.send({beforeSubmit:()=>{throw new Error('Captured carrier opt-out');}}),(e)=>e.sendNotAttempted===true&&/opt-out/.test(e.message));assert.equal(clicks,0);
+});
+
+test('integrated release UI supports guided mapping, activation, lead provenance, inbox imports, safe settings drafts and recovery at desktop/mobile sizes',{skip:process.env.FC_BROWSER_TESTS!=='1'},async(t)=>{
+ const f=await serve(t,14688),browser=await loadPlaywright().chromium.launch({channel:process.env.FC_TEST_BROWSER_CHANNEL||'chrome',headless:true});t.after(()=>browser.close());const page=await browser.newPage({viewport:{width:1440,height:1100}}),errors=[],external=[];page.on('pageerror',(e)=>{errors.push(e.message);t.diagnostic('Browser error: '+e.message);});page.on('request',(r)=>{if(!r.url().startsWith(f.url))external.push(r.url());});
+ await page.goto(f.url+'/#imports');await page.waitForFunction(()=>document.querySelector('#reviewCampaign').value==='c1');await page.locator('#reviewLoad').click();await page.locator('#reviewMappingWizard [data-status-sheet]').click();await page.locator('#reviewPreview').click();await page.waitForFunction(()=>!document.querySelector('#reviewPreview').disabled);
+ await page.locator('#repairSource').fill('Browser-reviewed export');await page.locator('#repairConfirm').check();await page.locator('#repairApply').click();await page.waitForFunction(()=>document.querySelector('#workspaceRevision').options.length===1&&!document.querySelector('#repairApply').textContent.includes('Working'));
+ page.once('dialog',(d)=>d.accept());await page.locator('#workspaceRestore').click();await page.waitForFunction(()=>document.querySelector('#reviewStatus').textContent.includes('Reviewed revision is active'));assert.equal((await f.api('state')).campaigns[0].enabled,false);
+ await page.locator('[data-view="leads"]').click();await page.waitForFunction(()=>document.querySelector('#leadRows').textContent.includes('second@example.com'));await page.locator('#leadRows tr').filter({hasText:'second@example.com'}).locator('[data-preview]').click();await page.locator('.carrier-evidence').waitFor();assert.match(await page.locator('.carrier-evidence').innerText(),/Browser-reviewed export/);
+ await page.locator('[data-conversation-email]').click();await page.locator('#view-conversations.active').waitFor();await page.locator('#replySearch').fill('');await page.locator('#replyRefresh').click();await page.waitForFunction(()=>!document.querySelector('#replyRefresh').disabled);
+ await page.getByText('Import one exported reply (.eml)',{exact:true}).click();await page.locator('#replyImportAccount').selectOption(account);await page.locator('#replyEml').setInputFiles({name:'reply.eml',mimeType:'message/rfc822',buffer:eml({text:'Please remove me from your list. <script>window.pwned=true</script>'})});await page.locator('#replyImport').click();await page.locator('#replyRows button').waitFor();await page.locator('#replyRows button').click();await page.locator('#replyReviewPanel').waitFor();assert.match(await page.locator('#replyProtection').innerText(),/block outreach/);assert.match(await page.locator('#replyProtectionDelivery').innerText(),/Independent PC/);assert.equal(await page.evaluate(()=>window.pwned),undefined);
+ await page.locator('#replyReviewNote').fill('Draft remains when navigating inside the app');await page.locator('[data-view="campaigns"]').click();await page.locator('[data-view="conversations"]').click();assert.equal(await page.locator('#replyReviewNote').inputValue(),'Draft remains when navigating inside the app');
+ await page.locator('#replyConfigPanel summary').click();await page.locator('#replyConfigAdd').click();await page.locator('[data-config-field="email"]').fill(account);await page.locator('[data-config-field="host"]').fill('mail.example.com');await page.locator('[data-config-field="passwordEnv"]').fill('REP_IMAP_PASSWORD');await page.locator('#replyConfigSave').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('configuration saved'));assert.equal((await f.api('conversations')).capture.enabled,false);
+ for(const width of [1440,390]){await page.setViewportSize({width,height:1100});assert(await page.evaluate(()=>Math.max(document.documentElement.scrollWidth,document.body.scrollWidth)<=innerWidth+1));if(process.env.FC_UI_SCREENSHOT_DIR){await fs.mkdir(process.env.FC_UI_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.FC_UI_SCREENSHOT_DIR,`carrier-release-${width}.png`)});}}
+ await page.reload();await page.locator('#replyRows button').waitFor();assert.equal(await page.locator('#replyCaptureTools').getAttribute('open'),null);assert.match(await page.locator('#replyProtectionDelivery').innerText(),/Independent PC/);
+ assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+});
+
+
+test('sample release preview rejects sending, mailbox connections and live capture even if a visitor enables it',async(t)=>{
+ const f=await serve(t,14689,{FC_RELEASE_PREVIEW:'1'});assert.equal((await f.api('state')).previewMode,true);
+ for(const route of ['connect','prepare','send','start','batch','conversations/scan','tracking/seed-send'])assert.equal((await f.raw(route,{})).status,403);
+ await assert.rejects(f.api('conversations/config',{enabled:true,confirmReadOnly:true}),/preview/);
+});

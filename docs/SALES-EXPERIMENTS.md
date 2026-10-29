@@ -1,3 +1,5 @@
+> Release preparation: experiments 01–03 are now integrated on `feat/import-repairs-carrier-conversations` as **2.2.0-rc.1**. See [the release guide](../IMPORTS-AND-CONVERSATIONS.md). The user declined shipping Team work and requested this release work on 29 October 2026. `feat/sales-experiments` remains at its separate Team work checkpoint (`5628fc0`) for later research. No further experiment or production rollout is authorized by this release candidate.
+
 # Sales experiments
 
 Branch: `feat/sales-experiments`. Base: `main`, Outreach Desk 2.1.0.

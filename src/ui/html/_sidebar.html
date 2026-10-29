@@ -28,6 +28,8 @@
               </svg>
               <span>Campaigns & Sheets</span>
             </a>
+            <a class="nav-link" href="#imports" data-view="imports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 3h12l4 4v14H4zM8 12h8M8 16h8"/></svg><span>Import review &amp; repairs</span></a>
+            <a class="nav-link" href="#conversations" data-view="conversations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4h18v14H7l-4 3zM3 4l9 7 9-7"/></svg><span>Carrier conversations</span></a>
             <a class="nav-link" href="#templates" data-view="templates">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -89,6 +91,7 @@
 
         <!-- Main Viewport -->
         <main class="app-viewport">
+          <p id="releasePreviewBanner" class="carrier-preview-banner" hidden>Sample data preview · Sending and live mailbox capture are disabled. Production data is not loaded.</p>
           <!-- Notification Toast -->
           <div id="notice" role="status" hidden></div>
 
