@@ -59,7 +59,7 @@ export class ExperimentImports {
     } finally { await fs.rm(temp, { recursive: true, force: true }); }
     const previewId = randomUUID();
     const importedAt = new Date().toISOString();
-    const protections = collectProtections(source.state, [...result.baselineLeads, ...result.leads], store.protections);
+    const protections = collectProtections(source.state, [...result.baselineLeads, ...result.leads], await this.replyProtections(store.protections));
     const identity = registerCarriers(structuredClone(store.registry), result.leads, { importId: source.importId, importedAt }, protections);
     while (this.previews.size >= 20) this.previews.delete(this.previews.keys().next().value);
     this.previews.set(previewId, { sourceHash: source.sourceHash, stateHash: source.stateHash, generation: store.generation, campaignId: source.c.id, mapping, addStatusColumns, at: Date.now() });
@@ -95,6 +95,14 @@ export class ExperimentImports {
     await fs.rename(tmp, filename);
     if (process.platform !== 'win32') { const dir = await fs.open(this.workspaceDir, 'r'); try { await dir.sync(); } finally { await dir.close(); } }
   }
+  async replyProtections(existing) {
+    const protections = structuredClone(existing);
+    let replies;
+    try { replies = JSON.parse(await fs.readFile(path.join(this.workspaceDir, 'replies.json'), 'utf8')); }
+    catch (error) { if (error.code === 'ENOENT') return protections; throw new Error('Cannot read reply protections. Restore the experiment backup before continuing.'); }
+    for (const p of Object.values(replies.protections || {})) if (!p.demo && p.email) protections[p.email] = [...new Set([...(protections[p.email] || []), p.reason])];
+    return protections;
+  }
   async apply(input) {
     if (input.confirmExperiment !== true) throw new Error('Confirm that this repair will be saved to the experiment copy only.');
     return this.withWrite(async () => {
@@ -115,7 +123,7 @@ export class ExperimentImports {
       await fs.writeFile(original, source.bytes, { mode: 0o600 });
       const result = await this.pythonRun(original, { mapping: preview.mapping, sourceMapping: source.c.mapping || {}, addStatusColumns: preview.addStatusColumns, output: working });
       await fs.chmod(working, 0o600);
-      store.protections = collectProtections(source.state, [...result.baselineLeads, ...result.leads], store.protections);
+      store.protections = collectProtections(source.state, [...result.baselineLeads, ...result.leads], await this.replyProtections(store.protections));
       const context = { importId: source.importId, revisionId, campaignId: source.c.id, sourceHash: source.sourceHash, importedAt,
         sourceLabel: provenance.label.trim(), acquiredAt, permission: provenance.permission, sourceWorkbook: path.basename(source.c.workbook.file) };
       const identity = registerCarriers(store.registry, result.leads, context, store.protections);
@@ -165,7 +173,8 @@ export class ExperimentImports {
     const recordBytes = await fs.readFile(path.join(this.workspaceDir, 'revisions', active.revisionId, 'records.json'));
     if (hash(recordBytes) !== active.recordsHash) throw new Error('Revision records changed. Restore from a trusted backup.');
     const source = await this.source(campaignId).catch(() => null);
-    const protections = source ? collectProtections(source.state, [], store.protections) : store.protections;
+    const combined = await this.replyProtections(store.protections);
+    const protections = source ? collectProtections(source.state, [], combined) : combined;
     let records = JSON.parse(recordBytes);
     records = records.map((r) => ({ ...r, protection: [...new Set([...r.protection, ...(protections[r.email] || [])])] }));
     const identitySummary = { ...active.identitySummary, protectedRows: records.filter((r) => r.protection.length).length };

@@ -11,8 +11,8 @@ The team has five salespeople and uses this tool for signing U.S. carriers by em
 | ID | Experiment | Status | User decision |
 |---|---|---|---|
 | 01 | Read-only import review and temporary mapping previews | Implemented; automated checks passed | Accepted for experiments on 29 Oct 2026; production pending |
-| 02 | Explicit import repairs, source provenance and durable carrier identity | Implemented; automated checks passed | Awaiting user test |
-| 03 | Human reply capture and shared conversations | Planned | Pending |
+| 02 | Explicit import repairs, source provenance and durable carrier identity | Implemented; automated checks passed | Authorized next experiment on 29 Oct 2026; production pending |
+| 03 | Human reply capture and consolidated conversations | Implemented; automated checks passed | Awaiting user test |
 | 04 | Carrier ownership and daily next-action queue | Planned | Pending |
 | 05 | Qualification and email signing pipeline | Planned | Pending |
 | 06 | Manual follow-up tasks; guarded sequences after reply reliability is proven | Planned | Pending |
@@ -93,7 +93,7 @@ Conflicting company/MC evidence for the same USDOT, malformed-layout rows, and a
 
 Each saved row retains its source workbook name/hash, campaign/import/revision IDs, worksheet/row, import time, user-entered source label, optional acquisition date, and operator-stated contact-permission status. Unknown stays unknown. A permission selection is an operator assertion, not a legal or provider authorization check.
 
-Prior attempted recipients, suppression and source prior-contact/opt-out markers accumulate in the experiment protection ledger. Repairs and revision restores cannot erase them. The normal app's sending ledger is untouched. This server still has no sender, mailbox connection, Firebase/IMAP worker, or production-save route.
+Prior attempted recipients, suppression and source prior-contact/opt-out markers accumulate in the experiment protection ledger. Repairs and revision restores cannot erase them. The normal app's sending ledger is untouched. Checkpoint ea65034 had no sender, mailbox connection, Firebase/IMAP worker, or production-save route. Experiment 03 below adds separately opted-in read-only IMAP capture; production sending remains disconnected.
 
 ### User test
 
@@ -113,4 +113,65 @@ Prior attempted recipients, suppression and source prior-contact/opt-out markers
 - Identity/store checks were rerun after that fix: normalization, conflicting identifiers, restart and cross-import IDs, source/protection preservation, stale/expired previews, duplicate submission, concurrent writers, failed publication, snapshot integrity, revision restore, missing-source recovery and symlink overlap rejection passed.
 - Desktop (1440px) and mobile (390px) repair screenshots were visually checked. Browser tests cover saving two revisions, restoring an older one, reload, source/identity/protection display, filtering, draft reuse and page bounds. A confirmation/preview timing issue found during testing was fixed and rechecked.
 - The actual local workbook was previewed without applying a repair; parsed-row counts remain 9,208 with 1,820 flagged layout rows and 2 sheets missing Status. No actual-source repair was auto-applied.
-- User acceptance: pending. Production approval: pending. Stop after experiment 02 until user feedback.
+- The user authorized experiment 03 next on 29 October 2026. Production approval remains pending.
+
+
+## Experiment 03 — reply capture and consolidated conversations
+
+Page: `http://127.0.0.1:4327/conversations`. Import review/repairs remain available at `/`. This is one consolidated local workspace for the configured mailboxes. Authenticated access from multiple PCs, salesperson ownership, next-action tasks and outbound reply composition are later experiments; they are not implemented or deployed here.
+
+### Try it without mailbox credentials
+
+1. Open **Conversations**, then **Load sample inbox**. Eight synthetic items cover pricing, interest, quoted opt-out text, an actual opt-out, out-of-office, an automated response, a structured bounce and an unmatched message. No message is sent or fetched.
+2. Open a thread. Check the original-send snapshot, newly written reply text, headers/references, capture timestamps and suggested categories. Samples are a separate mode and never contribute to real/imported message counts.
+3. Edit a category/note and **Save reply review**. Unmatched items require a selected conversation from the same mailbox, explicit link confirmation and an evidence note of at least five characters. Subject similarity is insufficient.
+4. Use **Ignore review item** with a reason to remove an irrelevant unmatched item from the active queue. The **Ignored review items** filter provides **Return to review**. Both actions retain message history, audit events and protections.
+5. Type an unsaved note, refresh the inbox, switch threads and come back. Drafts stay while navigating this page; reloading discards unsaved drafts. Saved notes persist after restart.
+6. For your own evidence, use **Load local sent history**, then import an authorized exported `.eml` file (up to 2 MB) under the correct mailbox. That mailbox must have confirmed source send history. Inspect the exact match or pending review. Reimporting the same message must not duplicate it.
+7. Give feedback before experiment 04. No production merge, provider connection or team-PC deployment has been performed automatically.
+
+### Live read-only capture setup
+
+Copy `.env.experiment.example` to the ignored `.env.experiment` file. Configure only mailboxes you are authorized to inspect, using `passwordEnv` or `accessTokenEnv` references rather than secrets embedded in JSON. Set `FC_EXPERIMENT_REPLY_CAPTURE_ENABLED=1`. Start with:
+
+```sh
+node --env-file=.env.experiment scripts/experiment.mjs
+```
+
+Select **Check configured mailboxes** for manual capture. Set `FC_EXPERIMENT_REPLY_AUTO=1` only if you want periodic background capture. A 15-second scheduler checks due accounts; successful accounts wait at least 60 seconds, failures back off up to an hour. No production monitor flags are inherited as authorization for this worker. No SMTP/webmail send action is available.
+
+`FC_EXPERIMENT_REPLY_MAILBOXES` supports up to 20 uniquely identified mailboxes. `email` is the sender identity represented in source history; `user` defaults to it but can be the provider-authorized login identity. `host`, optional `sentFolder` and `inboxFolder` define the account. Sent can be discovered by its special-use flag. TLS certificate validation is required. Outlook requires OAuth; Gmail/Yahoo app passwords require an explicit supported app-password mode. Token enrollment/refresh is not implemented: use the provider's legitimate authorization flow and rotate/restart as needed.
+
+The default backfill starts 30 days ago; set `FC_EXPERIMENT_REPLY_SINCE=YYYY-MM-DD` for a different initial date. Each folder processes at most `FC_EXPERIMENT_REPLY_BATCH` messages (default 50; maximum 100) in UID order per check. More pages are visibly labeled incomplete. These are independent reply cursors in `replies.json`, not the production DSN monitor's cursors. UIDVALIDITY or lookback changes restart the bounded search, with message deduplication. **Restart reply backfill** clears only reply cursors/monitor checkpoints and is rejected during an active capture lock; messages, reviews and protections remain.
+
+Mailbox history coverage matters: this experiment can correlate only source sends available in the selected source data folder, plus Sent evidence reconciled to those sends. It does not automatically read other PCs' private data or invent histories for their accounts. Load the correct source data before checking another mailbox. Different-address replies or reference-only messages without recognizable metadata can require a manual EML import/review or a renewed backfill after missing Sent evidence is available. A completed page/check is not proof that all historical replies were captured.
+
+### Matching, classification and privacy boundaries
+
+- Confirmed local source sends seed conversation anchors. Seed-test sends and uncertain/unconfirmed attempts are excluded. Exact outbound Message-IDs come from tracking or read-only Sent marker reconciliation using the existing tested reconciliation helper. Subject-only matching never establishes a thread.
+- References can point to the original send or a previously captured inbound/outbound response. Automatic linkage requires a single candidate and matching sender/recipient context. Changed participants, reused Message-IDs, multiple candidates and missing identifiers remain in review. Missing-body records and ID collisions never become automatic matches during later source refresh.
+- Source carrier IDs are attached only when an exact email has one consistent source-USDOT identity in the active import records. This is a source-data link, not authority verification or proof of a person's identity.
+- Human replies are candidates inferred from headers and relevant message text. Out-of-office, automated messages and DSN notices remain separate; rules and categories are editable operator assertions. No classification proves buying intent, qualification or a human reader.
+- Recognized quoted text and HTML quote blocks are stripped before suggestions. Definite newly written opt-outs from known contacts receive an experiment protection even when a conversation match is pending. Human replies pause relevant experiment follow-up markers; there is no sequence sender in this step.
+- **Production suppression is unchanged.** The inbox displays a callout when a real opt-out is captured: apply it to the normal app's Do not contact list before further production outreach. Experiment import previews, saves and views project real reply protections, and a saved import accumulates them in its protection ledger. Category edits, ignored items, backfill resets and revision restores never clear them.
+- Bodies are displayed as escaped plain text. Images/scripts are never rendered; attachments and raw MIME are not retained. Newly written text and original source-body snapshots are bounded to 24,000 characters with visible truncation flags. Source hashes, message references, capture provenance and operator review events support audit; complete context remains in the original mailbox.
+- Envelope checks avoid fetching unrelated message bodies when relevance can be ruled out. Oversized/unparseable relevant messages become explicit review stubs with folder/UID evidence; failed fetches or storage do not advance a failed message's cursor. Unknown contacts without known references are not retained. Classification can be incomplete for unsupported quote formats or malformed provider data.
+- Metrics describe captured messages in the selected data mode/mailbox, not carrier conversion. Search/category filters affect rows; the metric scope is explicitly labeled. Missing coverage never becomes a zero reply rate. Header dates are sender-reported; absent/invalid dates remain unknown and capture times are shown separately.
+
+### Storage and recovery
+
+`experiment-data/replies.json` contains conversation anchors, captured messages, independent cursors, mailbox diagnostics, opt-out protections and review events. It uses the experiment workspace's existing write lock plus an in-process write queue, owner-only files and atomic flushed replacement. Events and cursors commit together for inbound processing; Sent-ID enrichment is durable before its checkpoint advances. Replayed messages deduplicate by account, Message-ID and semantic fingerprint. Conflicting reuse enters review instead of overwriting earlier content.
+
+One `reply-capture.lock` prevents competing scanners from advancing the same workspace. It contains the process PID. If a crash leaves it behind, stop/verify that process before removing only the stale lock; do not delete reply data to recover a scanner. Incomplete saves do not mutate source state or send anything. The test harness forces live experiment capture off, even when the operator's normal environment has it enabled; simulated clients exercise the IMAP path.
+
+Back up the entire experiment workspace. Captured message/review history is retained; there is no automatic deletion/retention scheduler or cloud sync in this step. Larger deployments will need database/archival planning before production use. Local filesystem access controls apply; sharing this directory directly between PCs is not a substitute for an authenticated service.
+
+### Validation record for experiment 03
+
+- Full regression: 138/138 JavaScript tests and 12/12 Python tests passed, including synthetic Chrome and simulated IMAP. No real email was sent and no real mailbox was connected.
+- Focused coverage includes exact/subject-only/ambiguous/participant-mismatch threading, nested replies, Sent marker recovery, conflicting Message-ID reuse, HTML/plain-text quote handling, opt-out negation, autoresponders, structured DSNs, manual linking, reversible ignored items, deduplication/restart, separate sample data, credential redaction and source-state immutability.
+- Capture checks cover EXAMINE/read-only access, bounded independent UID cursors, UIDVALIDITY replay, failed fetch/storage handling, backoff, unrelated-envelope body skipping, review stubs, capture-lock conflicts, and preserving data/protections through backfill reset. The installed ImapFlow implementation was checked for EXAMINE and BODY.PEEK behavior.
+- Browser checks cover samples, filters, unsaved draft retention, manual review/matching, EML import, inert script-like text, no external resource requests, reload persistence and desktop/mobile page bounds. A stale-thread display during conversation changes was corrected and rechecked.
+- Desktop (1440px) and mobile (390px) screenshots were visually inspected. The live preview was restarted with capture/automatic flags explicitly off.
+- Real provider authorization, folder retention, received-thread headers and live reply correlation were not exercised. Those remain designated-mailbox validation steps when the user enables read-only capture.
+- User acceptance: pending. Production approval: pending. Stop after experiment 03 until user feedback.

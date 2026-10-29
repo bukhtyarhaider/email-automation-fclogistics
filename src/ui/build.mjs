@@ -108,6 +108,9 @@ async function build() {
       ["html/experiment.html", "experiment.html"],
       ["styles/_experiment.css", "experiment.css"],
       ["js/_experiment.js", "experiment.js"],
+      ["html/conversations.html", "conversations.html"],
+      ["styles/_conversations.css", "conversations.css"],
+      ["js/_conversations.js", "conversations.js"],
     ].map(async ([source, target]) => fs.writeFile(path.join(PUBLIC, target), await fs.readFile(path.join(UI_DIR, source)))),
   ]);
 

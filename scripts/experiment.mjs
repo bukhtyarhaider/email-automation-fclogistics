@@ -5,10 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { check } from './doctor.mjs';
 import { ExperimentImports } from '../src/experiment-imports.mjs';
+import { ExperimentReplies } from '../src/experiment-replies.mjs';
+import { ReplyCapture } from '../src/reply-capture.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export function createExperimentServer({ dataDir, workspaceDir = path.join(root, 'experiment-data'), python = check() }) {
+export function createExperimentServer({ dataDir, workspaceDir = path.join(root, 'experiment-data'), python = check(), env = process.env, replyClientFactory, clock = Date.now }) {
   const imports = new ExperimentImports({ dataDir, workspaceDir, python });
+  const replies = new ExperimentReplies({ imports, clock });
+  const capture = new ReplyCapture({ replies, env, clientFactory: replyClientFactory, clock });
   let reviewing = false;
   const send = (res, status, value) => {
     res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -25,13 +29,27 @@ export function createExperimentServer({ dataDir, workspaceDir = path.join(root,
     if (path.relative(base, file).startsWith('..') || path.isAbsolute(path.relative(base, file))) throw new Error('Workbook must be inside the source data folder.');
     return file;
   };
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     try {
       const port = req.socket.localPort;
       const origins = [`http://127.0.0.1:${port}`, `http://localhost:${port}`];
       if (![ `127.0.0.1:${port}`, `localhost:${port}` ].includes(req.headers.host)) return send(res, 403, { error: 'Invalid host.' });
       const url = new URL(req.url, origins[0]);
       if (req.headers.origin && !origins.includes(req.headers.origin)) return send(res, 403, { error: 'Invalid origin.' });
+      if (url.pathname === '/api/experiment/replies' && req.method === 'GET') return send(res, 200, { ...await replies.list(url.searchParams), capture: await capture.status(), accounts: await replies.accounts() });
+      if (url.pathname === '/api/experiment/reply-detail' && req.method === 'GET') return send(res, 200, await replies.detail(url.searchParams.get('id'), url.searchParams.get('type')));
+      const replyRoutes = ['demo', 'history', 'scan', 'backfill', 'review', 'import'].map((s) => '/api/experiment/replies/' + s);
+      if (replyRoutes.includes(url.pathname) && req.method === 'POST') {
+        if (req.headers['x-fc-request'] !== '1') return send(res, 403, { error: 'Missing request header.' });
+        const chunks = []; let size = 0;
+        for await (const chunk of req) { size += chunk.length; if (size > (url.pathname.endsWith('/import') ? 2_000_000 : 32_000)) return send(res, 413, { error: 'Reply import/request is too large.' }); chunks.push(chunk); }
+        const bytes = Buffer.concat(chunks);
+        if (url.pathname.endsWith('/import')) return send(res, 200, await replies.ingest(bytes, url.searchParams.get('mailbox'), { type: 'eml' }));
+        const input = JSON.parse(bytes.toString() || '{}');
+        const value = url.pathname.endsWith('/demo') ? await replies.seedDemo() : url.pathname.endsWith('/history') ? await replies.refreshHistory()
+          : url.pathname.endsWith('/scan') ? capture.start() : url.pathname.endsWith('/backfill') ? await capture.resetBackfill() : await replies.review(input);
+        return send(res, 200, value);
+      }
       if (url.pathname === '/api/experiment/campaigns' && req.method === 'GET') {
         const state = await readState();
         const workspace = await imports.load();
@@ -68,7 +86,7 @@ export function createExperimentServer({ dataDir, workspaceDir = path.join(root,
           return send(res, 200, result);
         } finally { reviewing = false; }
       }
-      const files = { '/': ['experiment.html', 'text/html'], '/experiment.js': ['experiment.js', 'text/javascript'], '/experiment.css': ['experiment.css', 'text/css'], '/style.css': ['style.css', 'text/css'] };
+      const files = { '/': ['experiment.html', 'text/html'], '/conversations': ['conversations.html', 'text/html'], '/conversations.js': ['conversations.js', 'text/javascript'], '/conversations.css': ['conversations.css', 'text/css'], '/experiment.js': ['experiment.js', 'text/javascript'], '/experiment.css': ['experiment.css', 'text/css'], '/style.css': ['style.css', 'text/css'] };
       if (req.method === 'GET' && files[url.pathname]) {
         const [file, type] = files[url.pathname];
         const content = await fs.readFile(path.join(root, 'public', file));
@@ -76,14 +94,17 @@ export function createExperimentServer({ dataDir, workspaceDir = path.join(root,
         return res.end(content);
       }
       return send(res, 404, { error: 'Import experiment: this action is unavailable.' });
-    } catch (error) { send(res, 400, { error: error instanceof SyntaxError ? 'Use valid JSON for the mapping.' : error.message }); }
+    } catch (error) { send(res, 400, { error: error instanceof SyntaxError ? 'Use valid JSON for this request.' : error.message }); }
   });
+  const timer = setInterval(() => { if (env.FC_EXPERIMENT_REPLY_CAPTURE_ENABLED === '1' && env.FC_EXPERIMENT_REPLY_AUTO === '1') { try { capture.start(); } catch {} } }, 15000);
+  timer.unref(); server.on('close', () => { clearInterval(timer); capture.stop(); });
+  return server;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const dataDir = path.resolve(process.env.FC_EXPERIMENT_SOURCE || path.join(root, 'data'));
   const port = Number(process.env.FC_EXPERIMENT_PORT || 4327);
   const server = createExperimentServer({ dataDir, workspaceDir: path.resolve(process.env.FC_EXPERIMENT_DATA_DIR || path.join(root, 'experiment-data')) });
   server.on('error', (error) => { console.error(error.code === 'EADDRINUSE' ? 'Experiment port is already in use. Stop the old preview or set FC_EXPERIMENT_PORT.' : 'Cannot start experiment server.'); process.exitCode = 1; });
-  server.listen(port, '127.0.0.1', () => console.log(`Import repair experiment: http://127.0.0.1:${port}\nSource files stay unchanged. Repairs save to experiment copies only. No mailboxes or sending. Ctrl+C stops this preview.`));
+  server.listen(port, '127.0.0.1', () => console.log(`Outreach experiments: http://127.0.0.1:${port}\nSource files stay unchanged. Repairs/replies stay in the experiment workspace. No sending; read-only reply capture is opt-in. Conversations: /conversations. Ctrl+C stops this preview.`));
   for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => server.close());
 }
