@@ -4,24 +4,26 @@
  const names={company:'Carrier/company name',phone:'Phone',equipment:'Equipment / trailer',zip:'ZIP code',contactName:'Contact name',truckCount:'Truck count',dot:'USDOT',mc:'MC',availability:'Availability',lanes:'Preferred lanes'};
  const date=(s)=>s?new Date(s).toLocaleString():'Unknown';
  let detail=null,library=null,local=null,busy=false,templateEdit=null,lastDashboard=0;
- const unsaved=new Map();
+ const unsaved=new Map(),libraryDrafts=new Map();let wording=null,caret={start:0,end:0},publishedBusy=false;
  const request=(route,data)=>api('/api/conversations/'+route,data);
  function error(message=''){$('assistantError').hidden=!message;$('assistantError').textContent=message;}
  function remember(){if(!detail?.root||!local)return;local.body=$('assistantBody').value;local.templateId=$('assistantTemplate').value;unsaved.set(detail.root.id,{...local});}
- function controls(){const c=detail?.assistant,approved=c?.draft?.status==='approved'&&c.draftCurrent&&!local?.dirty;
-  for(const e of $('replyAssistant').querySelectorAll('input,textarea,select,button'))e.disabled=busy;
+ function controls(){if(publishedBusy!==busy){publishedBusy=busy;window.dispatchEvent(new CustomEvent('fc-reply-desk-busy',{detail:busy}));}const c=detail?.assistant,approved=c?.draft?.status==='approved'&&c.draftCurrent&&!local?.dirty;
+  for(const e of document.querySelectorAll('#replyAssistant input,#replyAssistant textarea,#replyAssistant select,#replyAssistant button,.reply-library input,.reply-library select,.reply-library textarea,.reply-library button'))e.disabled=busy;
   $('replyMarkRead').disabled=busy||!c?.latestInboundId;$('replyMarkUnread').disabled=busy||!c?.latestInboundId;
   $('assistantSuggest').disabled=busy||!c||!!c.hold;$('assistantSaveDraft').disabled=busy||!c||!!c.hold||!$('assistantBody').value.trim();
   $('assistantApprove').disabled=busy||!c?.draft||!c.draftCurrent||local?.dirty||c.draft.status!=='draft'||!$('assistantApproveConfirm').checked||!$('assistantApprovalNote').value.trim();
   $('assistantCancelDraft').disabled=busy||!['draft','approved'].includes(c?.draft?.status);
+  $('assistantReviewOpen').disabled=busy||!c?.draft||!c.draftCurrent||local?.dirty||c.draft.status!=='draft';
   $('assistantCopy').disabled=busy||!approved;$('assistantReportSent').disabled=busy||!approved||!$('assistantSentConfirm').checked||!$('assistantSentNote').value.trim();
   $('assistantMailbox').hidden=!approved||!c?.mailboxUrl;if(approved&&c.mailboxUrl)$('assistantMailbox').href=c.mailboxUrl;else $('assistantMailbox').removeAttribute('href');
  }
  async function refreshDetail(){if(!detail?.root)return;const next=await api('/api/conversation-detail?'+new URLSearchParams({id:detail.root.id,type:'conversation'}));window.dispatchEvent(new CustomEvent('fc-conversation-detail',{detail:next}));window.dispatchEvent(new Event('fc-conversation-view'));await loadDashboard(true);}
  async function act(button,fn){if(busy)return;remember();busy=true;const label=button.textContent;button.textContent='Working…';error();controls();$('assistantStatus').textContent='Saving / checking conversation evidence…';try{const result=await fn();await refreshDetail();$('assistantStatus').textContent=result||'Saved. No email was sent.';}catch(e){error(e.message);if(!detail?.assistant){$('replyError').hidden=false;$('replyError').textContent=e.message;}$('assistantStatus').textContent='Needs attention. Your draft is retained; refresh changed evidence before approving.';}finally{busy=false;button.textContent=label;controls();}}
  function render(){
-  const c=detail?.assistant;$('replyAssistant').hidden=!c;$('replyStartThread').hidden=!!detail?.root||!detail?.messages?.[0]?.knownCarrierContact||detail.messages[0].bodyUnavailable;
-  if(!c){local=null;controls();return;}
+  const c=detail?.assistant;$('replyAssistant').hidden=!c;$('replyStartThread').hidden=true;
+  if(!c){local=null;wording=null;showWording();controls();return;}
+  if(wording&&(wording.rootId!==detail.root.id||wording.contextVersion!==c.version))wording=null;
   const remembered=unsaved.get(detail.root.id);local=remembered||{body:c.draft?.body||'',id:['draft','approved'].includes(c.draft?.status)?c.draft.id:null,version:c.draft?.version,contextVersion:c.version,templateId:c.draft?.templateId||'',requestId:crypto.randomUUID(),dirty:false};
   if(!local.dirty){local={...local,body:c.draft?.body||'',id:['draft','approved'].includes(c.draft?.status)?c.draft.id:null,version:c.draft?.version,contextVersion:c.version};}
   $('assistantBody').value=local.body;
@@ -32,12 +34,12 @@
   $('assistantDraftBasis').textContent=`From ${c.account} → ${c.replyTo} · ${c.subject}. ${c.noReply?'No-response follow-up':'Reply to a matched carrier message'}. Required details still needing review: ${c.missing.join(', ')||'none'}.`;
   $('assistantDraftState').textContent=local.dirty?'Unsaved edits. Save and review again before approval.':c.draft?`Draft ${c.draft.status} · version ${c.draft.version}${c.draftCurrent?'':' · conversation changed; previous approval is stale'}. ${c.sentCopyMatches.length?'A matching Sent copy is captured; inspect it before any further reply.':''}`:'No saved draft. Suggestions and edited text require explicit approval.';
   $('assistantHistory').innerHTML=c.draftHistory.map((d)=>`<details><summary>${esc(d.status)} · ${esc(date(d.createdAt))} · version ${d.version}</summary><p>${esc(d.approvalNote||'No approval recorded')} ${esc(d.reportNote||'')}</p><pre>${esc(d.body)}</pre>${(d.previousVersions||[]).map((v)=>`<details><summary>Earlier version ${v.version} · ${esc(v.status)}</summary><pre>${esc(v.body)}</pre></details>`).join('')}</details>`).join('')||'<p class="hint">No saved draft history.</p>';
-  $('assistantApproveConfirm').checked=false;$('assistantDetailsConfirm').checked=false;controls();
+  renderSavedReplies();showWording();$('assistantApproveConfirm').checked=false;$('assistantDetailsConfirm').checked=false;controls();
  }
- window.addEventListener('fc-conversation-detail',(event)=>{remember();detail=event.detail;render();});
+ window.addEventListener('fc-conversation-detail',(event)=>{remember();if(detail?.root?.id!==event.detail.root?.id){$('assistantStatus').textContent='';error();}detail=event.detail;render();});
  $('assistantBody').oninput=()=>{if(local){local.body=$('assistantBody').value;local.dirty=true;$('assistantApproveConfirm').checked=false;$('assistantDraftState').textContent='Unsaved edits. Save and review again before approval.';controls();}};
  $('assistantTemplate').onchange=()=>{if(local)local.templateId=$('assistantTemplate').value;};
- $('assistantSuggest').onclick=()=>act($('assistantSuggest'),async()=>{if(local?.dirty&&!confirm('Replace the current unsaved reply text with a new suggestion?'))return 'Suggestion cancelled. Your text is retained.';const r=await request('draft',{rootId:detail.root.id,templateId:$('assistantTemplate').value||undefined,expectedContext:detail.assistant.version,requestId:crypto.randomUUID()});unsaved.delete(detail.root.id);local=null;return 'Suggested reply saved as an unapproved draft. Review every detail before approval.';});
+ $('assistantSuggest').onclick=()=>previewWording($('assistantSuggest'));
  $('assistantSaveDraft').onclick=()=>act($('assistantSaveDraft'),async()=>{await request('draft',{rootId:detail.root.id,id:local.id,expectedVersion:local.version,expectedContext:detail.assistant.version,body:$('assistantBody').value,requestId:local.requestId});unsaved.delete(detail.root.id);local=null;return 'Edited draft saved. Earlier approval no longer applies.';});
  $('assistantNewDraft').onclick=()=>{if(local?.dirty&&!confirm('Discard the current unsaved text and start a new draft?'))return;local={body:'',id:null,requestId:crypto.randomUUID(),dirty:true,templateId:''};unsaved.set(detail.root.id,local);$('assistantBody').value='';controls();};
  for(const id of ['assistantApproveConfirm','assistantApprovalNote','assistantSentConfirm','assistantSentNote'])$(id).oninput=controls;
@@ -50,12 +52,61 @@
  $('assistantManualConfirm').onclick=()=>act($('assistantManualConfirm'),async()=>{await request('confirm-details',{rootId:detail.root.id,expectedContext:detail.assistant.version,confirm:$('assistantDetailsConfirm').checked,note:$('assistantDetailsNote').value,fields:[{field:$('assistantManualField').value,value:$('assistantManualValue').value,messageId:$('assistantManualSource').value,excerpt:$('assistantManualQuote').value}]});return 'Cited carrier-stated value saved. This is not independent verification.';});
  for(const [id,unread]of [['replyMarkRead',false],['replyMarkUnread',true]])$(id).onclick=()=>act($(id),async()=>{await request('seen',{rootId:detail.root.id,expectedContext:detail.assistant.version,messageId:detail.assistant.latestInboundId,unread});return unread?'Marked unread for dashboard tracking.':'Viewed carrier evidence marked read.';});
  $('replyStartThread').onclick=()=>act($('replyStartThread'),async()=>{const m=detail.messages[0],r=await request('start-thread',{messageId:m.id,expectedReview:m.reviewVersion,confirm:$('replyLinkConfirm').checked,note:$('replyReviewNote').value});location.hash='conversations';window.dispatchEvent(new CustomEvent('fc-open-conversation',{detail:{id:r.rootId,type:'conversation'}}));return 'Known-carrier conversation created from reviewed inbound evidence.';});
- async function loadLibrary(){library=await request('library');const selected=$('replyLibrarySelect').value;$('replyLibrarySelect').innerHTML='<option value="">Choose a reply template…</option>'+library.templates.map((t)=>`<option value="${t.id}">${esc(t.name)}${t.active?'':' · archived'}</option>`).join('');$('replyLibrarySelect').value=selected;$('replyLibraryVariables').textContent='Fields: '+library.variables.map((v)=>'{{'+v+'}}').join(', ')+'. Confirmed detail fields require source review; confirmation_questions asks for missing details.';$('replyFollowDays').value=library.preferences.followUpDays;$('replyFollowMax').value=library.preferences.maxFollowUps;}
- function newTemplate(){templateEdit=null;$('replyLibrarySelect').value='';$('replyLibraryName').value='';$('replyLibraryBody').value='';$('replyLibraryCategory').value='neutral';$('replyLibraryActive').checked=true;}
- $('replyLibrarySelect').onchange=()=>{templateEdit=library?.templates.find((t)=>t.id===$('replyLibrarySelect').value);if(!templateEdit)return newTemplate();$('replyLibraryName').value=templateEdit.name;$('replyLibraryBody').value=templateEdit.body;$('replyLibraryCategory').value=templateEdit.category;$('replyLibraryActive').checked=templateEdit.active;};
- $('replyLibraryNew').onclick=newTemplate;
- async function libraryAction(button,fn){if(busy)return;busy=true;for(const el of document.querySelectorAll('.reply-library input,.reply-library select,.reply-library textarea,.reply-library button'))el.disabled=true;controls();const label=button.textContent;button.textContent='Saving…';try{await fn();await loadLibrary();$('replyLibraryStatus').textContent='Saved. Templates never send messages automatically.';}catch(e){$('replyLibraryStatus').textContent=e.message+' Your template draft is retained.';}finally{busy=false;for(const el of document.querySelectorAll('.reply-library input,.reply-library select,.reply-library textarea,.reply-library button'))el.disabled=false;button.textContent=label;controls();}}
- $('replyLibrarySave').onclick=()=>libraryAction($('replyLibrarySave'),async()=>{const r=await request('template',{id:templateEdit?.id,expectedVersion:templateEdit?.version,name:$('replyLibraryName').value,category:$('replyLibraryCategory').value,body:$('replyLibraryBody').value,active:$('replyLibraryActive').checked});templateEdit=r.template;});
+ function renderSavedReplies(){
+  const query=$('assistantSavedSearch').value.trim().toLowerCase(),items=(detail?.templates||[]).filter((t)=>[t.name,t.category,t.body].some((v)=>String(v).toLowerCase().includes(query)));
+  $('assistantSavedCards').innerHTML=items.map((t)=>`<button type="button" class="saved-reply-card secondary" data-saved-reply="${esc(t.id)}"><strong>${esc(t.name)}</strong><span>${esc(t.category)} · v${t.version}</span><span>${esc(t.body.slice(0,150))}</span></button>`).join('')||'<p class="hint">No saved replies match. You can write your own response above.</p>';
+ }
+ function showWording(){
+  $('assistantWordingPreview').hidden=!wording;
+  if(wording){$('assistantWordingName').textContent=wording.name+' · v'+wording.templateVersion+' preview';$('assistantWordingText').textContent=wording.body;}
+ }
+ async function previewWording(button,templateId){return act(button,async()=>{
+  const selected=(detail.templates||[]).find((t)=>t.id===templateId),params={rootId:detail.root.id,expectedContext:detail.assistant.version};
+  if(selected){params.templateId=selected.id;params.templateVersion=selected.version;}
+  wording=await request('template-preview?'+new URLSearchParams(params));showWording();return 'Preview ready. Insert or replace text when you want; your draft is unchanged.';
+ });}
+ function applyWording(replace){
+  if(busy||!wording)return;
+  if(wording.rootId!==detail.root.id||wording.contextVersion!==detail.assistant.version){error('Conversation changed. Preview the wording again.');return;}
+  const editor=$('assistantBody');if(replace&&editor.value.trim()&&!confirm('Replace the current reply text? The saved draft history is retained.'))return;
+  if(replace)editor.value=wording.body;else{const start=Math.min(caret.start,editor.value.length),end=Math.max(start,Math.min(caret.end,editor.value.length));let text=wording.body;if(start&&/\S/.test(editor.value[start-1]))text=' '+text;if(end<editor.value.length&&/\S/.test(editor.value[end]))text+=' ';editor.setRangeText(text,start,end,'end');}
+  local.templateId=wording.templateId;$('assistantTemplate').value=wording.templateId;editor.dispatchEvent(new Event('input'));wording=null;showWording();editor.focus();$('assistantStatus').textContent='Wording inserted. Edit freely, then save and review the exact reply.';
+ }
+ $('assistantSavedSearch').oninput=renderSavedReplies;
+ $('assistantSavedCards').onclick=(event)=>{const b=event.target.closest('[data-saved-reply]');if(b)void previewWording(b,b.dataset.savedReply);};
+ $('assistantInsertWording').onclick=()=>applyWording(false);$('assistantReplaceWording').onclick=()=>applyWording(true);$('assistantDismissWording').onclick=()=>{wording=null;showWording();};
+ for(const type of ['select','keyup','click'])$('assistantBody').addEventListener(type,()=>{caret={start:$('assistantBody').selectionStart,end:$('assistantBody').selectionEnd};});
+ $('assistantReviewOpen').onclick=()=>{$('assistantReview').open=true;$('assistantApprovalNote').focus();};
+ $('assistantSaveAsWording').onclick=()=>{
+  const body=$('assistantBody').value;if(!body.trim()){error('Write a reply first.');return;}rememberLibrary();const pending=libraryDrafts.get('new');if(pending?.body&&pending.body!==body&&!confirm('Replace the unsaved new wording in the library?'))return;
+  libraryDrafts.set('new',{name:'',body,category:detail?.assistant?.intent?.intent||'neutral',active:true});chooseLibrary('');document.querySelector('.reply-library').open=true;$('replyLibraryName').focus();$('replyLibraryStatus').textContent='Name this wording and replace any client-specific details with fields before reusing it. Nothing saved yet.';
+ };
+ function renderLibrary(){
+  const q=$('replyLibrarySearch').value.trim().toLowerCase(),items=(library?.templates||[]).filter((t)=>[t.name,t.category,t.body].some((v)=>String(v).toLowerCase().includes(q)));
+  $('replyLibraryCards').innerHTML=items.map((t)=>`<button class="saved-reply-card secondary" type="button" data-library-reply="${esc(t.id)}"><strong>${esc(t.name)}${t.active?'':' · archived'}</strong><span>${esc(t.category)} · v${t.version}</span><span>${esc(t.body.slice(0,130))}</span></button>`).join('')||'<p class="hint">No saved replies match.</p>';
+  $('replyLibraryVersion').textContent=templateEdit?'Editing saved version '+templateEdit.version+'. Earlier versions are retained.':'New saved wording. The library does not send emails.';
+ }
+ function rememberLibrary(){
+  libraryDrafts.set(templateEdit?.id||'new',{name:$('replyLibraryName').value,body:$('replyLibraryBody').value,category:$('replyLibraryCategory').value,active:$('replyLibraryActive').checked,version:templateEdit?.version});
+ }
+ function chooseLibrary(id){
+  const saved=library?.templates.find((t)=>t.id===id),draft=libraryDrafts.get(id||'new'),value=draft||saved||{name:'',body:'',category:'neutral',active:true};
+  templateEdit=saved?{...saved,version:draft?.version||saved.version}:null;$('replyLibrarySelect').value=id||'';$('replyLibraryName').value=value.name;$('replyLibraryBody').value=value.body;$('replyLibraryCategory').value=['interested','positive','pricing','how_it_works','neutral','negative','follow_up'].includes(value.category)?value.category:'neutral';$('replyLibraryActive').checked=value.active!==false;renderLibrary();
+ }
+ async function loadLibrary(){
+  library=await request('library');const selected=templateEdit?.id||$('replyLibrarySelect').value;
+  $('replyLibrarySelect').innerHTML='<option value="">New saved wording…</option>'+library.templates.map((t)=>`<option value="${esc(t.id)}">${esc(t.name)}${t.active?'':' · archived'}</option>`).join('');$('replyLibrarySelect').value=selected;
+  $('replyLibraryVariables').textContent='Insert fields below where you need them. Phone/equipment/ZIP fields require reviewed values; next_question asks one useful missing detail.';
+  $('replyLibraryFields').innerHTML=library.variables.map((v)=>`<button class="secondary" type="button" data-template-field="${esc(v)}">${esc(({contact_name:'Contact name',carrier_name:'Carrier/company',carrier_phone:'Reviewed phone',equipment:'Reviewed equipment',zip:'Reviewed ZIP',next_question:'Next question',confirmation_questions:'Next question (older field)',business_name:'Our company',sender_name:'Sender name'})[v]||v)}</button>`).join('');$('replyFollowDays').value=library.preferences.followUpDays;$('replyFollowMax').value=library.preferences.maxFollowUps;renderLibrary();
+ }
+ $('replyLibrarySelect').onchange=()=>{const next=$('replyLibrarySelect').value;rememberLibrary();chooseLibrary(next);};
+ $('replyLibraryCards').onclick=(event)=>{const b=event.target.closest('[data-library-reply]');if(b){rememberLibrary();chooseLibrary(b.dataset.libraryReply);}};
+ $('replyLibrarySearch').oninput=renderLibrary;
+ $('replyLibraryNew').onclick=()=>{rememberLibrary();chooseLibrary('');$('replyLibraryName').focus();};
+ $('replyLibraryFields').onclick=(event)=>{const b=event.target.closest('[data-template-field]');if(!b)return;const editor=$('replyLibraryBody');editor.setRangeText('{{'+b.dataset.templateField+'}}',editor.selectionStart,editor.selectionEnd,'end');editor.focus();rememberLibrary();};
+ async function libraryAction(button,fn){if(busy)return;busy=true;controls();const label=button.textContent;button.textContent='Saving…';$('replyLibraryStatus').textContent='Saving your wording…';try{await fn();await loadLibrary();$('replyLibraryStatus').textContent='Saved. Your wording is available for preview in conversations.';}catch(e){$('replyLibraryStatus').textContent=e.message+' Your editor text is retained.';}finally{busy=false;button.textContent=label;controls();}}
+ const saveWording=(button,copy)=>libraryAction(button,async()=>{const previousKey=templateEdit?.id||'new',r=await request('template',{id:copy?undefined:templateEdit?.id,expectedVersion:copy?undefined:templateEdit?.version,name:$('replyLibraryName').value,category:$('replyLibraryCategory').value,body:$('replyLibraryBody').value,active:$('replyLibraryActive').checked});if(!copy)libraryDrafts.delete(previousKey);templateEdit=r.template;$('replyLibraryBody').value=r.template.body;await refreshDetail();});
+ $('replyLibrarySave').onclick=()=>saveWording($('replyLibrarySave'),false);$('replyLibraryCopy').onclick=()=>saveWording($('replyLibraryCopy'),true);
  $('replyFollowSave').onclick=()=>libraryAction($('replyFollowSave'),()=>request('preferences',{followUpDays:Number($('replyFollowDays').value),maxFollowUps:Number($('replyFollowMax').value)}));
  async function loadDashboard(force=false){if(!force&&Date.now()-lastDashboard<15000)return;try{const r=await request('dashboard');lastDashboard=Date.now();$('carrierAttentionStatus').textContent='Captured local carrier activity · '+new Date().toLocaleTimeString()+'. No automatic conversation sending.';const metrics=[['New / unread','unread','unread'],['Needs my reply','needsReply','needs_reply'],['Interested','interested','interested'],['Draft approvals','awaitingApproval','approval'],['Follow-up eligible','followUpReady','follow_up']];$('carrierAttentionMetrics').innerHTML=metrics.map(([label,key,work])=>`<button class="secondary" data-carrier-work="${work}"><strong>${r.summary[key]}</strong><span>${label}</span></button>`).join('');$('carrierAttentionRows').innerHTML=r.highlights.map((item)=>`<article class="carrier-highlight ${item.unread?'unread':''}"><div><strong>${esc(item.recipient)}</strong><p>${esc(item.intent?.intent||item.category)} · ${esc(item.subject)}${item.unread?' · New/unread':''}</p><p>${esc(item.excerpt||'No captured human response. Check capture coverage before a follow-up.')}</p></div><button class="secondary" data-carrier-open="${item.id}" data-carrier-type="${item.type}">Review</button></article>`).join('')||'<p class="hint">No captured carrier work needs attention. This does not establish complete mailbox coverage.</p>';}catch(e){$('carrierAttentionStatus').textContent='Carrier activity needs attention: '+e.message;}}
  $('carrierAttentionRows').onclick=(event)=>{const b=event.target.closest('[data-carrier-open]');if(!b)return;location.hash='conversations';window.dispatchEvent(new CustomEvent('fc-open-conversation',{detail:{id:b.dataset.carrierOpen,type:b.dataset.carrierType}}));};

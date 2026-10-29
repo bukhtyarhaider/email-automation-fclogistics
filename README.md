@@ -1,6 +1,6 @@
-> **2.2.0-rc.2 candidate:** reviewed import activation/recovery and carrier conversations are integrated into the normal sidebar. See [Import and conversation release guide](IMPORTS-AND-CONVERSATIONS.md). Team work is excluded; production rollout is pending review.
+> **2.2.0-rc.3 candidate:** reviewed import activation/recovery and carrier conversations are integrated into the normal sidebar. See [Import and conversation release guide](IMPORTS-AND-CONVERSATIONS.md). Team work is excluded; production rollout is pending review.
 
-# Outreach Desk 2.2.0-rc.2
+# Outreach Desk 2.2.0-rc.3
 
 A configurable local email sales tool for teams using Private Email. Each PC has its own mailbox profiles and browser session. An optional shared coordinator prevents duplicate recipient claims across PCs and enforces team mailbox allowances.
 
@@ -12,7 +12,7 @@ The earlier `feat/sales-experiments` branch is preserved for later research. Tea
 
 ## Install on Windows and macOS
 
-1. Extract `Outreach-Desk-2.2.0-rc.2.zip` to a permanent folder on each PC. Give every OS user their own installation/data folder.
+1. Extract `Outreach-Desk-2.2.0-rc.3.zip` to a permanent folder on each PC. Give every OS user their own installation/data folder.
 2. Install [Node.js 20+](https://nodejs.org/), [Python 3.9+](https://www.python.org/downloads/), and Google Chrome or Microsoft Edge. On Windows select **Add Python to PATH** during installation.
 3. Windows: open `Setup-Windows.cmd` once, then `Start-Windows.cmd`. macOS: open `Setup-Mac.command` once, then `Start-Mac.command`. If macOS strips execute permission from the archive, run `chmod +x *.command` in that folder. Setup installs the locked npm dependencies from the npm registry.
 4. The launcher opens http://127.0.0.1:4317. Keep its terminal open while using the tool. Closing it stops the local server. Linux also works with `npm ci` then `npm run launch`.

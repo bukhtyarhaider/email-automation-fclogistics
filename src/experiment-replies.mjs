@@ -2,14 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parseReply, digest, categories, messageIds } from './reply-parser.mjs';
+import { isToolConversation } from './tool-conversation-scope.mjs';
 import { reconcileSent } from './mailbox-monitor.mjs';
 export const replyReviewVersion = (m) => digest(JSON.stringify({ category:m.category, kind:m.kind, match:m.match, rootId:m.rootId, note:m.reviewNote, reviewedAt:m.reviewedAt }));
 export const DEMO_ACCOUNT = 'demo.dispatch@example.invalid';
 const validEmail = (s) => typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length <= 254;
 const newState = () => ({ version: 1, roots: {}, messages: {}, cursors: {}, monitors: {}, protections: {}, events: [] });
 const rootKey = (account, tracking) => digest(`${account}\n${tracking}`);
-export function matchReply(state, mail, account, knownEmails = []) {
-  const roots = Object.values(state.roots).filter((r) => r.account === account);
+export function matchReply(state, mail, account, knownEmails = [], toolSentOnly = false) {
+  const roots = Object.values(state.roots).filter((r) => r.account === account && (!toolSentOnly || isToolConversation(r)));
   const evidence = new Set([...mail.references, ...mail.dsn.flatMap((d) => d.messageIds || [])]);
   const referencedRoots = new Set(Object.values(state.messages).filter((m) => m.account === account && m.messageId && evidence.has(m.messageId) && !['review','ignored'].includes(m.match)).map((m) => m.rootId));
   const candidates = roots.filter((r) => r.messageIds.some((id) => evidence.has(id)) || referencedRoots.has(r.id));
@@ -23,17 +24,18 @@ export function matchReply(state, mail, account, knownEmails = []) {
   if (!inbound && !outbound && !bounce) return { match: 'review', reason: 'Message reference found, but sender/recipient evidence differs' };
   return { rootId: root.id, match: 'exact', direction: outbound ? 'outbound' : 'inbound', reason: bounce ? 'Exact structured delivery notification' : 'Exact references and participants' };
 }
-export function applyReply(state, mail, account, source, clock = Date.now, knownEmails = []) {
+export function applyReply(state, mail, account, source, clock = Date.now, knownEmails = [], toolSentOnly = false) {
   const base = digest(`${account}:${mail.messageId || mail.fingerprint}`);
   const existing = Object.values(state.messages).find((m) => m.account === account && m.fingerprint === mail.fingerprint);
   if (existing) {
     // A later read-only Sent observation adds evidence to an imported copy without duplicating the message.
     if (source.type === 'imap' && source.folderRole === 'sent' && existing.direction === 'outbound' && !existing.sentEvidence) existing.sentEvidence = source;
+    retryPending(state, toolSentOnly);
     return { duplicate: true, messageId: existing.id };
   }
   const sourceId = mail.messageId && Object.values(state.roots).find((r) => r.account === account && r.messageIds.includes(mail.messageId));
   if (sourceId && mail.from.length === 1 && mail.from[0] === account && mail.to.includes(sourceId.recipient) && mail.subject === sourceId.subject && !mail.references.length) return { sourceCopy: true };
-  let match = matchReply(state, mail, account, knownEmails);
+  let match = matchReply(state, mail, account, knownEmails, toolSentOnly);
   if (match.match === 'ignore') return { ignored: true };
   if (mail.bodyUnavailable) match = { match: 'review', reason: 'Message body was oversized or unparseable. Inspect the mailbox before linking/classifying.' };
   const conflict = state.messages[base];
@@ -46,6 +48,7 @@ export function applyReply(state, mail, account, source, clock = Date.now, known
   state.messages[id] = record;
   if (record.rootId && record.direction === 'outbound' && record.messageId) state.roots[record.rootId].messageIds = [...new Set([...state.roots[record.rootId].messageIds, record.messageId])];
   protectReply(state, record);
+  retryPending(state, toolSentOnly);
   return { messageId: id, match: record.match, kind: record.kind };
 }
 function protectReply(state, record) {
@@ -62,11 +65,16 @@ function protectReply(state, record) {
     if (root) root.followUpPaused = true;
   }
 }
-function retryPending(state) {
-  for (const message of Object.values(state.messages).filter((m) => m.match === 'review' && !m.reviewedAt)) {
-    if (message.manualMatchRequired) continue;
-    const match = matchReply(state, message, message.account);
-    if (match.match === 'exact') { Object.assign(message, match); protectReply(state, message); }
+function retryPending(state, toolSentOnly = false) {
+  // A child can be fetched before its parent (folder order / imported EML order).
+  // Revisit unresolved links until this bounded closure is stable; a later scan continues long chains.
+  for (let pass = 0; pass < 100; pass++) {
+    let changed = false;
+    for (const message of Object.values(state.messages).filter((m) => m.match === 'review' && !m.reviewedAt && !m.manualMatchRequired)) {
+      const match = matchReply(state, message, message.account, [], toolSentOnly);
+      if (match.match === 'exact') { Object.assign(message, match); protectReply(state, message); changed = true; }
+    }
+    if (!changed) break;
   }
 }
 
@@ -133,7 +141,7 @@ export class ExperimentReplies {
       const prior = state.roots[root.id];
       state.roots[root.id] = { ...root, messageIds: [...new Set([...(prior?.messageIds || []), ...root.messageIds])], followUpPaused: prior?.followUpPaused || false };
     }
-    retryPending(state);
+    retryPending(state, this.imports.managed);
   }
   async refreshHistory(snapshot = null) {
     const { roots } = snapshot || await this.rootsFromSource();
@@ -149,7 +157,7 @@ export class ExperimentReplies {
     return this.transaction((state) => {
       if (account !== DEMO_ACCOUNT && !Object.values(roots).some((r) => r.account === account) && !(this.imports.managed && allowedAccounts.includes(account) && knownEmails.length)) throw new Error('Mailbox has no confirmed source send history. Load the correct source data first.');
       this.mergeRoots(state, roots);
-      return applyReply(state, mail, account, evidence, this.clock, knownEmails);
+      return applyReply(state, mail, account, evidence, this.clock, knownEmails, this.imports.managed);
     });
   }
   async sentCopy(source, account, snapshot = null) {
@@ -167,8 +175,8 @@ export class ExperimentReplies {
   async recordParsed(mail, account, evidence, cursor = null) {
     const knownEmails = await this.contactEmails();
     return this.transaction((state) => {
-      const result = mail ? applyReply(state, mail, account, evidence, this.clock, knownEmails) : { ignored: true };
-      if (cursor) state.cursors[cursor.key] = cursor.value;
+      const result = mail ? applyReply(state, mail, account, evidence, this.clock, knownEmails, this.imports.managed) : { ignored: true };
+      if (cursor) {state.cursors[cursor.key]=cursor.value;if(this.imports.managed&&cursor.progress){state.monitors._progress=cursor.progress;if(cursor.progress.historyId&&state.monitors._history?.id===cursor.progress.historyId)state.monitors._history.scanned=(state.monitors._history.scanned||0)+1;}}
       return result;
     });
   }
@@ -191,6 +199,7 @@ export class ExperimentReplies {
       if (message.match === 'ignored') throw new Error('Return this item to review before linking or classifying it.');
       if (message.match === 'review') {
         const root = state.roots[input.rootId];
+        if (this.imports.managed && !isToolConversation(root)) throw new Error('Link replies only to a confirmed tool-sent conversation.');
         if (!root || root.account !== message.account || root.demo !== message.demo || input.confirmLink !== true || input.note.trim().length < 5) throw new Error('Select a conversation from the same mailbox, confirm the manual link, and record your evidence.');
         if (message.from.length !== 1 || !validEmail(message.from[0])) throw new Error('A message without one valid sender must remain in review.');
         message.rootId = root.id; message.match = 'manual'; message.direction = message.from[0] === message.account ? 'outbound' : 'inbound';
@@ -200,6 +209,7 @@ export class ExperimentReplies {
       message.category = input.category; message.classificationSource = 'manual'; message.reviewNote = input.note.trim(); message.reviewedAt = new Date(this.clock()).toISOString();
       message.kind = ['out_of_office', 'automated', 'bounce'].includes(input.category) ? input.category : 'human';
       protectReply(state, message);
+      retryPending(state, this.imports.managed);
       return { ok: true };
     });
   }

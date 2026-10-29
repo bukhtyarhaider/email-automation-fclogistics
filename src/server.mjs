@@ -789,6 +789,7 @@ const server = http.createServer(async (req, res) => {
         return response(res, { error: "Invalid origin" }, 403);
       if (req.headers["x-fc-request"] !== "1")
         return response(res, { error: "Missing request header" }, 403);
+      if (pathname === "/api/conversations/stop-capture") {req.resume();carriers.capture.stop();return response(res,{ok:true,message:"Stopping read-only scan; saved progress is retained."});}
       if (pathname === "/api/stop") {
         state.automation.enabled = false;
         state.automation.message = "Stopping after the current operation…";
@@ -893,7 +894,7 @@ const server = http.createServer(async (req, res) => {
           if (action === "config" && PREVIEW_MODE && input.enabled) throw new Error("Sample preview: live capture cannot be enabled.");
           if (action === "config") return response(res, await carriers.configure(input));
           if (action === "history") return response(res, await carriers.replies.refreshHistory());
-          if (action === "scan") return response(res, carriers.capture.start());
+          if (action === "scan") return response(res, carriers.capture.start({historical:true}));
           if (action === "backfill") return response(res, await carriers.capture.resetBackfill());
           if (action === "review") { delete input.actor; return response(res, await carriers.replies.review(input)); }
           throw new Error("Conversation action not available.");
@@ -1511,6 +1512,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (pathname === "/api/conversations") { url.searchParams.set("mode", "real"); return response(res, { ...await carriers.assistant.list(url.searchParams), capture: await carriers.status(), accounts: [...new Set([...(await carriers.replies.accounts()).filter((a)=>!a.demo).map((a)=>a.email),...carriers.configuredAccounts()])].map((email)=>({email,demo:false})) }); }
     if (pathname === "/api/conversation-detail") return response(res, await carriers.assistant.detail(url.searchParams.get("id"), url.searchParams.get("type")));
+    if (pathname === "/api/conversations/template-preview") return response(res,await carriers.assistant.previewTemplate({rootId:url.searchParams.get("rootId"),expectedContext:url.searchParams.get("expectedContext"),templateId:url.searchParams.get("templateId")||undefined,expectedTemplateVersion:url.searchParams.has("templateVersion")?Number(url.searchParams.get("templateVersion")):undefined}));
     if (pathname === "/api/conversations/library") return response(res,await carriers.assistant.library());
     if (pathname === "/api/conversations/dashboard") return response(res,await carriers.assistant.dashboard());
     if (pathname === "/api/conversations/approved") {await syncTeam();return response(res,await carriers.assistant.approved(url.searchParams.get("id")));}

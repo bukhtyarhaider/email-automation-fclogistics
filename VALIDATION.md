@@ -1,5 +1,15 @@
 # Outreach Desk 2 validation
 
+## Tool-started historical conversations and saved wording — 2.2.0-rc.3 — October 30, 2026
+
+On `feat/import-repairs-carrier-conversations`, `FC_BROWSER_TESTS=1 FC_UI_SCREENSHOT_DIR=outputs/carrier-rc3-regression npm test` passed **184/184 JavaScript tests and 12/12 Python tests**, no failures/skips. The focused historical suite passed **13/13** checks; the integrated browser/API suite passed **8/8**. Sending, signatures, pacing, reservations, uncertainty, workbook recovery, coordinator and Firebase regression checks passed with synthetic fixtures.
+
+New evidence covers full manual backfill beyond automatic page limits; old responses and duplicate archived copies; imported-only exclusions; deep Sent reconciliation; changed-address review; child-before-parent and cross-folder references; newer source anchors reopening old cursor ranges; older tracking sends; stop/resume; verified UID disappearance; failed-fetch cursor retention; mid-scan UIDVALIDITY/high-water reset; Drafts misconfiguration; stable incremental progress; reply elsewhere/recent-contact follow-up guards; preview without draft creation; one missing question; stale saved wording; and migration preserving custom/archived wording and approved bodies. Browser checks cover search, preview, intentional insertion, free editing, approval/copy/cancellation, dashboard routing and desktop/mobile bounds.
+
+The UI and APIs report 2.2.0-rc.3. Packaging uses an explicit source allowlist; clean-extraction smoke checks run with a new empty synthetic data directory and already-installed dependencies. No installer download, native Windows acceptance, live provider authorization/retention, real carrier email or other-PC installation is claimed. Real `data/state.json` and `.env` are not used for testing. Stored earlier inbound-only evidence/protection remains retained even when excluded from the tool-send-scoped inbox.
+
+Known limits: provider-retained folders/source evidence bound historical coverage; ambiguous bodies/headers need mailbox review; long/failed work remains visibly incomplete and resumable; counts are local contact/message evidence rather than signings. Final sending stays in the original mailbox and requires the human’s action. The separate Team work/ownership experiment remains excluded. Option 1’s full Mailroom layout is the next UI checkpoint.
+
 ## Carrier reply desk and complete capture — 2.2.0-rc.2 — October 29, 2026
 
 Branch: `feat/import-repairs-carrier-conversations`. This candidate extends the reviewed import/conversation release without the deferred Team work experiment. No production deployment, main merge, remote push or other-PC installation was performed.

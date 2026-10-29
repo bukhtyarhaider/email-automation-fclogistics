@@ -23,7 +23,7 @@ test('detail extraction identifies phone/equipment/ZIP without treating DOT, tra
  assert.equal(extractCarrierDetails({...base,kind:'automated',text:'Phone: 8175550199 ZIP: 75001'}).length,0);
 });
 test('all known sent conversations include no-response work; suggestions wait, use editable templates and never become sent on approval',async(t)=>{
- const f=await setup(t);assert.equal(f.root.noReply,true);assert.equal(f.root.followUpReady,true);const made=await suggest(f);assert.equal(made.draft.status,'draft');assert.match(made.draft.body,/following up/);assert.match(made.draft.body,/phone/);await assert.rejects(f.desk.approved(made.draft.id),/approved/);
+ const f=await setup(t);assert.equal(f.root.noReply,true);assert.equal(f.root.followUpReady,true);const made=await suggest(f);assert.equal(made.draft.status,'draft');assert.match(made.draft.body,/following up/);assert.equal((made.draft.body.match(/\?/g)||[]).length,1);await assert.rejects(f.desk.approved(made.draft.id),/approved/);
  const approved=await approve(f,made.draft);assert.equal(approved.draft.status,'approved');assert.equal((await f.desk.approved(made.draft.id)).draft.body,made.draft.body);assert.equal((await f.get()).assistant.draft.reportedAt,undefined);
  await f.desk.reportSent({id:made.draft.id,expectedVersion:approved.draft.version,confirm:true,note:'Sent myself using native Reply in the correct mailbox'});const after=await f.get();assert.equal(after.assistant.draft.status,'reported_sent');assert.equal(after.assistant.followUpReady,false);assert.equal(f.state.history[recipient].status,'Sent');
  await assert.rejects(f.desk.draft({id:made.draft.id,rootId:f.root.id,expectedContext:after.assistant.version,expectedVersion:after.assistant.draft.version,body:'Changed past sent report',requestId:'past-report-edit'}),/history/);
@@ -40,7 +40,7 @@ test('carrier detail confirmation cites actual message evidence, preserves confl
  await assert.rejects(f.desk.confirmDetails({rootId:f.root.id,expectedContext:ctx.version,confirm:true,fields:[{field:'zip',value:'99999',messageId:ctx.lastMessageId}]}),/quote/);
  await f.desk.confirmDetails({rootId:f.root.id,expectedContext:ctx.version,confirm:true,fields:[{field:'phone',value:'8175550199',messageId:ctx.lastMessageId},{field:'zip',value:'75001',messageId:ctx.lastMessageId}]});view=await f.get();assert(!view.assistant.missing.includes('phone'));assert.equal(view.assistant.fields.phone.confirmed.source,'operator-reviewed carrier email');
  await f.ops.replies.ingest(eml({id:'<phone-change@example.com>',text:'My phone is 2145550177. ZIP is 75002.'}),account);view=await f.get();assert(view.assistant.fields.phone.conflict);assert(view.assistant.missing.includes('phone'));
- const draft=await suggest(f);assert.match(draft.draft.body,/What is your best phone number/);
+ const draft=await suggest(f);assert.match(draft.draft.body,/Which phone number/);
 });
 test('opt-outs, uncertain source history and unmatched pending messages hold approval and approved export',async(t)=>{
  const f=await setup(t,'What are your fees?');const made=await suggest(f);await approve(f,made.draft);
@@ -58,11 +58,8 @@ test('reply template edits are versioned, active templates use explicit allowed 
  await f.desk.saveTemplate({...t1,expectedVersion:t1.version,name:'Edited starter'});await assert.rejects(f.desk.saveTemplate({...t1,expectedVersion:t1.version,name:'Stale editor'}),/changed/);
  const draft=await suggest(f,{templateId:saved.template.id});assert.match(draft.draft.body,/Please confirm/);assert(!draft.draft.body.includes('{{'));
 });
-test('known imported carrier without a source send is retained for review, can start a reviewed inbound conversation and opt-outs still protect immediately',async(t)=>{
- const f=await setup(t);const known=[{email:'new-carrier@example.com',company:'Known source fleet',fields:{}}];f.ops.replies.contacts=()=>known;f.desk.contacts=()=>known;
- const result=await f.ops.replies.ingest(eml({id:'<new-carrier@example.net>',from:known[0].email,reference:null,text:'I am interested. Phone: 8175550199. ZIP: 75001.'}),account);assert.equal(result.match,'review');let msg=(await f.ops.replies.detail(result.messageId,'review')).messages[0];assert(msg.knownCarrierContact);
- const linked=await f.desk.startConversation({messageId:msg.id,expectedReview:msg.reviewVersion,confirm:true,note:'Reviewed source contact and actual mailbox sender'});const view=await f.desk.detail(linked.rootId,'conversation');assert.equal(view.root.source,'carrier_inbound');assert.equal(view.root.sentAt,null);assert.equal(view.assistant.intent.intent,'interested');
- await f.ops.replies.ingest(eml({id:'<new-carrier-stop@example.net>',from:known[0].email,reference:null,text:'Remove me from your list.'}),account);assert.match(f.ops.guard(known[0].email),/opt-out/);
+test('known imported carriers without tool-sent history are excluded from the conversation inbox',async(t)=>{
+ const f=await setup(t);const result=await f.ops.replies.ingest(eml({id:'<unsent-carrier@example.net>',from:'new-carrier@example.com',reference:null,text:'I am interested.'}),account);assert.equal(result.ignored,true);assert.equal((await f.desk.list()).total,1);await assert.rejects(f.desk.startConversation({}),/tool-sent/);
 });
 test('a matching Sent copy is distinct from approval/reporting and a later response reopens attention',async(t)=>{
  const f=await setup(t,'I am interested.');const made=await suggest(f);await approve(f,made.draft);let raw=eml({id:'<approved-outbound@example.com>',from:account,to:recipient,reference:originalId,text:made.draft.body+'\n\nExisting mailbox signature'}).toString().replace(/Date:.*?\r\n/,'Date: Fri, 06 Nov 2026 13:01:00 +0000\r\n');await f.ops.replies.ingest(Buffer.from(raw),account);const observed=await f.ops.replies.ingest(Buffer.from(raw),account,{type:'imap',folder:'Sent',folderRole:'sent',uid:22});assert.equal(observed.duplicate,true);let ctx=(await f.get()).assistant;assert.equal(ctx.sentCopyMatches.length,1);assert.equal(ctx.draft.status,'approved');assert.equal(ctx.needsReply,false);

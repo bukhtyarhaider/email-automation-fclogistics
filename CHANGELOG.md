@@ -1,8 +1,16 @@
 # Outreach Desk changelog
 
-Current candidate: **2.2.0-rc.2**. Previous stable package: **2.1.0**.
+Current candidate: **2.2.0-rc.3**. Previous stable package: **2.1.0**.
 
 The repository records package versions 1.0.0 and 2.0.0 before this release. Later updates often kept the same package version; they appear as dated milestones below. The historical Git label V1.1.0 did not change the recorded package version from 2.0.0.
+
+## 2.2.0-rc.3 — 2026-10-30 (release candidate)
+
+- Restricted conversation capture to threads anchored by confirmed tool sends, including older nonlatest tracking history. Imported contacts alone cannot start a conversation.
+- Added a resumable full-history scan across available response folders, Sent reconciliation, cross-folder ancestry revisits, explicit partial states and stable incremental cursors.
+- Added replied-contact filtering, first/latest reply dates and human-reply counts; replies elsewhere and recent contact activity prevent stale follow-ups.
+- Replaced forced template use with free writing, searchable saved wording, previews, deliberate insertion/replacement, field buttons and retained wording versions.
+- Shorter untouched starters ask one relevant missing question. Custom/archived wording and exact-text approvals remain preserved. Final Send stays manual in the existing mailbox.
 
 ## 2.2.0-rc.2 — 2026-10-29 (release candidate)
 

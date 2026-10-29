@@ -7,6 +7,7 @@ import { ExperimentImports } from './experiment-imports.mjs';
 import { ExperimentReplies, replyReviewVersion } from './experiment-replies.mjs';
 import { ReplyCapture, replyCaptureConfig } from './reply-capture.mjs';
 import { collectProtections } from './carrier-identity.mjs';
+import { isToolConversation, relatedToolRoots, confirmedToolSend } from './tool-conversation-scope.mjs';
 import { ConversationAssistant } from './conversation-assistant.mjs';
 import { digest } from './reply-parser.mjs';
 const copy = (value) => structuredClone(value);
@@ -26,10 +27,27 @@ class CarrierReplies extends ExperimentReplies {
     });
     const task = this.tail.then(run, run); this.tail = task.catch(() => {}); return task;
   }
-  contactEmails() { return [...new Set(this.contacts().map((c) => c.email).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))]; }
+  contactEmails() { return []; } // Imported contacts alone are not evidence of a tool-started email.
   allowedAccounts() { return this.accountsAllowed(); }
-  async rootsFromSource() { return { ...await super.rootsFromSource(), knownEmails:this.contactEmails() }; }
-  async detail(id, type) { const result = await super.detail(id,type);for(const m of result.messages)m.reviewVersion=replyReviewVersion(m);return result; }
+  mergeRoots(state,roots){for(const root of Object.values(roots)){const prior=state.roots[root.id];root.anchorMessageIds=[...new Set([...(prior?.anchorMessageIds||prior?.messageIds||[]),...root.messageIds])];}super.mergeRoots(state,roots);}
+  async rootsFromSource() {
+    const snapshot = await super.rootsFromSource();
+    // Keep every confirmed tracking send, including older sends no longer at history[email].
+    for (const [id, root] of Object.entries(snapshot.roots)) {
+      const history = snapshot.source.history?.[root.recipient];
+      if (!confirmedToolSend(history, true)) delete snapshot.roots[id];
+    }
+    for (const [recordKey, savedRecord] of Object.entries(snapshot.source.tracking?.records || {})) {
+      const record={...savedRecord,id:savedRecord.id||recordKey};
+      if (!confirmedToolSend(record) || !record.confirmedAt || !record.attemptedAt || !record.id || !record.sender || !record.recipient) continue;
+      const id = digest(`${record.sender}\n${record.id}`);
+      if (snapshot.roots[id]) continue;
+      snapshot.roots[id] = {id,account:record.sender.toLowerCase(),recipient:record.recipient.toLowerCase(),company:record.recipient,carrierId:null,identityReview:true,campaignId:record.campaignId||null,campaignName:'Confirmed tracking history',trackingId:record.id,subject:record.subject||'(No subject)',body:'',bodyUnavailable:true,sentAt:record.confirmedAt,messageIds:record.messageIds||[],demo:false,source:'local_sent_history',followUpPaused:false};
+      if (!isToolConversation(snapshot.roots[id])) delete snapshot.roots[id];
+    }
+    return {...snapshot, knownEmails:[...new Set(Object.values(snapshot.roots).map((r)=>r.recipient))]};
+  }
+  async detail(id, type) { const result = await super.detail(id,type);if(result.root&&!isToolConversation(result.root))throw fail('This conversation has no confirmed tool-sent email. Existing evidence is retained.');if(!result.root){const s=await this.load();if(!relatedToolRoots(s,result.messages[0],result.messages[0].account).length)throw fail('This message has no tool-sent conversation to review.');result.candidates=result.candidates.filter((r)=>isToolConversation(s.roots[r.id]));}for(const m of result.messages)m.reviewVersion=replyReviewVersion(m);return result; }
   async list(params) {
     const result = await super.list(params);
     result.protectionNote = result.protectionNote ? 'Captured opt-outs block outreach on this PC immediately. Shared protection delivery is shown below; other PCs require the team coordinator.' : null;
