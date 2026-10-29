@@ -15,11 +15,15 @@ export function replyCaptureConfig(env = process.env, clock = Date.now) {
     c.email = c.email.toLowerCase(); c.user ||= c.email;
     seen.add(c.id); accounts.add(c.email);
   }
-  const since = env.FC_EXPERIMENT_REPLY_SINCE || new Date(clock() - 30 * 86400000).toISOString().slice(0,10);
+  const allHistory = env.FC_EXPERIMENT_REPLY_ALL_HISTORY === '1';
+  const allFolders = env.FC_EXPERIMENT_REPLY_ALL_FOLDERS === '1';
+  const pages = Number(env.FC_EXPERIMENT_REPLY_PAGES || 1);
+  if(!Number.isInteger(pages)||pages<1||pages>10)throw new Error('Choose 1–10 pages per folder/check.');
+  const since = allHistory ? '1970-01-01' : env.FC_EXPERIMENT_REPLY_SINCE || new Date(clock() - 30 * 86400000).toISOString().slice(0,10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(since) || !Number.isFinite(Date.parse(since)) || new Date(since).toISOString().slice(0,10) !== since || Date.parse(since) > clock()) throw new Error('Use a valid reply backfill start date in the past.');
   const batch = Number(env.FC_EXPERIMENT_REPLY_BATCH || 50);
   if (!Number.isInteger(batch) || batch < 1 || batch > 100) throw new Error('Reply batch must be from 1 to 100 messages per folder/check.');
-  return { mailboxes, since, batch, enabled: env.FC_EXPERIMENT_REPLY_CAPTURE_ENABLED === '1', auto: env.FC_EXPERIMENT_REPLY_AUTO === '1' };
+  return { mailboxes, since, batch, pages, allHistory, allFolders, enabled: env.FC_EXPERIMENT_REPLY_CAPTURE_ENABLED === '1', auto: env.FC_EXPERIMENT_REPLY_AUTO === '1' };
 }
 export class ReplyCapture {
   constructor({ replies, env = process.env, clientFactory = (opts) => new ImapFlow(opts), clock = Date.now }) {
@@ -30,7 +34,7 @@ export class ReplyCapture {
     try { config = replyCaptureConfig(this.env, this.clock); }
     catch { return { enabled: false, auto: false, running: this.running, configurationError: 'Invalid experiment reply configuration. Check mailbox IDs, dates and credential references.', mailboxes: [] }; }
     const state = await this.replies.load();
-    return { enabled: config.enabled, auto: config.enabled && config.auto, running: this.running, since: config.since, batch: config.batch, captureError: this.lastError ? { status: 'Needs attention', message: this.lastError } : state.monitors._capture || null,
+    return { enabled: config.enabled, auto: config.enabled && config.auto, running: this.running, since: config.since, batch: config.batch, pages:config.pages, allHistory:config.allHistory, allFolders:config.allFolders, captureError: this.lastError ? { status: 'Needs attention', message: this.lastError } : state.monitors._capture || null,
       mailboxes: config.mailboxes.map((c) => ({ id: c.id, email: c.email, credentialsConfigured: Boolean((c.passwordEnv && this.env[c.passwordEnv]) || (c.accessTokenEnv && this.env[c.accessTokenEnv])), ...(state.monitors[c.id] || { status: 'Not checked' }) })) };
   }
   start() {
@@ -38,7 +42,7 @@ export class ReplyCapture {
     const config = replyCaptureConfig(this.env, this.clock);
     if (!config.enabled) throw new Error('Live reply capture is disabled. Use samples/EML import or explicitly configure experiment IMAP access.');
     if (!config.mailboxes.length) throw new Error('No experiment reply mailboxes are configured.');
-    this.running = true;
+    this.stopped = false; this.running = true;
     void this.run(config).catch(() => { this.lastError = 'Reply capture did not finish. Inspect workspace storage and capture lock.'; }).finally(() => { this.running = false; });
     return { started: true, running: true };
   }
@@ -49,17 +53,18 @@ export class ReplyCapture {
     const validity = String(box.uidValidity);
     let uid = prior?.validity === validity && prior.since === config.since ? prior.uid : 0;
     const uids = (await client.search(uid ? { uid: `${uid + 1}:*` } : { since: new Date(config.since + 'T00:00:00Z') }, { uid: true }) || []).filter((n) => Number.isSafeInteger(n) && n > uid).sort((a,b) => a-b);
+    const knownEmails=new Set(snapshot.knownEmails||[]);
     let processed = 0;
     for (const next of uids.slice(0, config.batch)) {
       if (this.stopped) throw new Error('Capture stopped.');
-      const evidence = { type: 'imap', folder, uid: next, uidValidity: validity };
-      const meta = await client.fetchOne(String(next), { size: true, envelope: true }, { uid: true });
+      const evidence = { type: 'imap', folder, folderRole:sent?'sent':'inbox', uid: next, uidValidity: validity };
+      const meta = await client.fetchOne(String(next), { size: true, envelope: true, headers:['references','in-reply-to'] }, { uid: true });
       if (!meta || !Number.isFinite(meta.size)) throw new Error('Message metadata unavailable; cursor retained.');
       const state = await this.replies.load(), roots = Object.values(state.roots).filter((r) => r.account === c.email);
       const envelope = meta.envelope;
       const from = (envelope?.from || []).map((a) => a.address?.toLowerCase()).filter(Boolean), to = [...(envelope?.to || []), ...(envelope?.cc || [])].map((a) => a.address?.toLowerCase()).filter(Boolean);
-      const reference = messageIds(envelope?.inReplyTo);
-      const relevant = !envelope || roots.some((r) => from.includes(r.recipient) || (sent && to.includes(r.recipient)) || r.messageIds.some((id) => reference.includes(id))) || /mailer-daemon|postmaster/.test(from.join(' ')) || /undeliverable|delivery fail|returned mail/i.test(envelope.subject || '');
+      const reference = [...new Set([...messageIds(envelope?.inReplyTo),...messageIds(meta.headers?.length<=65536?meta.headers.toString():'')])];
+      const relevant = !envelope || from.some((email)=>knownEmails.has(email)) || (sent && to.some((email)=>knownEmails.has(email))) || roots.some((r) => from.includes(r.recipient) || (sent && to.includes(r.recipient)) || r.messageIds.some((id) => reference.includes(id))) || /mailer-daemon|postmaster/.test(from.join(' ')) || /undeliverable|delivery fail|returned mail/i.test(envelope.subject || '');
       const cursor = { key, value: { account: c.email, folder, validity, uid: next, since: config.since, checkedAt: new Date(this.clock()).toISOString() } };
       if (!relevant) { await this.replies.recordParsed(null, c.email, evidence, cursor); uid = next; processed++; continue; }
       let parsed;
@@ -99,19 +104,37 @@ export class ReplyCapture {
         if (previous.nextAt && Date.parse(previous.nextAt) > this.clock()) continue;
         let client, folders = [];
         try {
-          if (!Object.values((await this.replies.load()).roots).some((r) => r.account === c.email && !r.demo)) throw new Error('No confirmed local sent history for this mailbox.');
+          if (!Object.values((await this.replies.load()).roots).some((r) => r.account === c.email && !r.demo) && !((await this.replies.allowedAccounts()).includes(c.email) && snapshot.knownEmails?.length)) throw new Error('No confirmed local sent history for this mailbox.');
           client = this.clientFactory(imapOptions(c, this.env)); client.on('error', () => {}); this.clients.add(client);
           await client.connect();
-          const available = await client.list();
+          let available=[],listingFailed=false;try{available=await client.list();}catch{listingFailed=true;}
           const sent = c.sentFolder || available.find((f) => f.specialUse === '\\Sent')?.path;
-          if (!sent) throw new Error('Sent folder missing.');
-          folders.push(await this.scanFolder(client, c, sent, true, config, snapshot));
-          folders.push(await this.scanFolder(client, c, c.inboxFolder || 'INBOX', false, config, snapshot));
-          await this.replies.transaction((state) => { state.monitors[c.id] = { status: folders.some((f) => f.more) ? 'Backfill in progress' : 'Checked', checkedAt: new Date(this.clock()).toISOString(), folders, failures: 0, nextAt: new Date(this.clock() + 60000).toISOString() }; });
+          const foldersToScan=[...new Set([...(sent?[sent]:[]),c.inboxFolder||'INBOX',...(config.allFolders?available.filter((f)=>f.specialUse!=='\\Drafts'&&!new Set(f.flags||[]).has('\\Noselect')).map((f)=>f.path):[])])];
+          let partial=listingFailed;
+          for (const folder of foldersToScan) {
+            const isSent=folder===sent;
+            try {
+            let count=0;
+            for(let page=0;page<(config.pages||1);page++) {
+              if(this.stopped)throw new Error('Capture stopped.');
+              const result=await this.scanFolder(client,c,folder,isSent,config,snapshot);count+=result.processed;
+              const progress={...result,processed:count,pages:page+1};const index=folders.findIndex((f)=>f.folder===folder);
+              if(index<0)folders.push(progress);else folders[index]=progress;
+              await this.replies.transaction((state)=>{state.monitors[c.id]={status:'Checking',checkedAt:previous.checkedAt||null,folders,sentUnavailable:!sent,attemptedAt:new Date(this.clock()).toISOString()};});
+              if(!result.more)break;
+            }
+            } catch {
+              if(this.stopped)throw new Error('Capture stopped.');
+              partial=true;
+              const progress=folders.find((f)=>f.folder===folder);
+              if(progress)Object.assign(progress,{error:true,more:true});else folders.push({folder,processed:0,error:true,more:true});
+            }
+          }
+          await this.replies.transaction((state) => { state.monitors[c.id] = { status: partial ? 'Needs attention' : folders.some((f) => f.more) ? 'Backfill in progress' : sent ? 'Checked' : 'Inbox checked; Sent unavailable', sentUnavailable:!sent, checkedAt:partial?(previous.checkedAt||null):new Date(this.clock()).toISOString(),attemptedAt:new Date(this.clock()).toISOString(),folders,failures:partial?(previous.failures||0)+1:0,message:partial?'Partial capture: a folder or folder listing failed. Successful pages are retained; failed cursors are retried. Check folders, credentials and connectivity.':null,nextAt:new Date(this.clock()+(partial?120000:60000)).toISOString() }; });
         } catch {
           const failures = Math.min((previous.failures || 0) + 1, 10);
-          await this.replies.transaction((state) => { state.monitors[c.id] = { status: 'Needs attention', checkedAt: previous.checkedAt || null, attemptedAt: new Date(this.clock()).toISOString(), failures, folders,
-            message: 'Read-only mailbox check failed. Check confirmed source history, credentials, folder names and connectivity. Failed fetches/storage never advance the cursor; oversized/unparseable relevant messages enter review.', nextAt: new Date(this.clock() + Math.min(3600000, 60000 * 2 ** failures)).toISOString() }; });
+          await this.replies.transaction((state) => { state.monitors[c.id] = { status: this.stopped ? 'Stopped' : 'Needs attention', checkedAt: previous.checkedAt || null, attemptedAt: new Date(this.clock()).toISOString(), failures, folders,
+            message: 'Read-only mailbox check failed. Check confirmed source history, credentials, folder names and connectivity. Failed fetches/storage never advance the cursor; oversized/unparseable relevant messages enter review.', nextAt: new Date(this.clock() + (this.stopped ? 0 : Math.min(3600000, 60000 * 2 ** failures))).toISOString() }; });
         } finally { client?.close(); this.clients.delete(client); }
       }
     } catch {

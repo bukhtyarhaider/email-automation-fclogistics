@@ -28,6 +28,7 @@ import { FirebaseSync } from "./firebase-sync.mjs";
 import { historyReport, historyCsv, csv, saveFollowUp } from "./history-report.mjs";
 import { StateFile } from "./state-file.mjs";
 import { CarrierWorkspace } from "./carrier-workspace.mjs";
+import { sharedReplyHold } from './conversation-assistant.mjs';
 import { APP_VERSION, releaseCatalog, saveReleaseNote } from "./release-catalog.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -170,7 +171,9 @@ const stateFile = new StateFile({ state, file: storePath });
 const persist = () => stateFile.save();
 const monitor = new MailboxMonitor({ state, persist });
 const firebaseSync = new FirebaseSync({ state, persist, dataDirectory: DATA });
-const carriers = new CarrierWorkspace({ dataDir: DATA, state, persist, team,
+let contactCacheKey = '', contactCache = [];
+function knownCarrierContacts() { const key = `${campaignRevision}:${campaignData.size}`; if(key !== contactCacheKey){contactCache=[...campaignData.values()].flatMap((d)=>d.leads);contactCacheKey=key;}return contactCache; }
+const carriers = new CarrierWorkspace({ dataDir: DATA, state, persist, team, contacts:knownCarrierContacts,replyGuard:(email)=>state.settings.team.enabled?sharedReplyHold(teamSnapshot,email):null,
   commitCampaign: (campaign, next) => stateFile.save({ campaign, next }),
   python: process.env.FC_PYTHON || (process.platform === "win32" ? "python" : "python3"),
   readWorkbook: (file, mapping) => python("read", file, mapping) });
@@ -884,6 +887,9 @@ const server = http.createServer(async (req, res) => {
         }
         if (pathname.startsWith("/api/conversations/")) {
           const action = pathname.slice("/api/conversations/".length);
+          const assistantRoutes={draft:'draft',approve:'approve','report-sent':'reportSent','cancel-draft':'cancelDraft',seen:'seen','confirm-details':'confirmDetails','template':'saveTemplate',preferences:'preferences','start-thread':'startConversation'};
+          if (Object.hasOwn(assistantRoutes,action)) {if(["draft","approve"].includes(action))await syncTeam();return response(res,await carriers.assistant[assistantRoutes[action]](input));}
+          if (action === "stop-capture") {carriers.capture.stop();return response(res,{ok:true,message:"Stopping read-only capture; saved cursors/messages remain."});}
           if (action === "config" && PREVIEW_MODE && input.enabled) throw new Error("Sample preview: live capture cannot be enabled.");
           if (action === "config") return response(res, await carriers.configure(input));
           if (action === "history") return response(res, await carriers.replies.refreshHistory());
@@ -1503,8 +1509,11 @@ const server = http.createServer(async (req, res) => {
       const file = await carriers.imports.download(url.searchParams.get("revisionId"), url.searchParams.get("kind"));
       res.writeHead(200, { "Content-Type": file.type, "Content-Disposition": `attachment; filename="${file.filename.replace("experiment-", "import-")}"`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }); return res.end(file.bytes);
     }
-    if (pathname === "/api/conversations") { url.searchParams.set("mode", "real"); return response(res, { ...await carriers.replies.list(url.searchParams), capture: await carriers.status(), accounts: (await carriers.replies.accounts()).filter((a) => !a.demo) }); }
-    if (pathname === "/api/conversation-detail") return response(res, await carriers.replies.detail(url.searchParams.get("id"), url.searchParams.get("type")));
+    if (pathname === "/api/conversations") { url.searchParams.set("mode", "real"); return response(res, { ...await carriers.assistant.list(url.searchParams), capture: await carriers.status(), accounts: [...new Set([...(await carriers.replies.accounts()).filter((a)=>!a.demo).map((a)=>a.email),...carriers.configuredAccounts()])].map((email)=>({email,demo:false})) }); }
+    if (pathname === "/api/conversation-detail") return response(res, await carriers.assistant.detail(url.searchParams.get("id"), url.searchParams.get("type")));
+    if (pathname === "/api/conversations/library") return response(res,await carriers.assistant.library());
+    if (pathname === "/api/conversations/dashboard") return response(res,await carriers.assistant.dashboard());
+    if (pathname === "/api/conversations/approved") {await syncTeam();return response(res,await carriers.assistant.approved(url.searchParams.get("id")));}
     if (pathname === "/api/tracking") {
       return response(res, { ...report(state.tracking, url.searchParams),
         monitorEnabled: process.env.FC_MONITOR_ENABLED === "1",

@@ -68,7 +68,13 @@ export class ExperimentImports {
       mode: Object.hasOwn(input, 'mapping') ? 'preview' : 'saved', previewId, identitySummary: identity.summary,
       records: identity.records.slice(0, 10), sourceHash: source.sourceHash, addStatusColumns };
   }
-  async withWrite(fn) {
+  withWrite(fn) {
+    if (!this.managed) return this.lockedWrite(fn);
+    const run = () => this.lockedWrite(fn);
+    const job = (this.writeTail || Promise.resolve()).then(run, run);
+    this.writeTail = job.catch(() => {}); return job;
+  }
+  async lockedWrite(fn) {
     if (this.busy) throw new Error('An experiment save is running. Wait for it to finish.');
     this.busy = true; let lock;
     try {

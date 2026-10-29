@@ -95,6 +95,7 @@ const JS_FILES = [
   "_experiment.js",
   "_conversations.js",
   "_carrier-workspace.js",
+  "_conversation-assistant.js",
   "_boot.js",
 ];
 

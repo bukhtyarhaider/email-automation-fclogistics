@@ -18,17 +18,20 @@
   }
   window.addEventListener('fc-capture-status', ({detail}) => {
     const shared = detail.sharedProtection;
+    $('replyStopCapture').disabled=!detail.running;
     $('replyConfigNote').textContent = `${detail.configurationSource || ''} · ${detail.protectionHealth || ''}. ${shared?.enabled ? `${shared.pending} opt-out(s) awaiting coordinator sync.` : 'Independent PC: opt-outs are local. Configure the team coordinator for shared sending protection.'}`;
     if(loaded||dirty||!detail.configuration)return;
     loaded=true;const c=detail.configuration;mailboxes=c.mailboxes;
-    $('replyConfigEnabled').checked=c.enabled;$('replyConfigAuto').checked=c.auto;$('replyConfigSince').value=c.since;$('replyConfigBatch').value=c.batch;renderMailboxes();
+    $('replyConfigEnabled').checked=c.enabled;$('replyConfigAuto').checked=c.auto;$('replyConfigSince').value=c.since;$('replyConfigBatch').value=c.batch;$('replyConfigAll').checked=c.allHistory===true;$('replyConfigAllFolders').checked=c.allFolders===true;$('replyConfigPages').value=c.pages||5;$('replyConfigSince').disabled=c.allHistory===true;renderMailboxes();
   });
+  $('replyConfigAll').onchange=()=>{$('replyConfigSince').disabled=$('replyConfigAll').checked;dirty=true;};
+  $('replyStopCapture').onclick=async()=>{try{await api('/api/conversations/stop-capture',{});notice('Stopping capture. Saved messages and cursors are retained.');}catch(e){notice(e.message);}};
   $('replyConfigPanel').oninput=()=>{dirty=true;};
   $('replyConfigAdd').onclick=()=>{if(saving)return;mailboxes=readMailboxes();if(mailboxes.length>=20){notice('Up to 20 mailboxes are supported.');return;}mailboxes.push({id:'mailbox'+(mailboxes.length+1)});dirty=true;renderMailboxes();};
   $('replyConfigMailboxes').onclick=(event)=>{const b=event.target.closest('[data-config-remove]');if(!b||saving)return;mailboxes=readMailboxes();mailboxes.splice(Number(b.dataset.configRemove),1);dirty=true;renderMailboxes();};
   $('replyConfigSave').onclick=async()=>{
     if(saving)return;saving=true;const b=$('replyConfigSave');b.textContent='Saving…';b.disabled=true;
-    try {await api('/api/conversations/config',{enabled:$('replyConfigEnabled').checked,auto:$('replyConfigAuto').checked,since:$('replyConfigSince').value,batch:Number($('replyConfigBatch').value),mailboxes:readMailboxes(),confirmReadOnly:$('replyConfigConfirm').checked});loaded=false;dirty=false;$('replyConfigConfirm').checked=false;window.dispatchEvent(new Event('fc-conversation-view'));notice('Read-only capture configuration saved. Secret values were not stored.');}
+    try {await api('/api/conversations/config',{enabled:$('replyConfigEnabled').checked,auto:$('replyConfigAuto').checked,since:$('replyConfigSince').value,batch:Number($('replyConfigBatch').value),allHistory:$('replyConfigAll').checked,allFolders:$('replyConfigAllFolders').checked,pages:Number($('replyConfigPages').value),mailboxes:readMailboxes(),confirmReadOnly:$('replyConfigConfirm').checked});loaded=false;dirty=false;$('replyConfigConfirm').checked=false;window.dispatchEvent(new Event('fc-conversation-view'));notice('Read-only capture configuration saved. Secret values were not stored.');}
     catch(e){notice(e.message);$('replyConfigNote').textContent=e.message+' Your settings draft is retained.';}
     finally{saving=false;b.textContent='Save capture settings';b.disabled=false;}
   };

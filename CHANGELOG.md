@@ -1,8 +1,17 @@
 # Outreach Desk changelog
 
-Current candidate: **2.2.0-rc.1**. Previous stable package: **2.1.0**.
+Current candidate: **2.2.0-rc.2**. Previous stable package: **2.1.0**.
 
 The repository records package versions 1.0.0 and 2.0.0 before this release. Later updates often kept the same package version; they appear as dated milestones below. The historical Git label V1.1.0 did not change the recorded package version from 2.0.0.
+
+## 2.2.0-rc.2 — 2026-10-29 (release candidate)
+
+- Added the integrated reply desk with local intent suggestions, editable/versioned reply templates and evidence-backed carrier detail confirmations.
+- Both unanswered human responses and no-captured-response follow-ups have work queues; dashboard highlights link to the exact conversation with explicit local read/unread tracking.
+- Drafts require exact-text/account/recipient approval before copy. Edits/new evidence invalidate approval; cancel and retained versions support recovery. Final Send stays in the existing mailbox using native Reply and signatures.
+- Keep operator-reported mailbox actions separate from captured matching Sent copies and delivery; never fabricate submission from approval alone.
+- Expanded read-only capture to full history and archive folders, bounded resumable pages, stop/resume, partial folder failures, References-only changed senders and known carrier inbound-first reviews.
+- Retained opt-out/uncertainty guards and added current coordinator checks before drafting, approval and copy when team mode is enabled. The deferred Team work/ownership experiment is still excluded.
 
 ## 2.2.0-rc.1 — 2026-10-29 (release candidate)
 

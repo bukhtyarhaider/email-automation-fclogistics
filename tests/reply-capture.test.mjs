@@ -11,7 +11,7 @@ function fakeClient(items, calls, validity = 1) {
   return { folder:'', on(){}, async connect(){calls.push('connect');}, close(){calls.push('close');}, async list(){return [{path:'Sent',specialUse:'\\Sent'}];},
     async mailboxOpen(folder,options){assert.equal(options.readOnly,true);this.folder=folder;return {uidValidity:validity};},
     async search(query,options){assert.equal(options.uid,true);calls.push({query,folder:this.folder});return this.folder==='Sent'?[]:items.map((m)=>m.uid);},
-    async fetchOne(uid,query,options){assert.equal(options.uid,true);const item=items.find((m)=>m.uid===Number(uid));if(query.size)return {size:item.size??item.source.length,envelope:item.envelope||{from:[{address:recipient}],to:[{address:account}],messageId:`<capture-${uid}@example.com>`,subject:'Reply'}};calls.push('fetch-source');if(item.fail)throw new Error('PRIVATE_TRANSPORT_ERROR');return {source:item.source};},
+    async fetchOne(uid,query,options){assert.equal(options.uid,true);const item=items.find((m)=>m.uid===Number(uid));if(query.size){assert.deepEqual(query.headers,['references','in-reply-to']);return {size:item.size??item.source.length,headers:Buffer.from(item.headers||''),envelope:item.envelope||{from:[{address:recipient}],to:[{address:account}],messageId:`<capture-${uid}@example.com>`,subject:'Reply'}};}calls.push('fetch-source');if(item.fail)throw new Error('PRIVATE_TRANSPORT_ERROR');return {source:item.source};},
     async messageFlagsAdd(){throw new Error('Must never mutate mailbox');}, async messageMove(){throw new Error('Must never move messages');}, async messageDelete(){throw new Error('Must never delete messages');},
   };
 }
@@ -26,6 +26,35 @@ test('live capture requires its own explicit configuration; credentials use TLS/
  await capture.run(replyCaptureConfig(env,()=>fixed));
  assert((await capture.status()).mailboxes[0].checkedAt);
  assert(!JSON.stringify(await capture.status()).includes('PRIVATE_IMAP_PASSWORD'));
+});
+
+test('full-history pages resume across checks and References-only changed senders are retained for explicit review',async(t)=>{
+ const {replies}=await fixture(t),calls=[],env={...envFor(),FC_EXPERIMENT_REPLY_ALL_HISTORY:'1',FC_EXPERIMENT_REPLY_PAGES:'2'};let now=fixed;
+ const source=eml({id:'<changed-sender@example.net>',from:'new-address@example.net'}).toString().replace(/In-Reply-To:.*?\r\n/,'');
+ const items=[{uid:1,source:Buffer.from(source),headers:'References: <sent-one@example.com>\r\n',envelope:{from:[{address:'new-address@example.net'}],to:[{address:account}],subject:'Re: Dispatch support'}},{uid:2,source:eml({id:'<page-2@example.com>'})},{uid:3,source:eml({id:'<page-3@example.com>'})}];
+ const capture=new ReplyCapture({replies,env,clock:()=>now,clientFactory:()=>fakeClient(items,calls)});await capture.run(replyCaptureConfig(env,()=>now));
+ let s=await capture.status();assert.equal(s.since,'1970-01-01');assert.equal(s.mailboxes[0].folders.find((f)=>f.folder==='INBOX').processed,2);assert.equal(s.mailboxes[0].status,'Backfill in progress');assert.equal((await replies.list()).summary.needsMatch,1);
+ now+=61000;await capture.run(replyCaptureConfig(env,()=>now));s=await capture.status();assert.equal(s.mailboxes[0].status,'Checked');assert.equal(Object.keys((await replies.load()).messages).length,3);
+});
+
+test('known imported contacts are captured without an outbound anchor and Inbox capture survives unavailable Sent/folder listings',async(t)=>{
+ const f=await fixture(t);f.state.history={};await fs.writeFile(path.join(f.dataDir,'state.json'),JSON.stringify(f.state));
+ f.replies.allowedAccounts=()=>[account];f.replies.contactEmails=()=>[recipient];const original=f.replies.rootsFromSource.bind(f.replies);f.replies.rootsFromSource=async()=>({...await original(),knownEmails:[recipient]});
+ const capture=new ReplyCapture({replies:f.replies,env:envFor(),clock:()=>fixed,clientFactory:()=>{const c=fakeClient([{uid:1,source:eml({reference:null})}],[]);c.list=async()=>[];return c;}});await capture.run(replyCaptureConfig(envFor(),()=>fixed));
+ assert.equal((await capture.status()).mailboxes[0].status,'Inbox checked; Sent unavailable');const messages=Object.values((await f.replies.load()).messages);assert.equal(messages.length,1);assert.equal(messages[0].match,'review');assert.equal(messages[0].knownCarrierContact,true);
+});
+
+test('archived carrier responses are included, Drafts are excluded and one folder failure does not hide successful Inbox pages',async(t)=>{
+ const {replies}=await fixture(t),opened=[],env={...envFor(),FC_EXPERIMENT_REPLY_ALL_FOLDERS:'1'};
+ const capture=new ReplyCapture({replies,env,clock:()=>fixed,clientFactory:()=>{const c=fakeClient([{uid:1,source:eml()}],[]);c.list=async()=>[{path:'Sent',specialUse:'\\Sent'},{path:'Archive'},{path:'Drafts',specialUse:'\\Drafts'},{path:'Parent',flags:new Set(['\\Noselect'])}];const open=c.mailboxOpen.bind(c);c.mailboxOpen=async(folder,o)=>{opened.push(folder);if(folder==='Sent')throw new Error('Unavailable');return open(folder,o);};return c;}});
+ await capture.run(replyCaptureConfig(env,()=>fixed));assert.deepEqual(opened,['Sent','INBOX','Archive']);const s=(await capture.status()).mailboxes[0];assert.equal(s.status,'Needs attention');assert(s.folders.find((f)=>f.folder==='Sent').error);assert.equal((await replies.list()).summary.humanMessages,1);
+});
+
+test('stopping a scan keeps committed pages and permits a new start from retained cursors',async(t)=>{
+ const {replies}=await fixture(t),env={...envFor(),FC_EXPERIMENT_REPLY_PAGES:'3'};let capture,stopOnce=true;
+ capture=new ReplyCapture({replies,env,clock:()=>fixed,clientFactory:()=>{const c=fakeClient([{uid:1,source:eml({id:'<stop-one@example.com>'})},{uid:2,source:eml({id:'<stop-two@example.com>'})}],[]),fetch=c.fetchOne.bind(c);c.fetchOne=async(...args)=>{const r=await fetch(...args);if(args[1].source&&stopOnce){stopOnce=false;capture.stop();}return r;};return c;}});
+ await capture.run(replyCaptureConfig(env,()=>fixed));assert.equal((await capture.status()).mailboxes[0].status,'Stopped');assert.equal(Object.keys((await replies.load()).messages).length,1);
+ capture.start();for(let i=0;i<100&&capture.running;i++)await new Promise((r)=>setTimeout(r,10));assert.equal(capture.running,false);assert.equal(Object.keys((await replies.load()).messages).length,2);
 });
 
 test('read-only UID backfill is bounded, resumable, restart-safe and independent of source DSN cursors',async(t)=>{

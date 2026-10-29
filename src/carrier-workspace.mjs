@@ -7,13 +7,14 @@ import { ExperimentImports } from './experiment-imports.mjs';
 import { ExperimentReplies, replyReviewVersion } from './experiment-replies.mjs';
 import { ReplyCapture, replyCaptureConfig } from './reply-capture.mjs';
 import { collectProtections } from './carrier-identity.mjs';
+import { ConversationAssistant } from './conversation-assistant.mjs';
 import { digest } from './reply-parser.mjs';
 const copy = (value) => structuredClone(value);
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const prefix = 'Captured carrier opt-out: ';
 
 class CarrierReplies extends ExperimentReplies {
-  constructor(options) { super(options); this.onCommit = options.onCommit; this.onFailure = options.onFailure; }
+  constructor(options) { super(options); this.onCommit = options.onCommit; this.onFailure = options.onFailure; this.contacts = options.contacts; this.accountsAllowed = options.accountsAllowed; }
   transaction(fn) {
     const run = () => this.imports.withWrite(async () => {
       const state = await this.load();
@@ -25,6 +26,9 @@ class CarrierReplies extends ExperimentReplies {
     });
     const task = this.tail.then(run, run); this.tail = task.catch(() => {}); return task;
   }
+  contactEmails() { return [...new Set(this.contacts().map((c) => c.email).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))]; }
+  allowedAccounts() { return this.accountsAllowed(); }
+  async rootsFromSource() { return { ...await super.rootsFromSource(), knownEmails:this.contactEmails() }; }
   async detail(id, type) { const result = await super.detail(id,type);for(const m of result.messages)m.reviewVersion=replyReviewVersion(m);return result; }
   async list(params) {
     const result = await super.list(params);
@@ -34,8 +38,8 @@ class CarrierReplies extends ExperimentReplies {
 }
 
 export class CarrierWorkspace {
-  constructor({ dataDir, state, persist, readWorkbook, team, python, env = process.env, clientFactory, commitCampaign }) {
-    Object.assign(this, { dataDir, state, persist, readWorkbook, team, env });
+  constructor({ dataDir, state, persist, readWorkbook, team, python, env = process.env, clientFactory, commitCampaign, contacts = () => [], replyGuard = () => null }) {
+    Object.assign(this, { dataDir, state, persist, readWorkbook, team, env, contacts });
     this.commitCampaign = commitCampaign || (async (campaign, next) => {
       const before = copy(campaign);
       Object.keys(campaign).forEach((key) => delete campaign[key]);Object.assign(campaign,next);
@@ -43,17 +47,21 @@ export class CarrierWorkspace {
       try { await this.persist(); } catch(e) { Object.keys(campaign).forEach((key)=>delete campaign[key]);Object.assign(campaign,before);if(state.activeCampaign===campaign.id)state.workbook=campaign.workbook;throw e; }
     });
     this.imports = new ExperimentImports({ dataDir, workspaceDir: path.join(dataDir, 'carrier-workspace'), python, managed: true, stateReader: () => state });
-    this.replies = new CarrierReplies({ imports: this.imports, onCommit: (s) => this.applyProtections(s), onFailure: () => { this.error='Carrier reply storage failed. Restore its health before sending.'; } });
+    this.replies = new CarrierReplies({ imports: this.imports, contacts, accountsAllowed: () => [...new Set([...(state.profiles || []).map((p) => p.email?.toLowerCase()), ...this.configuredAccounts()])].filter(Boolean), onCommit: (s) => this.applyProtections(s), onFailure: () => { this.error='Carrier reply storage failed. Restore its health before sending.'; } });
     this.capture = new ReplyCapture({ replies: this.replies, env: this.captureEnv(), clientFactory });
     this.holds = new Map(); this.error = null;
+    this.assistant = new ConversationAssistant({ replies:this.replies, state, guard:(email)=>this.guard(email)||replyGuard(email), contacts });
   }
   captureEnv(config = this.state.replyCapture) {
     const environment = { ...this.env };
-    for (const key of ['CAPTURE_ENABLED', 'AUTO', 'MAILBOXES', 'SINCE', 'BATCH']) {
+    for (const key of ['CAPTURE_ENABLED', 'AUTO', 'MAILBOXES', 'SINCE', 'BATCH', 'ALL_HISTORY', 'ALL_FOLDERS', 'PAGES']) {
       delete environment['FC_EXPERIMENT_REPLY_' + key];
       const value = this.env['FC_REPLY_' + key];
       if (value !== undefined) environment['FC_EXPERIMENT_REPLY_' + key] = value;
     }
+    if (!config && !this.env.FC_REPLY_SINCE && this.env.FC_REPLY_ALL_HISTORY === undefined) environment.FC_EXPERIMENT_REPLY_ALL_HISTORY='1';
+    if (!config && this.env.FC_REPLY_ALL_FOLDERS === undefined) environment.FC_EXPERIMENT_REPLY_ALL_FOLDERS='1';
+    if (!config && this.env.FC_REPLY_PAGES === undefined) environment.FC_EXPERIMENT_REPLY_PAGES='5';
     if (config) {
       Object.assign(environment, {
         FC_EXPERIMENT_REPLY_CAPTURE_ENABLED: config.enabled ? '1' : '0',
@@ -61,12 +69,16 @@ export class CarrierWorkspace {
         FC_EXPERIMENT_REPLY_MAILBOXES: JSON.stringify(config.mailboxes),
         FC_EXPERIMENT_REPLY_SINCE: config.since,
         FC_EXPERIMENT_REPLY_BATCH: String(config.batch),
+        FC_EXPERIMENT_REPLY_ALL_HISTORY: config.allHistory ? '1' : '0',
+        FC_EXPERIMENT_REPLY_ALL_FOLDERS: config.allFolders ? '1' : '0',
+        FC_EXPERIMENT_REPLY_PAGES: String(config.pages || 5),
       });
     }
     return environment;
   }
+  configuredAccounts() { try { return replyCaptureConfig(this.capture.env).mailboxes.map((m)=>m.email); } catch { return []; } }
   async initialize() {
-    try { await this.applyProtections(await this.replies.load()); }
+    try { await this.applyProtections(await this.replies.load()); await this.replies.refreshHistory(); }
     catch { this.error = 'Carrier protection storage is unavailable. Restore the carrier-workspace backup before sending.'; }
   }
   guard(email) { return this.error || this.holds.get(email) || null; }
@@ -104,7 +116,7 @@ export class CarrierWorkspace {
     const capture = await this.capture.status();
     let config; try { config = replyCaptureConfig(this.capture.env); } catch { config = { enabled:false, auto:false, since:new Date(Date.now()-30*86400000).toISOString().slice(0,10), batch:50, mailboxes:[] }; }
     return { ...capture, configurationSource: this.state.replyCapture ? 'Saved on this PC' : 'Environment / defaults',
-      configuration: { enabled: config.enabled, auto: config.auto, since: config.since, batch: config.batch, mailboxes: config.mailboxes },
+      configuration: { enabled: config.enabled, auto: config.auto, since: config.since, batch: config.batch, allHistory:config.allHistory, allFolders:config.allFolders, pages:config.pages, mailboxes: config.mailboxes },
       protectionHealth: this.error || 'Local protection guard active',
       sharedProtection: this.state.settings.team.enabled ? { enabled: true, pending: Object.keys(this.state.replySuppressionOutbox || {}).length } : { enabled: false, pending: 0 } };
   }
@@ -124,7 +136,7 @@ export class CarrierWorkspace {
       if (m.authMode === 'oauth' && !m.accessTokenEnv) throw fail('Enter the OAuth token environment-variable name.');
       return copy(m);
     });
-    const config = { enabled: input.enabled === true, auto: input.auto === true, since: input.since, batch: Number(input.batch), mailboxes };
+    const config = { enabled: input.enabled === true, auto: input.auto === true, since: input.since, batch: Number(input.batch), allHistory:input.allHistory===true, allFolders:input.allFolders===true, pages:Number(input.pages||5), mailboxes };
     replyCaptureConfig(this.captureEnv(config));
     if(config.enabled&&!config.mailboxes.length)throw fail('Add at least one authorized mailbox before enabling capture.');
     const old = this.state.replyCapture;

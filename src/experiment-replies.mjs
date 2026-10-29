@@ -8,11 +8,12 @@ export const DEMO_ACCOUNT = 'demo.dispatch@example.invalid';
 const validEmail = (s) => typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length <= 254;
 const newState = () => ({ version: 1, roots: {}, messages: {}, cursors: {}, monitors: {}, protections: {}, events: [] });
 const rootKey = (account, tracking) => digest(`${account}\n${tracking}`);
-export function matchReply(state, mail, account) {
+export function matchReply(state, mail, account, knownEmails = []) {
   const roots = Object.values(state.roots).filter((r) => r.account === account);
   const evidence = new Set([...mail.references, ...mail.dsn.flatMap((d) => d.messageIds || [])]);
-  const candidates = roots.filter((r) => r.messageIds.some((id) => evidence.has(id)) || Object.values(state.messages).some((m) => m.rootId === r.id && m.messageId && evidence.has(m.messageId) && m.match !== 'review'));
-  const knownContact = roots.some((r) => mail.from.includes(r.recipient) || (mail.from[0] === account && mail.to.includes(r.recipient)));
+  const referencedRoots = new Set(Object.values(state.messages).filter((m) => m.account === account && m.messageId && evidence.has(m.messageId) && !['review','ignored'].includes(m.match)).map((m) => m.rootId));
+  const candidates = roots.filter((r) => r.messageIds.some((id) => evidence.has(id)) || referencedRoots.has(r.id));
+  const knownContact = ((mail.to.includes(account) || mail.deliveredTo === account) && mail.from.some((email) => knownEmails.includes(email))) || (mail.from[0] === account && mail.to.some((email) => knownEmails.includes(email))) || roots.some((r) => mail.from.includes(r.recipient) || (mail.from[0] === account && mail.to.includes(r.recipient)));
   if (!candidates.length) return knownContact ? { match: 'review', reason: 'Known contact, but no exact message-reference match' } : { match: 'ignore', reason: 'No known contact or message reference; nothing retained' };
   if (candidates.length !== 1) return { match: 'review', reason: 'References match more than one conversation' };
   const root = candidates[0];
@@ -22,13 +23,17 @@ export function matchReply(state, mail, account) {
   if (!inbound && !outbound && !bounce) return { match: 'review', reason: 'Message reference found, but sender/recipient evidence differs' };
   return { rootId: root.id, match: 'exact', direction: outbound ? 'outbound' : 'inbound', reason: bounce ? 'Exact structured delivery notification' : 'Exact references and participants' };
 }
-export function applyReply(state, mail, account, source, clock = Date.now) {
+export function applyReply(state, mail, account, source, clock = Date.now, knownEmails = []) {
   const base = digest(`${account}:${mail.messageId || mail.fingerprint}`);
   const existing = Object.values(state.messages).find((m) => m.account === account && m.fingerprint === mail.fingerprint);
-  if (existing) return { duplicate: true, messageId: existing.id };
+  if (existing) {
+    // A later read-only Sent observation adds evidence to an imported copy without duplicating the message.
+    if (source.type === 'imap' && source.folderRole === 'sent' && existing.direction === 'outbound' && !existing.sentEvidence) existing.sentEvidence = source;
+    return { duplicate: true, messageId: existing.id };
+  }
   const sourceId = mail.messageId && Object.values(state.roots).find((r) => r.account === account && r.messageIds.includes(mail.messageId));
   if (sourceId && mail.from.length === 1 && mail.from[0] === account && mail.to.includes(sourceId.recipient) && mail.subject === sourceId.subject && !mail.references.length) return { sourceCopy: true };
-  let match = matchReply(state, mail, account);
+  let match = matchReply(state, mail, account, knownEmails);
   if (match.match === 'ignore') return { ignored: true };
   if (mail.bodyUnavailable) match = { match: 'review', reason: 'Message body was oversized or unparseable. Inspect the mailbox before linking/classifying.' };
   const conflict = state.messages[base];
@@ -36,7 +41,7 @@ export function applyReply(state, mail, account, source, clock = Date.now) {
   if (sourceId && mail.from[0] !== account) match = { match: 'review', reason: 'Incoming message reuses an outbound Message-ID; inspect the mailbox' };
   const id = conflict ? digest(`${base}:${mail.fingerprint}`) : base;
   const record = { ...mail, ...match, id, account, demo: account === DEMO_ACCOUNT,
-    source, capturedAt: new Date(clock()).toISOString(), category: mail.suggestion.category, classificationSource: 'rule', reviewNote: '', reviewedAt: null,
+    source, knownCarrierContact: mail.from.length === 1 && knownEmails.includes(mail.from[0]) && (mail.to.includes(account) || mail.deliveredTo === account), capturedAt: new Date(clock()).toISOString(), category: mail.suggestion.category, classificationSource: 'rule', reviewNote: '', reviewedAt: null,
     manualMatchRequired: Boolean(conflict || mail.bodyUnavailable || (sourceId && mail.from[0] !== account)) };
   state.messages[id] = record;
   if (record.rootId && record.direction === 'outbound' && record.messageId) state.roots[record.rootId].messageIds = [...new Set([...state.roots[record.rootId].messageIds, record.messageId])];
@@ -47,7 +52,7 @@ function protectReply(state, record) {
   if (record.direction === 'outbound' || record.from.length !== 1 || record.from[0] === record.account) return;
   const root = state.roots[record.rootId];
   const contacts = Object.values(state.roots).filter((r) => r.account === record.account && r.recipient === record.from[0] && (record.to.includes(record.account) || record.deliveredTo === record.account));
-  if (!contacts.length && !(root && record.match === 'manual')) return;
+  if (!contacts.length && !(root && record.match === 'manual') && !record.knownCarrierContact) return;
   if (record.kind === 'human') for (const r of [...contacts, ...(root ? [root] : [])]) r.followUpPaused = true;
   if (record.category === 'opt_out' && record.kind === 'human' && (record.suggestion.definiteOptOut || record.classificationSource === 'manual')) {
     const email = record.from[0];
@@ -82,6 +87,8 @@ export class ExperimentReplies {
     const run = () => this.imports.withWrite(async () => { const state = await this.load(); const result = await fn(state); await this.persist(state); return result; });
     const task = this.tail.then(run, run); this.tail = task.catch(() => {}); return task;
   }
+  contactEmails() { return []; }
+  allowedAccounts() { return []; }
   async sourceState() {
     if (this.imports.stateReader) return structuredClone(this.imports.stateReader());
     try { return JSON.parse(await fs.readFile(path.join(this.imports.dataDir, 'state.json'), 'utf8')); }
@@ -137,10 +144,12 @@ export class ExperimentReplies {
     account = account.toLowerCase();
     const mail = await parseReply(source);
     const { roots } = await this.rootsFromSource();
+    const knownEmails = await this.contactEmails();
+    const allowedAccounts = await this.allowedAccounts();
     return this.transaction((state) => {
-      if (account !== DEMO_ACCOUNT && !Object.values(roots).some((r) => r.account === account)) throw new Error('Mailbox has no confirmed source send history. Load the correct source data first.');
+      if (account !== DEMO_ACCOUNT && !Object.values(roots).some((r) => r.account === account) && !(this.imports.managed && allowedAccounts.includes(account) && knownEmails.length)) throw new Error('Mailbox has no confirmed source send history. Load the correct source data first.');
       this.mergeRoots(state, roots);
-      return applyReply(state, mail, account, evidence, this.clock);
+      return applyReply(state, mail, account, evidence, this.clock, knownEmails);
     });
   }
   async sentCopy(source, account, snapshot = null) {
@@ -156,8 +165,9 @@ export class ExperimentReplies {
     return true;
   }
   async recordParsed(mail, account, evidence, cursor = null) {
+    const knownEmails = await this.contactEmails();
     return this.transaction((state) => {
-      const result = mail ? applyReply(state, mail, account, evidence, this.clock) : { ignored: true };
+      const result = mail ? applyReply(state, mail, account, evidence, this.clock, knownEmails) : { ignored: true };
       if (cursor) state.cursors[cursor.key] = cursor.value;
       return result;
     });
