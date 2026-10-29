@@ -1,8 +1,14 @@
 # Outreach Desk changelog
 
-Current candidate: **2.2.0-rc.4**. Previous stable package: **2.1.0**.
+Current candidate: **2.2.0-rc.5**. Previous stable package: **2.1.0**.
 
 The repository records package versions 1.0.0 and 2.0.0 before this release. Later updates often kept the same package version; they appear as dated milestones below. The historical Git label V1.1.0 did not change the recorded package version from 2.0.0.
+
+## 2.2.0-rc.5 — 2026-10-30 (release candidate)
+
+- Restored the shared application header, labeled navigation, mailbox profile footer and developer details on Carrier conversations.
+- Removed the separate Mailroom shell styling, including hidden status/version information and alternate notification/banner treatment. The shared mobile navigation rules apply across routes.
+- Used the existing page heading, spacing, surface and border tokens around the conversation workspace. Queues, free writing, optional saved lines and exact approval retain their existing behavior.
 
 ## 2.2.0-rc.4 — 2026-10-30 (release candidate)
 

@@ -1,6 +1,52 @@
-# Mailroom design QA — 2.2.0-rc.4
+# Shared Conversations design QA — 2.2.0-rc.5
 
 final result: passed
+
+The user's current direction is to reuse the existing app header, sidebar, footer and overall design on Conversations. This supersedes the separate shell in the original Mailroom image. The list/thread/free-reply workspace remains inside the shared app shell.
+
+Source visual truth: `outputs/shared-shell-qa/reference-templates-final.jpg`, the existing Templates page at `http://127.0.0.1:4327/#templates`. Initial pre-change reference: `reference-templates.jpg` in the same folder.
+Implementation: `outputs/shared-shell-qa/conversations-desktop.jpg`, `http://127.0.0.1:4327/#conversations`. Both use the same isolated synthetic preview with live capture and sending disabled.
+
+## Comparison and findings
+
+- Full-view combined input: `outputs/shared-shell-qa/desktop-comparison.jpg`. Source and implementation are **1089 × 910 screenshot pixels** at the same **1089 × 910 CSS viewport**. Native browser devicePixelRatio was 2; its screenshot API returned images already normalized to CSS pixels. Both sides use the same screenshot density; no additional density correction or stretching was needed.
+- Focused combined inputs: `header-comparison.jpg` and `sidebar-footer-comparison.jpg` in the same folder. Header height **46px**, desktop sidebar width **242px**, sidebar footer position and dimensions match the existing page. Header campaign/mailbox status, desktop version, labeled navigation, mailbox profile card and developer details remain visible. Only the expected active navigation item differs.
+- Mobile combined input: `mobile-comparison.jpg`, using `reference-templates-mobile.jpg` and `conversations-mobile.jpg`. Both are **390 × 844 pixels**, CSS **390 × 844**, DPR **1**. Header remains **46px** and sidebar **68px**, using the same shared responsive rules as Templates. No horizontal overflow was measured on Conversations. The existing compact footer and native list/detail navigation remain available.
+- State: dark theme, existing mailbox disconnected, preview banner visible, John Smith's synthetic conversation open, saved reply unapproved. Page-specific main content differs intentionally between the source and implementation. The comparison judges the shared shell and consistent content treatment, rather than copying the Templates form into the conversation view.
+- Earlier finding resolved: rc.4's route-specific titlebar/sidebar/footer rules hid shared information and changed geometry. Removed those overrides, restored normal banner and notification presentation, reused `page-header`, `page-eyebrow`, `page-title`, standard page insets, and surface/border/radius tokens. `conversations-first.jpg` records the initial integrated result; final captures confirm the same shared shell.
+
+No actionable P0/P1/P2 difference remains for this requested integration.
+
+## Required fidelity surfaces
+
+- **Typography:** the common titlebar/nav/footer rules supply the exact same fonts, sizes and weights across routes. Conversations uses the shared 26px page title and standard eyebrow. Message/editor typography remains designed for readable correspondence.
+- **Spacing/layout:** desktop titlebar, sidebar and footer geometry matches the reference; the conversation heading aligns to normal page padding. The bounded conversation surface uses existing panel radius and border tokens. On narrower widths the conversation workspace switches to list/detail without replacing shared navigation.
+- **Colors/tokens:** titlebar/sidebar gradients, footer card, common viewport background, notification/banner appearance and status colors are inherited unchanged. Conversation surfaces use `--bg-surface`, `--border-medium` and `--radius-md`.
+- **Asset fidelity:** the original common OD brand, FC mailbox profile, navigation icons and status marks are reused directly from the existing shared markup. No replacement shell, logo or footer was drawn or generated.
+- **Copy/content:** all shared labels, version, account status and developer information remain identical across routes. Conversation-specific wording, explicit draft review and evidence limitations remain intact.
+
+## Interaction and verification
+
+The full regression suite passed **186/186 JavaScript tests and 12/12 Python tests**, no failures/skips. The existing Mailroom browser scenario now compares shared shell geometry/styles on Conversations and Templates at desktop/mobile sizes and verifies that unsaved reply text survives route changes. Existing coverage retains search, queues, saved wording, exact approval, stale-evidence rejection, capture protections, imports and sender safety checks.
+
+Native in-app browser verification navigated Templates → Conversations, compared desktop captures, checked both routes at 390px and returned to the normal viewport. The selected thread and saved draft remained intact. No provider connection or email send was used for verification.
+
+## Implementation checklist
+
+- [x] Use shared header, status/version and labeled navigation.
+- [x] Use shared mailbox footer and developer information.
+- [x] Restore normal banner and notification styling.
+- [x] Align page typography, insets and conversation surface tokens.
+- [x] Compare desktop/mobile source and implementation together.
+- [x] Verify route changes retain draft text and the shared shell.
+
+No new share/deployment or real mailbox acceptance is implied by this visual check. The rc.4 record below is retained as design history; its separate-shell choices are superseded by this user's current request.
+
+---
+
+# Previous Mailroom design QA — 2.2.0-rc.4
+
+Result at rc.4: passed
 
 Selected target: **Option 1 — Mailroom**, from the displayed conversation design set recorded in `outputs/conversation-ux-review/CONCEPTS.md`.
 

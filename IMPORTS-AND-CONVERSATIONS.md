@@ -1,4 +1,4 @@
-# Outreach Desk 2.2.0-rc.4 — reviewed imports and carrier conversations
+# Outreach Desk 2.2.0-rc.5 — reviewed imports and carrier conversations
 
 Feature branch: `feat/import-repairs-carrier-conversations`.
 Previous stable build: 2.1.0. This is a release candidate for review, not an automatically approved production deployment. Experiments 01–03 are integrated into the normal app; Team work remains on `feat/sales-experiments` and is excluded from this candidate.
@@ -92,4 +92,4 @@ Automated results and package inspection are recorded in VALIDATION.md after the
 - After approval, copy the approved text, open the existing mailbox and use native Reply above its signature. Record a mailbox action only after you send it yourself. Operator reports, matching Sent copies and delivery remain different evidence.
 - Unsaved draft text survives switching queues, searches and conversations in the running page. Reloading/closing the app discards unsaved edits; use Save draft to persist them. On narrow screens use **Back to inbox** to choose another carrier.
 
-The layout is scoped to Carrier conversations. Other routes retain the established app shell. The sample preview uses isolated synthetic data with sending and live capture disabled; production provider/other-PC rollout remains a separate acceptance step.
+Carrier conversations shares the established header, sidebar, mailbox profile footer, developer information, notifications and responsive navigation with every other route. Only the conversation workspace has its own content layout. The sample preview uses isolated synthetic data with sending and live capture disabled; production provider/other-PC rollout remains a separate acceptance step.

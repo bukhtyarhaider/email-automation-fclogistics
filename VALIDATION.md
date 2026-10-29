@@ -1,5 +1,13 @@
 # Outreach Desk 2 validation
 
+## Shared Conversations shell — 2.2.0-rc.5 — October 30, 2026
+
+`FC_BROWSER_TESTS=1 FC_UI_SCREENSHOT_DIR=outputs/carrier-rc5-regression npm test` passed **186/186 JavaScript tests and 12/12 Python tests**, with no failures/skips. The existing Mailroom browser case now compares titlebar/sidebar/footer styles and dimensions with Templates on desktop and mobile, and checks unsaved text through cross-page navigation. All existing reply approval, stale evidence, import, capture and sender safeguards passed.
+
+Removed route-specific header, navigation, footer, banner and notification styling. Conversations uses the actual common markup and responsive rules, plus the shared heading classes and page spacing. Only its content workspace has dedicated layout rules. Native in-app browser comparisons at **1089 × 910** and **390 × 844** confirmed matching shell geometry and no Conversations horizontal overflow. `design-qa.md` records the current shared-shell target and passed comparisons; the older Mailroom reference remains as history.
+
+The candidate stays on `feat/import-repairs-carrier-conversations`. The sample preview uses isolated synthetic state, with sending and live capture disabled. No production-state or mailbox-setting migration, remote push, merge or deployment was performed. rc.4 remains available as the prior local checkpoint/package.
+
 ## Mailroom conversation workspace — 2.2.0-rc.4 — October 30, 2026
 
 On `feat/import-repairs-carrier-conversations`, the final `FC_BROWSER_TESTS=1 FC_UI_SCREENSHOT_DIR=outputs/carrier-rc4-regression npm test` passed **186/186 JavaScript tests and 12/12 Python tests**, no failures/skips. JavaScript syntax checks passed for **92 files**, Python compilation for **2 files**, and `git diff --check` passed. An earlier regression run exposed an outdated release-count assertion (six entries); it now expects the seventh recorded package entry. No production code was changed to satisfy that count.
