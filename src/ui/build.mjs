@@ -51,6 +51,7 @@ const CSS_FILES = [
   "_experiment.css",
   "_conversations.css",
   "_carrier-workspace.css",
+  "_mailroom.css",
 ];
 
 // === HTML partials (order matters) ===
@@ -96,6 +97,7 @@ const JS_FILES = [
   "_conversations.js",
   "_carrier-workspace.js",
   "_conversation-assistant.js",
+  "_mailroom.js",
   "_boot.js",
 ];
 

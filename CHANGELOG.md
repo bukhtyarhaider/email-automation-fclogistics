@@ -1,8 +1,17 @@
 # Outreach Desk changelog
 
-Current candidate: **2.2.0-rc.3**. Previous stable package: **2.1.0**.
+Current candidate: **2.2.0-rc.4**. Previous stable package: **2.1.0**.
 
 The repository records package versions 1.0.0 and 2.0.0 before this release. Later updates often kept the same package version; they appear as dated milestones below. The historical Git label V1.1.0 did not change the recorded package version from 2.0.0.
+
+## 2.2.0-rc.4 — 2026-10-30 (release candidate)
+
+- Built the selected Mailroom layout in the normal Carrier conversations flow: list, latest carrier message and free reply editor together, with mobile list/detail navigation.
+- Added direct search and Needs reply / All / Waiting tabs; preserved broader filters, mailbox setup, full thread evidence and review controls in dialogs.
+- Review reply saves current wording and shows the exact text, account and recipient before approval. Optional saved lines support preview, insertion and reuse without replacing free writing.
+- Preserved unsaved draft text while filtering/navigating; reject changed conversation evidence during approval and keep errors visible in the review dialog.
+- Historical messages sort by their effective message time, rather than the order in which a scan imported them. Display names remain unverified email/header evidence.
+- Kept current sender, signature, import, opt-out, uncertainty and shared protection workflows. Final Send stays in the user's existing mailbox.
 
 ## 2.2.0-rc.3 — 2026-10-30 (release candidate)
 

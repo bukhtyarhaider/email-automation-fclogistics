@@ -1,0 +1,149 @@
+/* Mailroom is scoped to the conversation route; the established app shell remains elsewhere. */
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+.mailroom-active .app-titlebar{height:60px;background:var(--bg-app);box-shadow:none;backdrop-filter:none;}
+.mailroom-active .titlebar-left{margin-left:82px;}
+.mailroom-active .window-dots,.mailroom-active .titlebar-center,.mailroom-active .titlebar-right,.mailroom-active .brand-subtext{display:none;}
+.mailroom-active .titlebar-brand{font-size:16px;letter-spacing:.6px;gap:14px;}
+.mailroom-active .brand-monogram{font-size:14px;padding:9px 11px;}
+.mailroom-active .app-container{height:calc(100vh - 60px);}
+.mailroom-active .app-sidebar{width:82px;padding:14px 8px;background:var(--bg-sidebar);}
+.mailroom-active .nav-category,.mailroom-active .nav-link>span,.mailroom-active .profile-info,.mailroom-active .sidebar-developer{display:none;}
+.mailroom-active .sidebar-nav{gap:6px;}
+.mailroom-active .nav-link{min-height:46px;padding:12px;justify-content:center;}
+.mailroom-active .nav-link svg{width:22px;height:22px;}
+.mailroom-active .nav-link:focus-visible{outline:2px solid var(--accent-red)!important;outline-offset:-3px;}
+.mailroom-active .sidebar-foot{background:none;border:0;justify-content:center;padding:8px;box-shadow:none;}
+.mailroom-active .app-viewport{display:flex;flex-direction:column;overflow:hidden;background:var(--bg-app);}
+.mailroom-active #releasePreviewBanner{border-radius:0;margin:0;padding:7px 20px;font-size:12px;flex-shrink:0;}
+.mailroom-active #notice{position:fixed;top:70px;right:20px;max-width:460px;margin:0;}
+#view-conversations.mailroom-page{max-width:none;width:100%;padding:0 18px;min-height:0;flex:1;overflow:hidden;}
+#view-conversations.mailroom-page.active{display:flex;flex-direction:column;animation:none;}
+.mailroom-header{display:grid;grid-template-columns:auto 205px minmax(220px,1fr);align-items:center;gap:24px;padding:22px 12px 14px;flex-shrink:0;}
+.mailroom-header h1{font-size:32px;font-weight:700;letter-spacing:-1px;margin:0;}
+.mailroom-header select,.mailroom-header input{height:46px;font-size:14px;width:100%;background:var(--bg-input);}
+.mailroom-header label{margin:0;min-width:0;}
+.mailroom-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid var(--border-medium);flex-shrink:0;}
+.mailroom-tabs{display:flex;gap:8px;}
+.mailroom-tabs button{display:flex;gap:10px;align-items:center;min-height:48px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--text-secondary);box-shadow:none;padding:8px 14px;font-size:15px;white-space:nowrap;}
+.mailroom-tabs button[aria-pressed=true]{color:var(--text-primary);border-bottom-color:var(--accent-red);}
+.mailroom-tabs button span{background:var(--bg-surface-hover);border-radius:12px;padding:2px 9px;line-height:20px;font-size:13px;}
+.mailroom-tabs button[aria-pressed=true] span{background:var(--accent-red);color:white;}
+.mailroom-tools{display:flex;gap:6px;align-items:center;}
+.mailroom-tools button{font-size:12px;padding:8px 10px;background:transparent;box-shadow:none;border-color:transparent;}
+.mailroom-scan-note{flex-shrink:0;font-size:12px;line-height:1.45;color:var(--text-secondary);margin:8px 14px;}
+.mailroom-workspace{display:grid;grid-template-columns:minmax(300px,34%) minmax(0,1fr);min-height:0;flex:1;overflow:hidden;}
+.mailroom-list-pane{display:flex;flex-direction:column;min-width:0;min-height:0;padding-right:12px;}
+.mailroom-list{min-height:0;overflow-y:auto;flex:1;padding:8px 0;}
+#mailroomList .mailroom-card{display:flex;flex-direction:column;align-items:stretch;width:100%;text-align:left;gap:5px;padding:18px 16px;border:0;border-bottom:1px solid var(--border-subtle);border-left:3px solid transparent;background:transparent;box-shadow:none;border-radius:0;color:var(--text-primary);font-weight:400;white-space:normal;transform:none;}
+#mailroomList .mailroom-card:hover{background:var(--bg-surface);transform:none;box-shadow:none;}
+#mailroomList .mailroom-card.selected{background:var(--accent-red-bg);border-left-color:var(--accent-red);border-radius:7px;}
+.mailroom-card-top{display:flex;gap:12px;justify-content:space-between;align-items:baseline;min-width:0;}
+.mailroom-card-top strong{font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mailroom-card-top time{font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+.mailroom-card-company,.mailroom-card-address{font-size:13px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mailroom-card-subject{font-size:14px;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mailroom-card-excerpt{font-size:14px;color:var(--text-secondary);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mailroom-badge{display:inline-block;align-self:flex-start;color:#b7c2d3;background:var(--bg-surface-hover);border-radius:14px;padding:4px 11px;font-size:12px;font-weight:400;line-height:1.3;margin-top:8px;}
+.mailroom-badge.warm{background:rgba(239,68,68,.16);color:#f3a2a2;}
+.mailroom-pagination{display:flex;align-items:center;gap:8px;padding:12px 0;flex-shrink:0;border-top:1px solid var(--border-subtle);}
+.mailroom-pagination .hint{flex:1;font-size:12px;margin:0;}
+.mailroom-pagination button{font-size:12px;padding:6px 9px;}
+.mailroom-reader-stage{min-width:0;min-height:0;border-left:1px solid var(--border-medium);overflow:hidden;position:relative;}
+#replyInspector.mailroom-reader{height:100%;min-width:0;margin:0;padding:0 26px 32px;overflow-y:auto;border:0;border-radius:0;background:transparent;box-shadow:none;}
+.mailroom-subject-bar{position:sticky;top:0;background:var(--bg-app);display:flex;align-items:center;gap:10px;padding:20px 0 16px;z-index:3;}
+.mailroom-subject-bar h2{font-size:22px;font-weight:600;letter-spacing:-.4px;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mailroom-subject-bar button{font-size:12px;padding:7px 10px;box-shadow:none;background:transparent;}
+.mailroom-back{display:none;}
+.mailroom-empty{padding:80px 26px;text-align:center;color:var(--text-secondary);line-height:1.7;}
+.mailroom-empty h2{font-size:21px;color:var(--text-primary);margin-bottom:10px;}
+.mailroom-empty button{margin-top:16px;}
+.mailroom-list-empty{padding:30px 16px;color:var(--text-secondary);font-size:14px;line-height:1.7;}
+.mailroom-older{border-bottom:1px solid var(--border-subtle);margin-bottom:18px;}
+#view-conversations .mailroom-older>summary{font-size:12px;color:var(--text-secondary);padding:8px 0 12px;}
+.mailroom-message{padding:10px 0 12px;margin:0 0 18px;border-bottom:1px solid var(--border-medium);font-size:14px;}
+.mailroom-message-heading{display:flex;align-items:flex-start;gap:12px;}
+.mailroom-message-heading .mailroom-avatar{background:#334155;box-shadow:none;width:42px;height:42px;font-weight:500;font-size:15px;}
+.mailroom-sender{display:flex;flex-direction:column;flex:1;min-width:0;gap:4px;}
+.mailroom-sender strong{font-weight:600;font-size:16px;}
+.mailroom-sender span,.mailroom-sender small{font-size:12px;color:var(--text-secondary);overflow-wrap:anywhere;}
+.mailroom-message-heading time{font-size:12px;color:var(--text-secondary);white-space:nowrap;padding-top:4px;}
+.mailroom-message pre{font:15px/1.65 var(--font-sans);white-space:pre-wrap;overflow-wrap:anywhere;margin:22px 0 12px;max-width:76ch;color:var(--text-primary);}
+#view-conversations .mailroom-message-evidence summary{font-size:12px;color:var(--text-secondary);padding:5px 0;}
+.mailroom-message-evidence p,.mailroom-message-evidence pre{font-size:12px;}
+.mailroom-hold{padding:12px 14px;background:var(--accent-red-bg);color:#fca5a5;border-left:3px solid var(--accent-red);font-size:13px;margin:12px 0;}
+#replyAssistant{margin:20px 0 0;border:0;padding-top:0;}
+#replyAssistant .assistant-draft{padding:0;margin:0;}
+.mailroom-compose-heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;}
+.mailroom-compose-heading h3{font-size:16px;font-weight:600;margin:0;}
+.mailroom-compose-heading h3 span{font-weight:400;}
+.mailroom-compose-heading p{font-size:12px;flex:1;margin:0;min-width:200px;text-align:right;overflow-wrap:anywhere;}
+.mailroom-compose-heading button{font-size:12px;background:none;border:0;box-shadow:none;padding:5px;}
+#replyAssistant label[for=assistantBody]{margin:0;}
+#assistantBody{width:100%;min-height:174px;line-height:1.6;font-size:15px;padding:18px;background:var(--bg-input);border:1px solid var(--border-medium);border-radius:8px;}
+.mailroom-compose-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:relative;}
+#assistantSaveDraft,#assistantSuggest{font-size:13px;box-shadow:none;padding:10px 12px;}
+.mailroom-review-primary{margin-left:auto;box-shadow:none;padding:12px 18px;font-size:14px;}
+#assistantDraftState{font-size:12px;margin:12px 0;color:#a3b5cc;}
+#assistantStatus{font-size:12px;line-height:1.5;margin:10px 0;}
+.mailroom-saved-lines{position:relative;}
+#view-conversations .mailroom-saved-lines>summary{border:1px solid var(--border-medium);background:var(--bg-surface);border-radius:7px;padding:10px 12px;font-size:13px;cursor:pointer;}
+.mailroom-lines-popover{position:absolute;bottom:calc(100% + 10px);left:0;width:340px;max-width:calc(100vw - 120px);padding:14px;background:var(--bg-surface);border:1px solid var(--border-medium);border-radius:8px;z-index:8;box-shadow:0 12px 36px rgba(0,0,0,.35);}
+.mailroom-lines-popover .saved-reply-list{max-height:240px;}
+#replyAssistant .wording-preview{margin:14px 0;}
+#replyAssistant>.hint{font-size:12px;}
+#mailroomApprovalDialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font:15px/1.65 var(--font-sans);padding:16px;background:var(--bg-input);border-radius:8px;max-height:35vh;overflow-y:auto;margin:18px 0;}
+.mailroom-dialog{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 48px);margin:auto;padding:24px;color:var(--text-primary);background:var(--bg-surface);border:1px solid var(--border-medium);border-radius:12px;overflow-y:auto;}
+.mailroom-dialog::backdrop{background:rgba(3,5,10,.7);backdrop-filter:blur(3px);}
+.mailroom-dialog.mailroom-wide{width:min(900px,calc(100vw - 32px));}
+.mailroom-dialog-heading{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.mailroom-dialog-heading h2{font-size:20px;}
+.mailroom-dialog label{display:block;margin:16px 0;}
+.mailroom-dialog .check{display:flex;}
+.mailroom-dialog input:not([type=checkbox]),.mailroom-dialog select,.mailroom-dialog textarea{width:100%;}
+.mailroom-dialog .reply-filters{grid-template-columns:1fr 1fr;}
+.mailroom-dialog .reply-library{margin:0;border:0;background:transparent;box-shadow:none;padding:0;}
+.mailroom-dialog #replyMetrics{grid-template-columns:repeat(2,minmax(0,1fr));}
+.mailroom-dialog #assistantDetails{grid-template-columns:repeat(2,minmax(0,1fr));}
+@media(max-width:1100px){.mailroom-header{grid-template-columns:auto 180px minmax(140px,1fr);gap:16px;padding-left:0;padding-right:0;}.mailroom-header h1{font-size:27px;}.mailroom-tools{gap:0;}.mailroom-tools button{font-size:11px;padding:7px;}.mailroom-tabs button{font-size:13px;padding:8px 9px;gap:6px;}.mailroom-workspace{grid-template-columns:minmax(260px,35%) minmax(0,1fr);}#replyInspector.mailroom-reader{padding:0 20px 26px;}.mailroom-compose-heading p{min-width:160px;text-align:left;}.mailroom-message-heading time{white-space:normal;text-align:right;max-width:110px;}}
+@media(max-width:850px){.mailroom-active .app-sidebar{width:60px;padding:10px 5px;}.mailroom-active .nav-link{padding:10px;min-height:42px;}.mailroom-active .nav-link svg{width:20px;height:20px;}.mailroom-active .titlebar-left{margin-left:60px;}.mailroom-header{grid-template-columns:1fr 170px;padding:18px 0 12px;}.mailroom-search{grid-column:1/-1;}.mailroom-toolbar{flex-wrap:wrap;gap:0;}.mailroom-tools{margin-left:auto;}.mailroom-tools #replyScan{max-width:170px;}.mailroom-workspace{display:block;}.mailroom-list-pane{height:100%;padding:0;}.mailroom-reader-stage{height:100%;border-left:0;display:none;}.mailroom-workspace[data-thread-open=true] .mailroom-list-pane{display:none;}.mailroom-workspace[data-thread-open=true] .mailroom-reader-stage{display:block;}.mailroom-back{display:block;}.mailroom-subject-bar{flex-wrap:wrap;padding-top:14px;}.mailroom-subject-bar h2{font-size:19px;}#replyInspector.mailroom-reader{padding:0 4px 28px;}.mailroom-lines-popover{position:static;width:100%;max-width:none;box-shadow:none;margin-top:8px;}.mailroom-saved-lines[open]{width:100%;order:5;}.mailroom-scan-note{margin:8px 0;}.mailroom-pagination{padding:12px 0;}}
+@media(max-width:520px){.mailroom-active .app-sidebar{width:52px;padding:8px 4px;}.mailroom-active .titlebar-left{margin-left:42px;}.mailroom-active .titlebar-brand{font-size:13px;}.mailroom-active .brand-monogram{padding:7px 9px;font-size:12px;}.mailroom-active .app-titlebar{height:50px;}.mailroom-active .app-container{height:calc(100vh - 50px);}#view-conversations.mailroom-page{padding:0 12px;}.mailroom-header{gap:12px;grid-template-columns:1fr;}.mailroom-header h1{font-size:25px;}.mailroom-mailbox,.mailroom-search{grid-column:1;}.mailroom-header input,.mailroom-header select{height:40px;}.mailroom-toolbar{padding:0;}.mailroom-tools{width:100%;justify-content:space-between;}.mailroom-tabs{width:100%;justify-content:space-between;}.mailroom-tabs button{padding:7px 5px;}.mailroom-tools button{padding:6px;font-size:11px;}#replyScan{white-space:normal;}.mailroom-message-heading{gap:8px;flex-wrap:wrap;}.mailroom-message-heading time{margin-left:50px;text-align:left;max-width:none;padding:0;}.mailroom-dialog{padding:16px;}.mailroom-dialog .reply-filters,.mailroom-dialog #assistantDetails{grid-template-columns:1fr;}.mailroom-dialog-heading{align-items:flex-start;}.mailroom-subject-bar h2{order:3;flex-basis:100%;}.mailroom-subject-bar>button:last-child{margin-left:auto;}.mailroom-message pre{font-size:14px;}#assistantBody{font-size:14px;padding:12px;}.mailroom-compose-heading p{min-width:0;text-align:left;flex-basis:100%;}.mailroom-review-primary{margin-left:0;}.mailroom-active #releasePreviewBanner{padding:6px 12px;font-size:11px;}.mailroom-scan-note{font-size:11px;}}
+/* Override the app's broad secondary-button selector inside this route. */
+#view-conversations .mailroom-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;box-shadow:none;color:var(--text-secondary);font-weight:500;transform:none;}
+#view-conversations .mailroom-tabs button[aria-pressed=true]{background:transparent;border-bottom-color:var(--accent-red);color:var(--text-primary);}
+#view-conversations .mailroom-tabs button:hover{background:var(--bg-surface);}
+#view-conversations.mailroom-page{padding-left:12px;padding-right:12px;}
+.mailroom-workspace{grid-template-columns:minmax(300px,33%) minmax(0,1fr);}
+.mailroom-header h1{font-size:34px;}
+#mailroomList .mailroom-card{padding:18px 18px;gap:5px;}
+.mailroom-card-top strong{font-size:17px;}
+.mailroom-card-company{font-size:15px;}
+.mailroom-card-subject,.mailroom-card-excerpt{font-size:15px;}
+.mailroom-subject-bar h2{font-size:26px;}
+.mailroom-message pre{font-size:17px;line-height:1.55;margin-top:22px;}
+.mailroom-message-heading .mailroom-avatar{width:46px;height:46px;}
+.mailroom-sender strong{font-size:17px;}
+.mailroom-sender span{font-size:14px;}
+.mailroom-message>.mailroom-badge{margin-left:58px;margin-top:8px;}
+.mailroom-compose-heading h3{font-size:17px;}
+#assistantBody{font-weight:400;font-size:16px;}
+#assistantReviewOpen.primary{background:var(--accent-red);box-shadow:none;}
+@media(max-width:850px){.mailroom-header h1{font-size:27px;}.mailroom-workspace{display:block;}.mailroom-subject-bar h2{font-size:21px;}.mailroom-message pre{font-size:15px;}}
+@media(max-width:520px){.mailroom-header h1{font-size:25px;}.mailroom-message pre{font-size:14px;}}
+#replyThread .mailroom-message-evidence{display:none;}
+#replyInspector .mailroom-message{margin-bottom:22px;padding-top:0;padding-bottom:20px;}
+#assistantBody{height:174px;min-height:174px;}
+.mailroom-subject-bar{padding-bottom:20px;}
+
+#mailroomList .mailroom-card:focus-visible,#view-conversations .mailroom-tabs button:focus-visible{outline:2px solid var(--accent-red);outline-offset:-3px;}
+.mailroom-message-heading time{font-size:14px;}
+#assistantSuggest,#view-conversations .mailroom-saved-lines>summary{font-size:14px;}
+@media(max-width:520px){
+ .mailroom-header{grid-template-columns:minmax(0,1fr) 128px;gap:10px;}
+ .mailroom-header h1{font-size:23px;letter-spacing:-.8px;}
+ .mailroom-mailbox{grid-column:2;}.mailroom-search{grid-column:1/-1;}
+ .mailroom-header select{font-size:12px;padding-left:10px;}
+ .mailroom-message-heading time{flex-basis:100%;margin-left:54px;max-width:none;font-size:12px;}
+ .mailroom-message-heading .mailroom-sender{min-width:0;}
+ .mailroom-message-heading .mailroom-avatar{flex-shrink:0;}
+}
+@media(max-width:360px){.mailroom-header{grid-template-columns:1fr;}.mailroom-mailbox{grid-column:1;}}

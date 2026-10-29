@@ -84,3 +84,11 @@ test('shared opt-outs and uncertain submissions hold replies while cold-outreach
  assert.match(sharedReplyHold({records:{[recipient]:{status:'Uncertain'}},suppression:{}},recipient),/uncertain/);
  assert.equal(sharedReplyHold({records:{[recipient]:{status:'Sent'}},suppression:{[recipient]:'Previously contacted or uncertain in workbook'}},recipient),null);
 });
+
+test('historical inbox order uses message time across backfills and header display names never confirm carrier identity',async(t)=>{
+ const f=await setup(t);const second='second@example.com',tid='second-tool-send',ref='<second-tool-send@example.com>';
+ f.state.history[second]={...f.state.history[recipient],trackingId:tid,recipient:second,company:'Second Fleet'};f.state.tracking.records[tid]={...f.state.tracking.records[f.trackingId],id:tid,recipient:second,messageIds:[ref]};await f.persist();await f.ops.replies.refreshHistory();
+ await f.ops.replies.ingest(eml({id:'<latest-second@example.com>',from:'Maria Lopez <'+second+'>',reference:ref,text:'What are your fees? '+('More context. '.repeat(30))+'Dedicated lane questions.'}),account);
+ await f.ops.replies.ingest(Buffer.from(eml({id:'<older-owner@example.com>',from:'John Smith <'+recipient+'>',text:'What lanes do you cover?'}).toString().replace('Thu, 29 Oct 2026 12:00:00 +0000','Wed, 28 Oct 2026 16:00:00 +0000')),account);
+ const rows=(await f.desk.list(new URLSearchParams({work:'all'}))).rows;assert.equal(rows[0].recipient,second);assert.equal(rows[0].contactName,'Maria Lopez');const detail=await f.desk.detail(rows[0].id,'conversation');assert.equal(detail.assistant.fields.contactName.confirmed,null);assert.deepEqual(detail.assistant.fields.contactName.candidates,[]);assert.equal(detail.root.recipient,second);for(const q of ['Maria Lopez','Dedicated lane questions'])assert.deepEqual((await f.desk.list(new URLSearchParams({q}))).rows.map((r)=>r.recipient),[second]);
+});

@@ -16,6 +16,7 @@ function navigate(viewName) {
   ];
   const target = validViews.includes(viewName) ? viewName : "dashboard";
 
+  document.body.classList.toggle("mailroom-active",target==="conversations");
   document.querySelectorAll(".view-page").forEach((el) => {
     el.classList.toggle("active", el.id === `view-${target}`);
   });
@@ -40,6 +41,8 @@ window.addEventListener("hashchange", () => {
 
 // Ensure mouse click removes focus ring
 document.querySelectorAll(".nav-link").forEach((link) => {
+  if(!link.getAttribute("aria-label"))link.setAttribute("aria-label",link.textContent.trim());
+  link.title=link.getAttribute("aria-label");
   link.addEventListener("click", () => {
     link.blur();
   });

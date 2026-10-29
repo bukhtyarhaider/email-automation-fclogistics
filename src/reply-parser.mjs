@@ -49,7 +49,7 @@ export async function parseReply(source) {
   const id = messageIds(mail.messageId)[0] || null;
   const rawDate = mail.headerLines.find((h) => h.key === 'date')?.line.replace(/^date:\s*/i, '') || '';
   const date = rawDate && Number.isFinite(Date.parse(rawDate)) ? new Date(rawDate).toISOString() : null;
-  const value = { messageId: id, references: messageIds([mail.inReplyTo, ...(Array.isArray(mail.references) ? mail.references : [mail.references])]), from, to,
+  const value = { senderName:String(mail.from?.value?.[0]?.name||'').slice(0,120), messageId: id, references: messageIds([mail.inReplyTo, ...(Array.isArray(mail.references) ? mail.references : [mail.references])]), from, to,
     deliveredTo: header('delivered-to').toLowerCase(), subject: (mail.subject || '(No subject)').slice(0, 500), date,
     text: fresh, textTruncated: freshText(text).length > 24_000, kind, suggestion, sourceHash: digest(bytes) };
   value.dsn = bounce ? await parseDsn(bytes) : [];
