@@ -7,30 +7,36 @@ import { errorMessage } from '../../shared/utils';
 import { session } from '../../shared/session';
 import { $, waitClock, api, notice, copyToClipboard, action } from '../../shared/runtime';
 import { refresh } from '../../app/runtime/refresh';
-export // Live System Activity Logic
-function classifyEvent(e: ActivityEvent) {
-  const msg = String(e?.message || '');
-  const k = String(e?.kind || '').toLowerCase();
-  if (k === 'error' || /fail|error|uncertain|needs attention|blocked/i.test(msg)) return 'error';
+/** Keep distinct messages and categories even when the server timestamps them together. */
+export function eventIdentity(event: ActivityEvent): string {
+  return JSON.stringify([
+    event.at,
+    event.kind,
+    event.message,
+    event.seconds,
+    event.company,
+    event.email,
+  ]);
+}
+
+// Live System Activity Logic
+export function classifyEvent(event: ActivityEvent): 'error' | 'pause' | 'send' | 'system' {
+  const kind = event.kind?.toLowerCase();
+  if (kind === 'error') return 'error';
+  if (['pause', 'pacing', 'rest', 'waiting'].includes(kind)) return 'pause';
+  if (['sent', 'send', 'start'].includes(kind)) return 'send';
+  if (['system', 'template', 'import', 'stop', 'settings', 'profile'].includes(kind))
+    return 'system';
+  const message = event.message || '';
+  if (/\b(fail(?:ed|ure|ing)?|error|uncertain|needs attention|blocked)\b/i.test(message))
+    return 'error';
   if (
-    k === 'pause' ||
-    /pause|rest|seconds|waiting for leads|team pacing|interval|allowance pause/i.test(msg)
-  )
-    return 'pause';
-  if (
-    k === 'sent' ||
-    k === 'start' ||
-    /sent to|sending to|started .* outreach|dispatched/i.test(msg)
-  )
-    return 'send';
-  if (
-    k === 'system' ||
-    k === 'template' ||
-    /saved|imported|connected|disconnected|reloaded|deleted|profile|template|settings|workbook|suppress|reviewed|cleared/i.test(
-      msg,
+    /\b(paus(?:e|ed|ing)|rest(?:ing)?|seconds?|waiting for leads|team pacing|interval|allowance pause)\b/i.test(
+      message,
     )
   )
-    return 'system';
+    return 'pause';
+  if (/sent to|sending to|started .* outreach|dispatched/i.test(message)) return 'send';
   return 'system';
 }
 
@@ -38,10 +44,10 @@ export function renderLiveActivityView() {
   if (!session.state) return;
   // 1. Accumulate events into liveEventsList without duplicates
   if (Array.isArray(session.state.events)) {
-    const existingKeys = new Set(session.liveEventsList.map((e) => `${e.at}_${errorMessage(e)}`));
+    const existingKeys = new Set(session.liveEventsList.map((e) => eventIdentity(e)));
     for (const e of session.state.events) {
-      const key = `${e.at}_${errorMessage(e)}`;
-      if (!existingKeys.has(key)) {
+      const key = eventIdentity(e);
+      if (!existingKeys.has(key) && !session.liveClearedEvents.has(key)) {
         session.liveEventsList.push(e);
         existingKeys.add(key);
       }
@@ -55,7 +61,7 @@ export function renderLiveActivityView() {
   const countdownTimer = $('liveCountdownTimer');
   const countdownLabel = $('liveCountdownLabel');
   const job = session.state.job || {};
-  const isRunning = !!(session.state.automation && session.state.automation.enabled);
+  const isRunning = session.state.job.enabled;
   const runnerStatus = job.status || (isRunning ? 'Running' : 'Stopped');
   if (runnerBadge) {
     runnerBadge.textContent = runnerStatus;
@@ -167,7 +173,7 @@ export function renderLiveActivityView() {
     const cls = classifyEvent(e);
     if (session.liveFilterKind !== 'all' && cls !== session.liveFilterKind) return false;
     if (query) {
-      const text = `${errorMessage(e)} ${e.kind || ''} ${cls}`.toLowerCase();
+      const text = `${e.message} ${e.kind || ''} ${cls}`.toLowerCase();
       if (!text.includes(query)) return false;
     }
     return true;
@@ -209,12 +215,16 @@ export function renderLiveActivityView() {
                     {displayText(time)}
                   </time>
                   <div className={'event-body'}>
-                    <span>{displayText(errorMessage(e))}</span>
-                    {metaTags.map((t) => (
-                      <>
-                        <span className={'event-meta-tag'}>{t}</span>
-                      </>
-                    ))}
+                    <span className="event-message">{displayText(e.message)}</span>
+                    {metaTags.length > 0 && (
+                      <div className="event-meta-tags">
+                        {metaTags.map((tag) => (
+                          <span key={tag} className="event-meta-tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </li>
               </>
@@ -233,7 +243,7 @@ export function renderLiveActivityView() {
         .map((e) => {
           const cls = classifyEvent(e).toUpperCase().padEnd(6);
           const time = new Date(e.at).toLocaleTimeString();
-          return `[${time}] [${cls}] ${errorMessage(e)}`;
+          return `[${time}] [${cls}] ${e.message}`;
         })
         .join('\n');
       termOutput.textContent = termLines;
@@ -293,10 +303,10 @@ export function mountLiveActivity() {
     uiScope.listen($('liveCategoryTabs'), 'click', (e) => {
       const tab = eventElement(e).closest<HTMLElement>('.cat-tab');
       if (!tab) return;
-      document
-        .querySelectorAll<HTMLElement>('.cat-tab')
-        .forEach((t) => t.classList.remove('active'));
-      tab.classList.add('active');
+      document.querySelectorAll<HTMLElement>('.cat-tab').forEach((item) => {
+        item.classList.toggle('active', item === tab);
+        item.setAttribute('aria-selected', String(item === tab));
+      });
       session.liveFilterKind = tab.dataset.kind || 'all';
       renderLiveActivityView();
     });
@@ -324,6 +334,8 @@ export function mountLiveActivity() {
   }
   if ($('liveClearEventsBtn')) {
     uiScope.listen($('liveClearEventsBtn'), 'click', async () => {
+      for (const event of [...session.liveEventsList, ...session.state.events])
+        session.liveClearedEvents.add(eventIdentity(event));
       session.liveEventsList = [];
       if (
         window.confirm(

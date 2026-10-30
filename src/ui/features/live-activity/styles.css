@@ -431,7 +431,18 @@
 }
 
 .live-search-box {
-  min-width: 260px;
+  min-width: 0;
+  width: 260px;
+  max-width: 100%;
+}
+
+.live-toolbar-right {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.stream-view-toggle-group {
+  flex-shrink: 0;
 }
 
 .live-autoscroll-toggle {
@@ -502,9 +513,10 @@
   border: 1px solid var(--border-subtle);
   border-left-width: 4px;
   border-radius: var(--radius-sm);
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 12px;
   transition:
     transform 0.12s ease,
     border-color 0.12s ease,
@@ -576,11 +588,11 @@
 }
 
 .event-body {
-  flex: 1;
+  min-width: 0;
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--text-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .event-body strong {
@@ -596,8 +608,16 @@
   border: 1px solid var(--border-subtle);
   border-radius: 3px;
   padding: 1px 6px;
-  margin-left: 6px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   color: var(--text-secondary);
+}
+
+.event-meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 /* Mode 2: Terminal Console */
@@ -755,6 +775,21 @@
   }
   .live-search-box {
     width: 100%;
+  }
+  .live-event-card {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+  .event-time {
+    text-align: right;
+  }
+  .event-body {
+    grid-column: 1 / -1;
+  }
+  .live-activity-panel .panel-head {
+    align-items: flex-start;
+  }
+  .live-activity-panel .panel-head > div {
+    max-width: 100%;
   }
 }
 

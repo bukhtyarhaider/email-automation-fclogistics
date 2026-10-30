@@ -21,6 +21,7 @@ class UISession {
   liveSearchQuery = '';
   liveAutoScroll = true;
   liveEventsList = [] as ActivityEvent[];
+  liveClearedEvents = new Set<string>();
   liveCountdownTotal = null as number | null;
   lastHistoryRefresh = 0;
 }

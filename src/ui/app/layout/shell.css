@@ -435,6 +435,7 @@
 /* Main Viewport */
 .app-viewport {
   flex: 1;
+  min-width: 0;
   height: 100%;
   overflow-y: auto;
   background:

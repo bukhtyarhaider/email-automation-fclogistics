@@ -16,8 +16,8 @@
     "typecheck": "tsc --noEmit",
     "dev:ui": "node src/ui/build.mjs --watch",
     "check:ui": "npm run typecheck && npm run format:check && node src/ui/build.mjs",
-    "format:ui": "prettier --write \"src/ui/**/*.{ts,tsx,css,mjs}\" tsconfig.json tests/ui-react.test.mjs",
-    "format:check": "prettier --check \"src/ui/**/*.{ts,tsx,css,mjs}\" tsconfig.json tests/ui-react.test.mjs",
+    "format:ui": "prettier --write \"src/ui/**/*.{ts,tsx,css,mjs}\" tsconfig.json tests/ui-react.test.mjs tests/live-activity-ui.test.mjs",
+    "format:check": "prettier --check \"src/ui/**/*.{ts,tsx,css,mjs}\" tsconfig.json tests/ui-react.test.mjs tests/live-activity-ui.test.mjs",
     "pretest": "npm run check:ui",
     "prebundle": "npm run check:ui"
   },

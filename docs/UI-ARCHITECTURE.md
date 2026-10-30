@@ -77,6 +77,8 @@ Build output keeps `/app.js`, `/style.css`, `/experiment.js`, `/experiment.css`,
 
 ## Regression evidence
 
-`tests/fixtures/ui-contract.json` records the original main UI's control IDs and twelve routes. `tests/ui-react.test.mjs` verifies that inventory, native primitives, safe text rendering, teardown/remount resource ownership, absence of legacy rendering paths, and retained edits across all routes and desktop/mobile widths. The existing integration/browser tests remain the behavior baseline, including import repairs, conversations, stale approvals, read markers, tracking, Firebase diagnostics, send insights, mailbox recovery and wait reset.
+`tests/fixtures/ui-contract.json` records the original main UI's control IDs and twelve routes. `tests/ui-react.test.mjs` and `tests/live-activity-ui.test.mjs` verify that inventory, native primitives, safe text rendering, teardown/remount resource ownership, absence of legacy rendering paths, and retained edits across all routes and desktop/mobile widths. The existing integration/browser tests remain the behavior baseline, including import repairs, conversations, stale approvals, read markers, tracking, Firebase diagnostics, send insights, mailbox recovery and wait reset.
 
 Synthetic tests cannot establish that every possible real mailbox/provider state is covered. This branch does not deploy, send customer email, migrate customer state or change installed PCs. Rollout requires the usual per-PC backups, retained `.env`/`data`, dependency installation and real-environment verification.
+
+The visual follow-up and regression repairs are recorded in [UI visual QA](UI-VISUAL-QA.md).

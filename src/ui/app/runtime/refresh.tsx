@@ -2,7 +2,6 @@ import { Button } from '../../design-system/primitives';
 import { renderRegion } from '../../shared/regions';
 import { displayText } from '../../shared/utils';
 import type { AppState } from '../../shared/types/api';
-import { errorMessage } from '../../shared/utils';
 import { session } from '../../shared/session';
 import { api, $, syncOptions, waitDuration } from '../../shared/runtime';
 import { fillTemplate, renderTemplatesTable } from '../../features/templates/controller';
@@ -147,7 +146,7 @@ export async function refresh() {
           <>
             <li>
               <time>{displayText(new Date(e.at).toLocaleTimeString())}</time>
-              <span>{displayText(errorMessage(e))}</span>
+              <span>{displayText(e.message)}</span>
             </li>
           </>
         )),

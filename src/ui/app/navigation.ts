@@ -1,4 +1,4 @@
-import { resolveView } from './routes';
+import { resolveView, isTrackingSection } from './routes';
 import { uiScope } from '../shared/lifecycle';
 import { errorMessage } from '../shared/utils';
 import { session } from '../shared/session';
@@ -7,8 +7,15 @@ import { notice } from '../shared/runtime';
 import { loadHistory } from '../features/history/controller';
 import { loadTracking } from '../features/tracking/controller';
 import { renderLiveActivityView } from '../features/live-activity/controller';
-export // Navigation View Routing
-function navigate(viewName: string) {
+/** Hash anchors within Tracking are sections of that workspace, not unknown pages. */
+export function revealTrackingSection(value: string) {
+  if (isTrackingSection(value) && location.hash === `#${value}`) {
+    document.getElementById(value)?.scrollIntoView({ block: 'start' });
+  }
+}
+
+// Navigation View Routing
+export function navigate(viewName: string) {
   const target = resolveView(viewName);
 
   document.body.classList.toggle('mailroom-active', target === 'conversations');
@@ -29,7 +36,10 @@ function navigate(viewName: string) {
   if (target === 'activity' && session.state)
     void loadHistory().catch((e) => notice(errorMessage(e)));
   if (target === 'tracking' && session.state)
-    void loadTracking().catch((e) => notice(errorMessage(e)));
+    void loadTracking()
+      .then(() => revealTrackingSection(viewName))
+      .catch((e) => notice(errorMessage(e)));
+  revealTrackingSection(viewName);
   if (target === 'live-activity') {
     renderLiveActivityView();
   }

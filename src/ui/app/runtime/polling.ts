@@ -1,6 +1,7 @@
 import { uiScope } from '../../shared/lifecycle';
 import { session } from '../../shared/session';
-import { navigate } from '../navigation';
+import { navigate, revealTrackingSection } from '../navigation';
+import { resolveView } from '../routes';
 import { refresh } from './refresh';
 import { loadLeads } from '../../features/leads/controller';
 import { loadHistory } from '../../features/history/controller';
@@ -15,7 +16,10 @@ export async function mountBoot() {
   await loadLeads();
   await loadHistory();
   if (location.hash === '#catalog') await loadCatalog();
-  if (location.hash === '#tracking') await loadTracking();
+  if (resolveView(location.hash.slice(1)) === 'tracking') {
+    await loadTracking();
+    revealTrackingSection(location.hash.slice(1));
+  }
   // Background polling loop
   uiScope.interval(async () => {
     try {

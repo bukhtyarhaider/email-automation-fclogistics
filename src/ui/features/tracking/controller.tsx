@@ -1,3 +1,4 @@
+import { resolveView } from '../../app/routes';
 import type { SeedPlanResponse } from '../../shared/types/api';
 import { Button } from '../../design-system/primitives';
 import { uiScope } from '../../shared/lifecycle';
@@ -2535,7 +2536,7 @@ export function mountTracking() {
     });
   }
   uiScope.interval(() => {
-    if (!session.pending && location.hash === '#tracking')
+    if (!session.pending && resolveView(location.hash.slice(1)) === 'tracking')
       loadTracking().catch((e) => notice(errorMessage(e)));
   }, 10000);
 }

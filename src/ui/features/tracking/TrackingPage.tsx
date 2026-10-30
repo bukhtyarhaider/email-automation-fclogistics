@@ -375,7 +375,7 @@ export function TrackingPage() {
             className={'panel-head'}
             style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}
           >
-            <div style={{ flex: '1', minWidth: '280px' }}>
+            <div style={{ flex: '1 1 280px', minWidth: 0 }}>
               <span className={'page-eyebrow'} style={{ fontSize: '10px', color: '#60a5fa' }}>
                 {'DELIVERABILITY & INBOX PLACEMENT TESTING'}
               </span>
@@ -596,7 +596,7 @@ export function TrackingPage() {
             className={'panel-head'}
             style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}
           >
-            <div style={{ flex: '1', minWidth: '280px' }}>
+            <div style={{ flex: '1 1 280px', minWidth: 0 }}>
               <span className={'page-eyebrow'} style={{ fontSize: '10px', color: '#a78bfa' }}>
                 {'SENDER REPUTATION & AUTHENTICATION'}
               </span>

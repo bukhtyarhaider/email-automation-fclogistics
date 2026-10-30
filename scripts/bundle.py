@@ -10,7 +10,7 @@ parser.add_argument('--output', type=Path, help='Optional validation or distribu
 args=parser.parse_args()
 dest=args.output or root/'dist'/f'Outreach-Desk-{version}.zip'
 dest.parent.mkdir(parents=True, exist_ok=True)
-files=[root/name for name in ['package.json','package-lock.json','tsconfig.json','.prettierrc.json','docs/UI-ARCHITECTURE.md','README.md','CHANGELOG.md','VALIDATION.md','TRACKING.md','SYNC-REPAIR.md','IMPORTS-AND-CONVERSATIONS.md','design-qa.md','.env.example','Setup-Windows.cmd','Start-Windows.cmd','Setup-Mac.command','Start-Mac.command']]
+files=[root/name for name in ['package.json','package-lock.json','tsconfig.json','.prettierrc.json','docs/UI-ARCHITECTURE.md','docs/UI-VISUAL-QA.md','README.md','CHANGELOG.md','VALIDATION.md','TRACKING.md','SYNC-REPAIR.md','IMPORTS-AND-CONVERSATIONS.md','design-qa.md','.env.example','Setup-Windows.cmd','Start-Windows.cmd','Setup-Mac.command','Start-Mac.command']]
 for directory in ['src','public','scripts','tests']:
  files.extend(p for p in (root/directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ['.pyc','.log'])
 with zipfile.ZipFile(dest,'w',zipfile.ZIP_DEFLATED) as z:

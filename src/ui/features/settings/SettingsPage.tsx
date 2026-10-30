@@ -165,7 +165,7 @@ export function SettingsPage() {
                   }
                 </p>
               </div>
-              <label className={'hint'}>
+              <label className={'check hint'}>
                 <Input id={'autoReconnect'} type={'checkbox'} defaultChecked={true} />
                 {' Restore this connection when the application starts'}
               </label>

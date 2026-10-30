@@ -2,7 +2,6 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { pathToFileURL } from 'node:url';
@@ -10,6 +9,9 @@ import { build } from 'esbuild';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { loadPlaywright } from '../src/browser.mjs';
+import { workspace } from './fixtures/carrier-workspace.mjs';
+import { upgrade } from '../src/config.mjs';
+import { templates } from '../src/core.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const version = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8')).version;
@@ -27,6 +29,7 @@ before(async () => {
     export {App} from './src/ui/app/App';
     export {UIScope} from './src/ui/shared/lifecycle';
     export {viewNames, resolveView} from './src/ui/app/routes';
+    export {classifyEvent, eventIdentity} from './src/ui/features/live-activity/controller';
     export {Button, Input, Textarea, Select, Dialog} from './src/ui/design-system/primitives';
   `,
     },
@@ -47,6 +50,11 @@ test('React retains every original main-app control ID and all twelve hash route
   const markup = renderToStaticMarkup(createElement(ui.App));
   const ids = [...markup.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length, 'Control IDs must remain unique');
+  assert.equal(
+    (markup.match(/class="app-container"/g) || []).length,
+    1,
+    'The shell must have exactly one sidebar/content row',
+  );
   assert.deepEqual(
     contract.ids.filter((id) => !ids.includes(id)),
     [],
@@ -54,6 +62,36 @@ test('React retains every original main-app control ID and all twelve hash route
   assert.deepEqual([...ui.viewNames].sort(), [...contract.views].sort());
   for (const view of ui.viewNames) assert.equal(ui.resolveView(view), view);
   assert.equal(ui.resolveView('missing-route'), 'dashboard');
+  assert.equal(ui.resolveView('trackingSeedStudio'), 'tracking');
+  assert.equal(ui.resolveView('trackingDomainHealth'), 'tracking');
+});
+
+test('activity records keep distinct messages and explicit categories without formatting them as errors', () => {
+  const first = { at: '2026-10-30T11:24:52.000Z', kind: 'system', message: 'Mailbox restored.' };
+  const second = { ...first, message: 'A different event at the same timestamp.' };
+  assert.notEqual(ui.eventIdentity(first), ui.eventIdentity(second));
+  assert.equal(ui.eventIdentity(first), ui.eventIdentity({ ...first }));
+  assert.notEqual(ui.eventIdentity(first), ui.eventIdentity({ ...first, kind: 'pause' }));
+  assert.equal(ui.classifyEvent(first), 'system');
+  assert.equal(
+    ui.classifyEvent({
+      ...first,
+      kind: 'import',
+      message: 'Revision activated; campaign remains paused.',
+    }),
+    'system',
+  );
+  assert.equal(
+    ui.classifyEvent({ ...first, kind: 'pacing', message: 'Wait for the next queue check.' }),
+    'pause',
+  );
+  assert.equal(ui.classifyEvent({ ...first, kind: '', message: 'Session restored.' }), 'system');
+  assert.equal(
+    ui.classifyEvent({ ...first, kind: '', message: 'Resting for 180 seconds.' }),
+    'pause',
+  );
+  assert.equal(ui.classifyEvent({ ...first, kind: 'sent' }), 'send');
+  assert.equal(ui.classifyEvent({ ...first, kind: 'error' }), 'error');
 });
 
 test('design primitives preserve native form semantics and safely render operator text', () => {
@@ -161,7 +199,12 @@ test(
   'React navigation preserves unsaved edits across all routes and polling at desktop/mobile widths',
   { skip: process.env.FC_BROWSER_TESTS !== '1' },
   async (t) => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'fc-react-ui-'));
+    const cleanups = [];
+    const fixture = await workspace({ after: (cleanup) => cleanups.push(cleanup) });
+    const directory = fixture.dataDir;
+    const state = upgrade(fixture.state);
+    state.templates = structuredClone(templates);
+    await fixture.persist();
     const port = 14689;
     const child = spawn(process.execPath, [path.join(root, 'src/server.mjs')], {
       cwd: root,
@@ -189,7 +232,7 @@ test(
         child.kill('SIGTERM');
         await done;
       }
-      await fs.rm(directory, { recursive: true, force: true });
+      for (const cleanup of cleanups.reverse()) await cleanup();
     });
     const url = `http://127.0.0.1:${port}`;
     for (let i = 0; i < 100; i++) {
@@ -228,7 +271,7 @@ test(
     assert.equal(await page.locator('#trackingPcId').inputValue(), '4');
     assert.equal(await page.locator('#subject').inputValue(), draft);
     assert.equal(await page.locator('#body').inputValue(), draft);
-    for (const width of [1440, 390]) {
+    for (const width of [1440, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: 1000 });
       for (const view of ui.viewNames) {
         await page.locator(`[data-view="${view}"]`).click();
@@ -236,12 +279,74 @@ test(
           (view) => document.querySelector('.view-page.active')?.id === `view-${view}`,
           view,
         );
+        const shell = await page.evaluate(() => {
+          const sidebar = document.querySelector('.app-sidebar').getBoundingClientRect();
+          const viewport = document.querySelector('.app-viewport').getBoundingClientRect();
+          const container = document.querySelector('.app-container').getBoundingClientRect();
+          return {
+            count: document.querySelectorAll('.app-container').length,
+            gap: viewport.left - sidebar.right,
+            rightGap: container.right - viewport.right,
+            viewportContent: document.querySelector('.app-viewport').scrollWidth,
+            viewportWidth: document.querySelector('.app-viewport').clientWidth,
+          };
+        });
+        assert.equal(shell.count, 1, `${view}: one shell row`);
+        assert(
+          shell.viewportContent <= shell.viewportWidth + 1,
+          `${view}: the content pane must not scroll sideways (${shell.viewportContent}/${shell.viewportWidth})`,
+        );
+        assert(
+          Math.abs(shell.gap) <= 1,
+          `${view}: content must start beside the sidebar, got ${shell.gap}px gap`,
+        );
+        assert(Math.abs(shell.rightGap) <= 1, `${view}: content must fill the shell`);
         assert(
           await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
           `${view} at ${width}px`,
         );
       }
     }
+    await page.locator('[data-view="leads"]').click();
+    await page.locator('#filter').selectOption('all');
+    await page.locator('#leadRows [data-preview]').first().click();
+    await page.waitForFunction(() => {
+      const footer = document.querySelector('#leadPreviewDrawer .drawer-footer');
+      const bounds = footer.getBoundingClientRect();
+      return (
+        bounds.left >= 0 &&
+        bounds.right <= innerWidth + 1 &&
+        footer.scrollWidth <= footer.clientWidth + 1 &&
+        [...footer.querySelectorAll('button')].every(
+          (button) => button.getBoundingClientRect().right <= bounds.right + 1,
+        )
+      );
+    });
+    await page.locator('#closeDrawerBtn').click();
+    await page.locator('[data-view="tracking"]').click();
+    await page.waitForFunction(
+      () => document.querySelector('.view-page.active').id === 'view-tracking',
+    );
+    for (const section of ['trackingSeedStudio', 'trackingDomainHealth']) {
+      await page.locator(`a[href="#${section}"]`).click();
+      await page.waitForFunction(
+        (section) =>
+          location.hash === `#${section}` &&
+          document.querySelector('.view-page.active').id === 'view-tracking',
+        section,
+      );
+      assert(await page.locator(`#${section}`).isVisible());
+      const header = await page.locator(`#${section} .panel-head`).evaluate((element) => {
+        const right = element.getBoundingClientRect().right;
+        return [...element.children].every(
+          (child) => child.getBoundingClientRect().right <= right + 1,
+        );
+      });
+      assert(header, `${section}: header children fit inside the panel at mobile width`);
+    }
+    await page.goto(`${url}/#trackingSeedStudio`);
+    await page.locator('#trackingRows tr').first().waitFor();
+    assert.equal(await page.locator('.view-page.active').getAttribute('id'), 'view-tracking');
     assert.deepEqual(scriptErrors, []);
   },
 );

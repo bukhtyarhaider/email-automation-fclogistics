@@ -152,13 +152,14 @@
 
 .tracking-kpi-grid {
   display: grid !important;
-  grid-template-columns: repeat(4, 1fr) !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px !important;
   width: 100% !important;
   margin-bottom: 0 !important;
 }
 
 .tracking-kpi-card {
+  min-width: 0;
   background: linear-gradient(180deg, #151922 0%, #0e1117 100%);
   border: 1px solid var(--border-subtle, #202738);
   border-radius: var(--radius-md, 10px);
@@ -1016,13 +1017,14 @@
 
 .seed-studio-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 420px) 1fr;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
   gap: 22px;
   align-items: start;
 }
 
 .seed-config-card,
 .seed-preview-card {
+  min-width: 0;
   background: var(--bg-surface-elevated, #141720);
   border: 1px solid var(--border-subtle, #232838);
   border-radius: 12px;
@@ -1031,6 +1033,7 @@
 
 .seed-card-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-bottom: 18px;
@@ -1084,6 +1087,7 @@
 }
 .input-with-action input {
   flex: 1;
+  min-width: 0;
 }
 .input-with-action button {
   padding: 8px 12px;
@@ -1289,6 +1293,8 @@
   line-height: 1;
 }
 .seed-preview-instructions .inst-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 12px;
   color: #93c5fd;
   line-height: 1.5;
@@ -1683,13 +1689,13 @@
 /* ======================================================== */
 @media (max-width: 1100px) {
   .tracking-kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 900px) {
   .seed-studio-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 20px;
   }
 }

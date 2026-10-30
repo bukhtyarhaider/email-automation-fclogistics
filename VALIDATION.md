@@ -1,3 +1,12 @@
+# UI rendering and visual follow-up — 2026-10-30
+
+- Fixed migration regressions in the sidebar shell and event-message rendering, plus responsive action rows, event cards, tracking/seed panels, native checkbox alignment, tracking section anchors and drawer footer controls.
+- Manually inspected all 12 main screens at desktop/mobile sizes, tablet activity, conversation details/inbox navigation and the lead drawer. Used synthetic data for interaction tests; confirmed the reported fixes on the running app without modifying customer data or sending mail.
+- Final `FC_BROWSER_TESTS=1 npm test`: **215 Node tests + 12 Python tests passed; zero failures/skips**. This includes event content, simultaneous records, filters, pause/clear behavior, all-route shell geometry/internal overflow at 1440/1024/768/390px, direct tracking section URLs and drawer action bounds.
+- `npm run check:ui`, generated production assets and diff checks passed. See `docs/UI-VISUAL-QA.md` for the step-by-step visual review, repairs, local screenshots and limits.
+
+---
+
 # React / TypeScript UI migration — 2026-10-30
 
 Branch: `feat/react-typescript-ui`. The package remains `2.2.0-rc.9`; this branch is not a new deployed release.

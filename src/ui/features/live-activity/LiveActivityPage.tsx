@@ -279,31 +279,61 @@ export function LiveActivityPage() {
 
           <div className={'live-stream-toolbar'}>
             <div className={'live-category-tabs'} id={'liveCategoryTabs'} role={'tablist'}>
-              <Button type={'button'} className={'cat-tab active'} data-kind={'all'} role={'tab'}>
+              <Button
+                type={'button'}
+                className={'cat-tab active'}
+                data-kind={'all'}
+                role={'tab'}
+                aria-selected={true}
+              >
                 {'All Events '}
                 <span className={'tab-chip'} id={'tabChipAll'}>
                   {'0'}
                 </span>
               </Button>
-              <Button type={'button'} className={'cat-tab'} data-kind={'send'} role={'tab'}>
+              <Button
+                type={'button'}
+                className={'cat-tab'}
+                data-kind={'send'}
+                role={'tab'}
+                aria-selected={false}
+              >
                 {'Sends '}
                 <span className={'tab-chip green'} id={'tabChipSend'}>
                   {'0'}
                 </span>
               </Button>
-              <Button type={'button'} className={'cat-tab'} data-kind={'pause'} role={'tab'}>
+              <Button
+                type={'button'}
+                className={'cat-tab'}
+                data-kind={'pause'}
+                role={'tab'}
+                aria-selected={false}
+              >
                 {'Pacing '}
                 <span className={'tab-chip blue'} id={'tabChipPause'}>
                   {'0'}
                 </span>
               </Button>
-              <Button type={'button'} className={'cat-tab'} data-kind={'system'} role={'tab'}>
+              <Button
+                type={'button'}
+                className={'cat-tab'}
+                data-kind={'system'}
+                role={'tab'}
+                aria-selected={false}
+              >
                 {'System '}
                 <span className={'tab-chip purple'} id={'tabChipSystem'}>
                   {'0'}
                 </span>
               </Button>
-              <Button type={'button'} className={'cat-tab'} data-kind={'error'} role={'tab'}>
+              <Button
+                type={'button'}
+                className={'cat-tab'}
+                data-kind={'error'}
+                role={'tab'}
+                aria-selected={false}
+              >
                 {'Errors '}
                 <span className={'tab-chip red'} id={'tabChipError'}>
                   {'0'}
@@ -376,7 +406,7 @@ export function LiveActivityPage() {
           <div className={'live-console-footer'}>
             <div className={'console-footer-left'}>
               <span className={'pulse-indicator'}></span>
-              <span id={'liveConsoleStatusText'}>{'Engine active · polling telemetry'}</span>
+              <span id={'liveConsoleStatusText'}>{'Live telemetry · polling local state'}</span>
             </div>
             <div className={'console-footer-right'}>
               <span id={'liveFilteredCountText'}>{'Showing all events'}</span>
