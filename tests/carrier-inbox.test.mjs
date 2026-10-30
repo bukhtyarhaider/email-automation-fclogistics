@@ -31,6 +31,14 @@ test('carrier read markers reject newer evidence and preserve explicit unread st
  row=(await list(f)).rows[0];await f.ops.inbox.seen({carrierInboxId:row.carrierInboxId,expectedVersion:row.statusVersion,messageId:row.latestInboundId,unread:true});assert.equal((await list(f)).rows[0].unread,true);
  await f.ops.replies.ingest(eml({id:'<new-unread-carrier@example.com>',text:'One more question.'}),account);await assert.rejects(f.ops.inbox.seen({carrierInboxId:row.carrierInboxId,expectedVersion:row.statusVersion,messageId:row.latestInboundId}),/New carrier evidence/);
 });
+test('marking read dismisses the dashboard message while retaining its reply task and new replies restore the alert',async(t)=>{
+ const f=await workspace(t);await f.ops.replies.ingest(eml({text:'I am interested.'}),account);let row=(await list(f)).rows[0];
+ assert((await f.ops.assistant.dashboard()).highlights.some(r=>r.carrierInboxId===row.carrierInboxId));
+ await f.ops.inbox.seen({carrierInboxId:row.carrierInboxId,expectedVersion:row.statusVersion,messageId:row.latestInboundId});
+ let dashboard=await f.ops.assistant.dashboard();assert(!dashboard.highlights.some(r=>r.carrierInboxId===row.carrierInboxId));assert.equal(dashboard.summary.needsReply,1);assert.equal((await list(f,{work:'needs_reply'})).total,1);
+ row=(await list(f)).rows[0];await f.ops.inbox.seen({carrierInboxId:row.carrierInboxId,expectedVersion:row.statusVersion,messageId:row.latestInboundId,unread:true});assert((await f.ops.assistant.dashboard()).highlights.some(r=>r.carrierInboxId===row.carrierInboxId));
+ await f.ops.inbox.seen({carrierInboxId:row.carrierInboxId,expectedVersion:row.statusVersion,messageId:row.latestInboundId});await f.ops.replies.ingest(eml({id:'<new-dashboard-alert@example.com>',text:'One more question.'}),account);dashboard=await f.ops.assistant.dashboard();assert(dashboard.highlights.some(r=>r.carrierInboxId===row.carrierInboxId&&r.unread));
+});
 test('reusing monitor setup exposes environment references for the matching profile only and never enables capture automatically',async(t)=>{
  const f=await workspace(t);f.ops.env={FC_IMAP_USER:account,FC_IMAP_HOST:'mail.example.com',FC_IMAP_PASSWORD:'DO_NOT_EXPOSE'};f.ops.capture.env=f.ops.captureEnv();const s=await f.ops.status();assert.equal(s.enabled,false);assert.equal(s.setupCandidates[0].passwordEnv,'FC_IMAP_PASSWORD');assert.equal(s.setupCandidates[0].credentialsConfigured,true);assert(!JSON.stringify(s).includes('DO_NOT_EXPOSE'));f.ops.env.FC_IMAP_USER='unrelated@example.com';assert.equal((await f.ops.status()).setupCandidates.length,0);
 });

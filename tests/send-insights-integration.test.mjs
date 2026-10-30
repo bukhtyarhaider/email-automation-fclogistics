@@ -52,9 +52,9 @@ test('history HTTP exports match all filtered pages; reply and catalog notes sur
   await stop(); await start();
   const reviewed = await api('history?q=fast@example.com');
   assert.equal(reviewed.records[0].replyStatus, 'no_reply'); assert.match(reviewed.records[0].followUp.note, /follow up Friday/);
-  const catalog = await api('catalog'); assert.equal(catalog.installedVersion, '2.2.0-rc.8'); assert.equal(catalog.notes.length, 1);
+  const catalog = await api('catalog'); assert.equal(catalog.installedVersion, '2.2.0-rc.9'); assert.equal(catalog.notes.length, 1);
   assert.equal((await api('export-catalog')).notes[0].title, 'PC 2 rollout');
-  assert.equal((await api('state')).appVersion, '2.2.0-rc.8');
+  assert.equal((await api('state')).appVersion, '2.2.0-rc.9');
 });
 
 test('send insights and version catalog UI support filters, exports, review, notes and narrow screens', { skip: process.env.FC_BROWSER_TESTS !== '1' }, async (t) => {
@@ -89,10 +89,10 @@ test('send insights and version catalog UI support filters, exports, review, not
   }
   await page.setViewportSize({ width: 1440, height: 1050 });
   await page.locator('[data-view="catalog"]').click();
-  await page.waitForFunction(() => document.querySelector('#catalogMetrics').textContent.includes('2.2.0-rc.8'));
-  assert.match(await page.locator('#appVersion').textContent(), /2\.2\.0-rc\.8/);
+  await page.waitForFunction(() => document.querySelector('#catalogMetrics').textContent.includes('2.2.0-rc.9'));
+  assert.match(await page.locator('#appVersion').textContent(), /2\.2\.0-rc\.9/);
   await page.locator('#catalogType').selectOption('release');
-  assert.equal(await page.locator('#catalogEntries article').count(), 11);
+  assert.equal(await page.locator('#catalogEntries article').count(), 12);
   await page.locator('#catalogNoteTitle').fill('PC 3 rollout <test>');
   await page.locator('#catalogNoteChanges').fill('Preserved local state\nVerified sync');
   await page.locator('#catalogSaveNote').click();
@@ -104,7 +104,7 @@ test('send insights and version catalog UI support filters, exports, review, not
   await page.locator('#catalogSaveNote').click();
   await page.waitForFunction(() => document.querySelector('#catalogEntries').textContent.includes('PC 3 verified'));
   await page.reload();
-  await page.waitForFunction(() => document.querySelector('#catalogMetrics').textContent.includes('2.2.0-rc.8'));
+  await page.waitForFunction(() => document.querySelector('#catalogMetrics').textContent.includes('2.2.0-rc.9'));
   await page.locator('#catalogType').selectOption('local');
   assert.equal(await page.locator('#catalogEntries article').count(), 1);
   for (const width of [1440, 390]) {

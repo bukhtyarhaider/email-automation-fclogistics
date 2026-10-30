@@ -1,5 +1,15 @@
 # Outreach Desk 2 validation
 
+## Dismiss read dashboard messages — 2.2.0-rc.9 — October 30, 2026
+
+The reported read message remained highlighted because the dashboard's attention filter also included read carriers needing a reply. The incoming-message filter now requires unread evidence, before pagination. No-response follow-up tasks retain their existing behavior. Conversations and outstanding reply counts remain intact, and marking unread or receiving a new reply restores the message alert. The dashboard confirmation explicitly says the card was removed.
+
+A new service regression first failed against rc.8 and now passes. Final `FC_BROWSER_TESTS=1 FC_UI_SCREENSHOT_DIR=outputs/carrier-rc9-verified npm test`: **208/208 JavaScript tests and 12/12 Python tests passed**, no failures/skips. Integrated browser/API coverage remains **12/12** and now verifies disappearance immediately and after reload, retained reply tasks and draft text, marking unread, new evidence and stale-version rejection. The carrier inbox suite passes **16/16**. Syntax checks passed for **94 JavaScript and 2 Python files**, and `git diff --check` passed.
+
+Read-only verification reproduced the real workspace's already-read carrier still being highlighted on rc.8. After the idle local app was refreshed to rc.9, the same carrier was absent from dashboard highlights while its conversation and Needs reply remained available. No real read state was changed for verification. Native browser warning/error logs were empty. Send count remained 774, with outreach stopped, no prepared message and automatic capture off. No provider flags or mail were changed, and no email was sent. Private screenshots stay in ignored outputs outside distribution.
+
+The candidate remains on the existing feature branch, with prior packages retained and no remote push, main merge or team rollout. Packaging verifies source equality and an empty extracted preview workspace with capture off and sending blocked; existing installed dependencies are reused. Runtime data, credentials and customer evidence are excluded. Native Windows and other-PC installation remain outside this local check.
+
 ## Direct dashboard/message read controls — 2.2.0-rc.8 — October 30, 2026
 
 Added Mark as read / Mark as unread beside Review on dashboard carrier alerts and below the latest incoming message's sender in Conversations. Both use the existing carrier/message/version-bound read endpoint. Marking read refreshes unread counters/highlights and the selected conversation while preserving draft text and reply tasks; new incoming evidence stays unread. Dashboard requests retain the displayed evidence version, serialize against conversation work and display saving/error feedback. A successful save with a failed dashboard refresh reports that the view still needs refreshing. Earlier messages cannot silently clear a newer incoming message through these quick controls.

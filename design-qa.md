@@ -1,4 +1,18 @@
-# Direct read controls design QA — 2.2.0-rc.8
+# Dashboard read-message dismissal QA — 2.2.0-rc.9
+
+final result: passed
+
+The user's correction is that Mark as read must remove the message card from dashboard highlights. Read incoming messages are now excluded before pagination, even if the carrier still needs a reply or matching review. The underlying conversation, reply count/task and source evidence remain available. Mark as unread in Conversations and new incoming evidence restore the alert. No-response follow-up tasks retain their existing dashboard behavior.
+
+Native verification at `http://127.0.0.1:4317/#dashboard` confirmed rc.9 no longer highlights the designated already-read carrier, while the Needs my reply count remains one and its conversation is still available. `outputs/carrier-rc9-qa/dashboard-dismissed.jpg` records the result. Verification used navigation and read-only API checks, with no real read-state mutation or email send; browser warning/error logs were empty. Current app geometry and shared styling are unchanged.
+
+The browser regression checks actual dismissal, retained unsaved reply text, marking unread, newly arriving evidence/stale-version rejection and dismissal persistence after reload, including desktop/mobile bounds. A service-level test checks the complete unread/read/unread/new-reply lifecycle. Earlier rc.8 screenshots correctly show its old behavior but are superseded for dashboard dismissal. Customer screenshots remain private development outputs and are excluded from distribution.
+
+Final regression: **208/208 JavaScript tests and 12/12 Python tests**, no failures/skips. Integrated API/browser suite: **12/12**. No actionable P0/P1/P2 issue remains for this correction.
+
+---
+
+# Previous direct read controls design QA — 2.2.0-rc.8
 
 final result: passed
 

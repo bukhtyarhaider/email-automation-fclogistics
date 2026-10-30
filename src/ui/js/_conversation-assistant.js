@@ -136,7 +136,7 @@
   if(busy||conversationBusy)return;
   const input={carrierInboxId:button.dataset.carrierRead,expectedVersion:button.dataset.readVersion,messageId:button.dataset.readMessage,unread:button.dataset.unread==='true'};
   busy=true;++dashboardSequence;controls();button.setAttribute('aria-busy','true');button.textContent='Saving…';$('carrierAttentionStatus').textContent='Updating carrier read status…';
-  try{await request('carrier-seen',input);const refreshed=await loadDashboard(true);$('carrierAttentionStatus').textContent=!refreshed?'Read status saved. Refresh the dashboard to update its highlights.':input.unread?'Marked as unread.':'Marked as read. A message needing a reply stays in your reply queue.';}
+  try{await request('carrier-seen',input);const refreshed=await loadDashboard(true);$('carrierAttentionStatus').textContent=!refreshed?'Read status saved. Refresh the dashboard to update its highlights.':input.unread?'Marked as unread.':'Marked as read. Removed from dashboard highlights; the conversation remains available in Conversations.';}
   catch(e){await loadDashboard(true);$('carrierAttentionStatus').textContent='Read status was not changed: '+e.message;}
   finally{busy=false;button.removeAttribute('aria-busy');controls();}
  }

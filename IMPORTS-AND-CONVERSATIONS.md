@@ -1,4 +1,4 @@
-# Outreach Desk 2.2.0-rc.8 — reviewed imports and carrier conversations
+# Outreach Desk 2.2.0-rc.9 — reviewed imports and carrier conversations
 
 Feature branch: `feat/import-repairs-carrier-conversations`.
 Previous stable build: 2.1.0. This is a release candidate for review, not an automatically approved production deployment. Experiments 01–03 are integrated into the normal app; Team work remains on `feat/sales-experiments` and is excluded from this candidate.
@@ -117,3 +117,7 @@ Unsaved carrier status edits remain associated with that carrier while navigatin
 On the dashboard, each carrier alert with an incoming message has **Mark as read** beside Review. The latest incoming message in Conversations has the same direct action below its sender. Both switch to **Mark as unread** after saving. Existing history/details controls remain available. Read state is shared between these views on this PC; it does not change provider mailbox flags. Earlier messages do not have a button that could accidentally mark a newer reply read.
 
 The unread count/highlight updates immediately. Marking read does not close a reply task, approve a draft or send email. New carrier evidence returns the conversation to unread. Requests bind to the displayed message/version, so newly arriving evidence cannot be silently cleared by an old action. Saving/error feedback is visible, edits are retained, and desktop/mobile controls use the existing design.
+
+## Dashboard message dismissal (rc.9)
+
+**Mark as read** removes that incoming message from dashboard highlights immediately and after reload. Its conversation and outstanding reply task remain available in Conversations and the dashboard Needs my reply count. **Mark as unread** in Conversations or a new incoming message restores the alert. No-response follow-up tasks remain separate dashboard work. The filter runs before pagination, so acknowledged messages cannot occupy the available highlight slots. Earlier rc.8 descriptions of a read message staying highlighted are superseded by this behavior.
