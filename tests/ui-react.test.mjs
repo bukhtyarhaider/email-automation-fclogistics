@@ -204,6 +204,14 @@ test(
     const directory = fixture.dataDir;
     const state = upgrade(fixture.state);
     state.templates = structuredClone(templates);
+    state.profiles.push({
+      ...structuredClone(state.profiles[0]),
+      id: 'qa-secondary',
+      name: 'A longer secondary mailbox profile for responsive layout verification',
+      email: 'a-long-secondary-mailbox-for-layout-verification@example.invalid',
+      browserChannel: 'msedge',
+      autoReconnect: false,
+    });
     await fixture.persist();
     const port = 14689;
     const child = spawn(process.execPath, [path.join(root, 'src/server.mjs')], {
@@ -307,6 +315,104 @@ test(
         );
       }
     }
+    await page.locator('[data-view="settings"]').click();
+    await page.locator('#connectionMode').selectOption('cdp');
+    await page.locator('#cdpSettings').waitFor({ state: 'visible' });
+    for (const width of [1440, 1350, 1280, 1200, 1024, 820, 768, 480, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const layout = await page.locator('#view-settings').evaluate((view) => {
+        const rect = (element) => {
+          const { x, y, width, right } = element.getBoundingClientRect();
+          return { x, y, width, right };
+        };
+        const grid = view.querySelector('.settings-grid');
+        const panel = view.querySelector('.settings-profiles-panel');
+        const panels = [...grid.children].map(rect);
+        const presets = view.querySelector('#pacingPresetsGrid');
+        const headerOverflow = [...view.querySelectorAll('.panel-head')].some((head) =>
+          [...head.children].some((child) => rect(child).right > rect(head).right + 1),
+        );
+        const controlOverflow = [
+          ...view.querySelectorAll('input, select, textarea, button:not(table button)'),
+        ]
+          .filter(
+            (control) => control.closest('.panel') && control.getBoundingClientRect().width > 0,
+          )
+          .some((control) => rect(control).right > rect(control.closest('.panel')).right - 8);
+        const fieldRows = [...view.querySelectorAll('.form-grid-2')].map((row) =>
+          [...row.querySelectorAll('input, select')].map(rect),
+        );
+        return {
+          grid: rect(grid),
+          panels,
+          profileWidth: rect(panel).width,
+          presetGridWidth: rect(presets).width,
+          cards: [...presets.children].map((card) => ({
+            width: rect(card).width,
+            overflow: card.scrollWidth - card.clientWidth,
+          })),
+          headerOverflow,
+          controlOverflow,
+          fieldRows,
+          contentWidth: document.querySelector('.app-viewport').clientWidth,
+          contentScroll: document.querySelector('.app-viewport').scrollWidth,
+          syncOverflow: [...view.querySelector('.settings-sync-actions').children].some(
+            (child) => rect(child).right > rect(child.parentElement).right + 1,
+          ),
+        };
+      });
+      assert.equal(layout.panels.length, 9, 'All settings panels remain available');
+      assert(
+        Math.abs(layout.profileWidth - layout.grid.width) <= 1,
+        'Mailbox list spans the workspace',
+      );
+      if (width > 1280) {
+        assert(
+          Math.abs(layout.panels[1].y - layout.panels[2].y) <= 1,
+          'Profile and pacing panels align',
+        );
+        assert(
+          Math.abs(layout.panels[1].width - layout.panels[2].width) <= 1,
+          'Settings columns share width',
+        );
+        for (let index = 3; index < layout.panels.length; index += 2)
+          assert(
+            Math.abs(layout.panels[index].y - layout.panels[index + 1].y) <= 1,
+            'Later sections share rows',
+          );
+      } else {
+        for (const panel of layout.panels)
+          assert(
+            Math.abs(panel.width - layout.grid.width) <= 1,
+            'Narrow layouts use full-width panels',
+          );
+      }
+      for (const card of layout.cards) {
+        assert(
+          card.width >= Math.min(190, layout.presetGridWidth) - 1,
+          `Preset must stay readable at ${width}px: ${card.width}px`,
+        );
+        assert(card.overflow <= 1, `Preset contents fit at ${width}px`);
+      }
+      assert(!layout.headerOverflow, `Settings headings fit at ${width}px`);
+      assert(!layout.controlOverflow, `Settings inputs fit at ${width}px`);
+      assert(!layout.syncOverflow, `Sync action fits at ${width}px`);
+      assert(layout.contentScroll <= layout.contentWidth + 1, `Settings pane fits at ${width}px`);
+      if (width > 820) {
+        for (const fields of layout.fieldRows) {
+          // The provider occupies its own row; all other paired controls align below their labels.
+          if (fields.length === 2)
+            assert(
+              Math.abs(fields[0].y - fields[1].y) <= 1,
+              'Paired inputs align even when labels wrap',
+            );
+        }
+      }
+    }
+    await page.locator('#connectionMode').selectOption('saved');
+    await page.locator('#cdpSettings').waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('#trackingPcId').inputValue(), '4');
+    await page.setViewportSize({ width: 390, height: 1000 });
     await page.locator('[data-view="leads"]').click();
     await page.locator('#filter').selectOption('all');
     await page.locator('#leadRows [data-preview]').first().click();

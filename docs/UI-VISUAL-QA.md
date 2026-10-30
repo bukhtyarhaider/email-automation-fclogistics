@@ -2,6 +2,27 @@
 
 The follow-up review reproduced the reported `[object Object]` activity messages and the large blank column beside the sidebar. Both were migration regressions. The previous checks verified IDs, script execution and outer-page overflow; they did not assert event text, sidebar/content geometry or overflow inside the scrollable content pane.
 
+## Mailbox & Settings alignment follow-up
+
+The later settings review found a layout defect missed by the earlier pass: the profiles table's intrinsic minimum width widened the left dashboard column and compressed Sending Pace & Quotas. At 1350px this produced very narrow preset cards and put all later settings in a narrow right-hand column, leaving unused space beside them. Outer-page overflow checks did not catch the loss of usable card width.
+
+Settings now has its own grid. The mailbox list spans the available width; profile setup and pacing use equal columns on wide screens; later sections share paired rows. At 1280px and below, panels stack. All nine panels and their existing control IDs remain available. Pacing cards use the space in their own panel to choose one or two columns. Provider selection occupies a full form row, paired input baselines align when labels wrap, and sync actions, browser-discovery buttons and system information wrap within narrow screens.
+
+The current screenshots use synthetic data; the actual app was checked read-only and left open on Settings. No real mailbox settings were saved, no profile connection was made and no mail was sent.
+
+| Step | Surface checked | Health / evidence |
+| --- | --- | --- |
+| 1 | Desktop mailbox list and setup | Pass — full-width list, equal profile/pacing columns and readable presets at 1350px and 1440px. |
+| 2 | Sending pace and paired numeric fields | Pass — card contents and actions fit; wrapped labels keep input baselines aligned. |
+| 3 | Template checks and eligibility | Pass — panels share a row on desktop, and checkbox labels stay within their panel. |
+| 4 | Firebase sync and diagnostics | Pass — paired headings align; long paths and diagnostic values wrap; sync action stays inside the panel. |
+| 5 | Team settings and system information | Pass — narrow-screen fields and system values remain within the panel, including at 320px. |
+| 6 | Expanded CDP and responsive presets | Pass — browser address, discovery action and guide inspected at 320px/390px; two-column tablet presets inspected at 768px. |
+
+Sample screenshots are in `outputs/ui-qa-settings-followup/`: `desktop-overview.png`, `desktop-mailbox-and-pacing.png`, `desktop-sync-diagnostics.png`, `mobile-presets.png`, `mobile-system-info.png`, `mobile-cdp.png` and `tablet-presets.png`. They are local artifacts excluded from Git and portable packages.
+
+The settings regression now includes long profile names/emails, expanded CDP fields, minimum readable preset width, panel/header/control bounds, paired rows and input baselines at **1440, 1350, 1280, 1200, 1024, 820, 768, 480, 390 and 320px**. Existing settings save/reload, all-route navigation and unsaved-edit checks also passed. The final complete run passed **215 Node tests and 12 Python tests**, with no failures or skips; strict TypeScript, formatting, build and diff checks passed. Windows/Edge and assistive-technology behavior were not separately exercised.
+
 ## Repairs
 
 - Removed the extra layout container emitted by the sidebar. Main content now starts at the sidebar's right edge and uses the remaining width.

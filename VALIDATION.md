@@ -1,5 +1,12 @@
 # UI rendering and visual follow-up — 2026-10-30
 
+## Mailbox & Settings layout follow-up — 2026-10-30
+
+- Fixed intrinsic table sizing that compressed the pacing column, aligned settings in paired rows, and added narrow-screen wrapping for form actions and system information.
+- Visually inspected desktop, tablet, mobile and expanded CDP states; details and local screenshot names are in `docs/UI-VISUAL-QA.md`.
+- Expanded responsive settings assertions across ten widths (320–1440px), with long profile names/emails and expanded CDP fields.
+- Final `FC_BROWSER_TESTS=1 npm test`: **215 Node tests + 12 Python tests passed**, zero failures/skips. Strict TypeScript, formatting, production build and diff checks passed.
+
 - Fixed migration regressions in the sidebar shell and event-message rendering, plus responsive action rows, event cards, tracking/seed panels, native checkbox alignment, tracking section anchors and drawer footer controls.
 - Manually inspected all 12 main screens at desktop/mobile sizes, tablet activity, conversation details/inbox navigation and the lead drawer. Used synthetic data for interaction tests; confirmed the reported fixes on the running app without modifying customer data or sending mail.
 - Final `FC_BROWSER_TESTS=1 npm test`: **215 Node tests + 12 Python tests passed; zero failures/skips**. This includes event content, simultaneous records, filters, pause/clear behavior, all-route shell geometry/internal overflow at 1440/1024/768/390px, direct tracking section URLs and drawer action bounds.
