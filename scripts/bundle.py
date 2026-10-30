@@ -2,11 +2,15 @@
 from pathlib import Path
 import zipfile
 import json
+import argparse
 root=Path(__file__).resolve().parents[1]
 version=json.loads((root/'package.json').read_text())['version']
-dest=root/'dist'/f'Outreach-Desk-{version}.zip'
-dest.parent.mkdir(exist_ok=True)
-files=[root/name for name in ['package.json','package-lock.json','README.md','CHANGELOG.md','VALIDATION.md','TRACKING.md','SYNC-REPAIR.md','IMPORTS-AND-CONVERSATIONS.md','design-qa.md','.env.example','Setup-Windows.cmd','Start-Windows.cmd','Setup-Mac.command','Start-Mac.command']]
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--output', type=Path, help='Optional validation or distribution output path')
+args=parser.parse_args()
+dest=args.output or root/'dist'/f'Outreach-Desk-{version}.zip'
+dest.parent.mkdir(parents=True, exist_ok=True)
+files=[root/name for name in ['package.json','package-lock.json','tsconfig.json','.prettierrc.json','docs/UI-ARCHITECTURE.md','README.md','CHANGELOG.md','VALIDATION.md','TRACKING.md','SYNC-REPAIR.md','IMPORTS-AND-CONVERSATIONS.md','design-qa.md','.env.example','Setup-Windows.cmd','Start-Windows.cmd','Setup-Mac.command','Start-Mac.command']]
 for directory in ['src','public','scripts','tests']:
  files.extend(p for p in (root/directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ['.pyc','.log'])
 with zipfile.ZipFile(dest,'w',zipfile.ZIP_DEFLATED) as z:

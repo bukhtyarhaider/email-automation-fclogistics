@@ -12,17 +12,33 @@
     "team": "node src/coordinator.mjs",
     "test": "node scripts/test.mjs",
     "bundle": "python3 scripts/bundle.py",
-    "build:ui": "node src/ui/build.mjs"
+    "build:ui": "npm run typecheck && node src/ui/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev:ui": "node src/ui/build.mjs --watch",
+    "check:ui": "npm run typecheck && npm run format:check && node src/ui/build.mjs",
+    "format:ui": "prettier --write \"src/ui/**/*.{ts,tsx,css,mjs}\" tsconfig.json tests/ui-react.test.mjs",
+    "format:check": "prettier --check \"src/ui/**/*.{ts,tsx,css,mjs}\" tsconfig.json tests/ui-react.test.mjs",
+    "pretest": "npm run check:ui",
+    "prebundle": "npm run check:ui"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0",
+    "html-to-text": "10.0.1",
     "imapflow": "^2.4.2",
     "mailparser": "^3.9.39",
     "playwright": "^1.64.0",
-    "html-to-text": "10.0.1"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "engines": {
     "node": ">=20",
     "npm": ">=10"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "esbuild": "0.28.2",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
   }
 }

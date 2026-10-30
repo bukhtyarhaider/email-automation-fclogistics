@@ -1,3 +1,19 @@
+# React / TypeScript UI migration — 2026-10-30
+
+Branch: `feat/react-typescript-ui`. The package remains `2.2.0-rc.9`; this branch is not a new deployed release.
+
+- `npm run check:ui`: strict TypeScript, unused-binding/override checks, formatting and all three production bundles passed.
+- `FC_BROWSER_TESTS=1 npm test`: 213 Node tests passed with zero skips/failures, followed by all 12 Python tests. Includes desktop/mobile Chrome coverage, all 539 original main-app control IDs, all 12 routes, retained form drafts, native primitives, resource teardown/remount, imports/activation/undo, conversations, stale approvals, read markers, tracking, Firebase settings, reporting and wait reset.
+- The exact-draft review snapshot was verified by all 12 carrier-release integration/browser tests after fixing a background-refresh timing case. Backend approval validation remains unchanged.
+- Desktop/mobile screenshots from the synthetic browser suite were inspected. Both standalone workspaces retain their shared styles and original body class.
+- A validation ZIP was built separately under `/tmp`; TypeScript configuration, architecture documentation, React sources and generated assets are included. Existing private-data exclusion checks pass. No release ZIP or installed PC was replaced.
+- Dependency audit: 10 moderate advisories in existing backend dependency chains (`firebase-admin`/Google dependencies and `mailparser`/`nodemailer`/`uuid`), also present in the original lockfile. No additional frontend advisories; no high/critical findings. Backend dependency remediation is outside this UI migration.
+- No backend business module, HTTP endpoint, local state file or credential file changed. No real outreach, live-mailbox acceptance test, Windows/Edge installation or multi-PC deployment was performed. Synthetic coverage does not prove every real provider corner case.
+
+Architecture, ownership boundaries and developer commands are documented in `docs/UI-ARCHITECTURE.md`.
+
+---
+
 # Outreach Desk 2 validation
 
 ## Dismiss read dashboard messages — 2.2.0-rc.9 — October 30, 2026

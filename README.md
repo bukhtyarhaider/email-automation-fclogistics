@@ -205,18 +205,19 @@ Local UI binds only to loopback and checks host/origin/request headers. `data/` 
 ```sh
 npm test              # Run unit and integration tests (synthetic mail)
 npm run doctor        # Check Node, Python, and system prerequisites
-npm run build:ui      # Compile modular HTML, CSS, and JS from src/ui/ into public/
+npm run check:ui      # Strict types, frontend formatting, and production build
+npm run build:ui      # Typecheck and bundle the React/TypeScript UI
+npm run dev:ui        # Rebuild UI assets when frontend sources change
 npm run bundle        # Create clean production zip under dist/
 ```
 
-### UI Modular Architecture
+### React / TypeScript frontend
 
-The frontend is maintained as modular source components under `src/ui/`:
-- `src/ui/html/`: View partials (`_view-dashboard.html`, `_view-tracking.html`, `_view-settings.html`, `_drawer-lead.html`, etc.)
-- `src/ui/styles/`: Scoped CSS (`_tokens.css`, `_base.css`, `_tracking.css`, `_drawer.css`, etc.)
-- `src/ui/js/`: Domain modules (`_controls.js`, `_leads.js`, `_tracking.js`, `_settings.js`, etc.)
+The frontend lives in `src/ui/` and uses React, strict TypeScript, feature folders and shared native UI primitives. `app/` owns entries, layout, navigation and runtime lifecycle. `features/` owns each workflow's components, typed adapters and styles. `design-system/` owns tokens, foundations and primitives; `shared/` owns API DTOs, utilities, resource cleanup and React content regions. See [UI architecture and compatibility contract](docs/UI-ARCHITECTURE.md).
 
-Run `npm run build:ui` to concatenate and build `public/index.html`, `public/style.css`, and `public/app.js`.
+All twelve main views, drawers and both standalone workspaces use React markup. The existing forms stay mounted across hash navigation so unsaved edits survive. Typed feature adapters retain the existing event ordering, native control behavior and polling; React portals render dynamic lists, threads, options and inspectors without HTML injection. Backend `.mjs` modules, HTTP routes, persistence and delivery rules are unchanged.
+
+Run `npm run check:ui` before committing frontend changes. `npm test` and `npm run bundle` run this check automatically. Run the local server with `npm start` and `npm run dev:ui` in a separate terminal for rebuilds; reload the browser after a successful rebuild. `public/` contains generated assets and is included in the portable package. Do not hand-edit it.
 
 ### Headless browser tests
 
