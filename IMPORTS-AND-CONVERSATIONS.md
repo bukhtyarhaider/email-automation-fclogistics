@@ -1,4 +1,4 @@
-# Outreach Desk 2.2.0-rc.7 — reviewed imports and carrier conversations
+# Outreach Desk 2.2.0-rc.8 — reviewed imports and carrier conversations
 
 Feature branch: `feat/import-repairs-carrier-conversations`.
 Previous stable build: 2.1.0. This is a release candidate for review, not an automatically approved production deployment. Experiments 01–03 are integrated into the normal app; Team work remains on `feat/sales-experiments` and is excluded from this candidate.
@@ -111,3 +111,9 @@ History is scoped by a confirmed tool send to the exact carrier address in the r
 Dashboard attention is selected across the full carrier backlog before pagination. Closed/Signed labels clear the reply task until new incoming evidence arrives; a new reply remains explicitly marked. Incoming and outgoing messages sharing a header second use the same stable order as the reader. Recent exact-participant native Sent history postpones no-response follow-up eligibility and counts toward the follow-up maximum even without thread references. Workflow dates remain reminders, never scheduled email sends.
 
 Unsaved carrier status edits remain associated with that carrier while navigating in the running page. They retain the version originally edited: a refresh cannot silently authorize overwriting another window's status or new evidence. On a conflict, edits stay visible. **Reload saved status** deliberately discards the unsaved status form and loads the saved stage/date/note before a new edit. Browser reload still discards unsaved edits; save first. Read/unread controls show the next available action after each update. Internal scan IDs are reserved so custom mailbox IDs cannot overwrite history progress.
+
+## Direct read controls (rc.8)
+
+On the dashboard, each carrier alert with an incoming message has **Mark as read** beside Review. The latest incoming message in Conversations has the same direct action below its sender. Both switch to **Mark as unread** after saving. Existing history/details controls remain available. Read state is shared between these views on this PC; it does not change provider mailbox flags. Earlier messages do not have a button that could accidentally mark a newer reply read.
+
+The unread count/highlight updates immediately. Marking read does not close a reply task, approve a draft or send email. New carrier evidence returns the conversation to unread. Requests bind to the displayed message/version, so newly arriving evidence cannot be silently cleared by an old action. Saving/error feedback is visible, edits are retained, and desktop/mobile controls use the existing design.

@@ -3,13 +3,14 @@
  const esc=(s)=>String(s??'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const names={company:'Carrier/company name',phone:'Phone',equipment:'Equipment / trailer',zip:'ZIP code',contactName:'Contact name',truckCount:'Truck count',dot:'USDOT',mc:'MC',availability:'Availability',lanes:'Preferred lanes'};
  const date=(s)=>s?new Date(s).toLocaleString():'Unknown';
- let detail=null,library=null,local=null,busy=false,templateEdit=null,lastDashboard=0;
+ let detail=null,library=null,local=null,busy=false,templateEdit=null,lastDashboard=0,dashboardSequence=0,conversationBusy=false;
  const unsaved=new Map(),libraryDrafts=new Map();let wording=null,caret={start:0,end:0},publishedBusy=false;
  const request=(route,data)=>api('/api/conversations/'+route,data);
  function error(message=''){for(const id of ['assistantError','mailroomApprovalError']){const el=$(id);if(el){el.hidden=!message;el.textContent=message;}}}
  function remember(){if(!detail?.root||!local)return;local.body=$('assistantBody').value;local.templateId=$('assistantTemplate').value;unsaved.set(detail.root.id,{...local});}
  function controls(){if(publishedBusy!==busy){publishedBusy=busy;window.dispatchEvent(new CustomEvent('fc-reply-desk-busy',{detail:busy}));}const c=detail?.assistant,canDraft=c&&!c.hold&&!c.pendingReviewCount&&(!c.noReply||c.followUpReady),approved=c?.draft?.status==='approved'&&c.draftCurrent&&!local?.dirty;
   for(const e of document.querySelectorAll('#replyAssistant input,#replyAssistant textarea,#replyAssistant select,#replyAssistant button,.reply-library input,.reply-library select,.reply-library textarea,.reply-library button,#mailroomDetailsDialog input,#mailroomDetailsDialog textarea,#mailroomDetailsDialog select,#mailroomDetailsDialog button:not([data-close-mailroom]):not(#carrierStatusSave):not(#carrierStatusReload):not(#carrierSeen),#mailroomApprovalDialog input,#mailroomApprovalDialog button:not([data-close-mailroom])'))e.disabled=busy;
+  document.querySelectorAll('[data-carrier-read]').forEach(button=>{button.disabled=busy||conversationBusy;});
   $('replyMarkRead').disabled=busy||!c?.latestInboundId;$('replyMarkUnread').disabled=busy||!c?.latestInboundId;
   $('assistantSuggest').disabled=busy||!canDraft;$('assistantSaveDraft').disabled=busy||!canDraft||!$('assistantBody').value.trim();
   $('assistantApprove').disabled=busy||!c?.draft||!c.draftCurrent||local?.dirty||c.draft.status!=='draft'||!$('assistantApproveConfirm').checked||!$('assistantApprovalNote').value.trim();
@@ -116,8 +117,35 @@
  const saveWording=(button,copy)=>libraryAction(button,async()=>{const previousKey=templateEdit?.id||'new',r=await request('template',{id:copy?undefined:templateEdit?.id,expectedVersion:copy?undefined:templateEdit?.version,name:$('replyLibraryName').value,category:$('replyLibraryCategory').value,body:$('replyLibraryBody').value,active:$('replyLibraryActive').checked});if(!copy)libraryDrafts.delete(previousKey);templateEdit=r.template;$('replyLibraryBody').value=r.template.body;await refreshDetail();});
  $('replyLibrarySave').onclick=()=>saveWording($('replyLibrarySave'),false);$('replyLibraryCopy').onclick=()=>saveWording($('replyLibraryCopy'),true);
  $('replyFollowSave').onclick=()=>libraryAction($('replyFollowSave'),()=>request('preferences',{followUpDays:Number($('replyFollowDays').value),maxFollowUps:Number($('replyFollowMax').value)}));
- async function loadDashboard(force=false){if(!force&&Date.now()-lastDashboard<15000)return;try{const r=await request('dashboard');lastDashboard=Date.now();$('carrierAttentionStatus').textContent='Captured local carrier activity · '+new Date().toLocaleTimeString()+'. No automatic conversation sending.';const metrics=[['New / unread','unread','unread'],['Needs my reply','needsReply','needs_reply'],['Interested','interested','interested'],['Draft approvals','awaitingApproval','approval'],['Follow-up eligible','followUpReady','follow_up']];$('carrierAttentionMetrics').innerHTML=metrics.map(([label,key,work])=>`<button class="secondary" data-carrier-work="${work}"><strong>${r.summary[key]}</strong><span>${label}</span></button>`).join('');$('carrierAttentionRows').innerHTML=r.highlights.map((item)=>`<article class="carrier-highlight ${item.unread?'unread':''}"><div><strong>${esc(item.recipient)}</strong><p>${esc(item.intent?.intent||item.category)} · ${esc(item.subject)}${item.unread?' · New/unread':''}</p><p>${esc(item.excerpt||'No captured human response. Check capture coverage before a follow-up.')}</p></div><button class="secondary" data-carrier-open="${item.id}" data-carrier-type="${item.type}">Review</button></article>`).join('')||'<p class="hint">No captured carrier work needs attention. This does not establish complete mailbox coverage.</p>';}catch(e){$('carrierAttentionStatus').textContent='Carrier activity needs attention: '+e.message;}}
- $('carrierAttentionRows').onclick=(event)=>{const b=event.target.closest('[data-carrier-open]');if(!b)return;location.hash='conversations';window.dispatchEvent(new CustomEvent('fc-open-conversation',{detail:{id:b.dataset.carrierOpen,type:b.dataset.carrierType}}));};
+ async function loadDashboard(force=false){
+  if(!force&&(busy||Date.now()-lastDashboard<15000))return;
+  const sequence=++dashboardSequence;
+  try{
+   const r=await request('dashboard');if(sequence!==dashboardSequence)return;lastDashboard=Date.now();
+   $('carrierAttentionStatus').textContent='Captured local carrier activity · '+new Date().toLocaleTimeString()+'. No automatic conversation sending.';
+   const metrics=[['New / unread','unread','unread'],['Needs my reply','needsReply','needs_reply'],['Interested','interested','interested'],['Draft approvals','awaitingApproval','approval'],['Follow-up eligible','followUpReady','follow_up']];
+   $('carrierAttentionMetrics').innerHTML=metrics.map(([label,key,work])=>`<button class="secondary" data-carrier-work="${work}"><strong>${r.summary[key]}</strong><span>${label}</span></button>`).join('');
+   $('carrierAttentionRows').innerHTML=r.highlights.map(item=>{
+    const readAction=item.carrierInboxId&&item.latestInboundId?`<button class="secondary" data-carrier-read="${esc(item.carrierInboxId)}" data-read-version="${esc(item.statusVersion)}" data-read-message="${esc(item.latestInboundId)}" data-unread="${!item.unread}" title="Update this carrier’s read status in Outreach Desk" aria-label="${item.unread?'Mark as read':'Mark as unread'} for ${esc(item.recipient)}">${item.unread?'Mark as read':'Mark as unread'}</button>`:'';
+    return `<article class="carrier-highlight ${item.unread?'unread':''}"><div><strong>${esc(item.recipient)}</strong><p>${esc(item.intent?.intent||item.category)} · ${esc(item.subject)}${item.unread?' · New/unread':item.latestInboundId?' · Read':''}</p><p>${esc(item.excerpt||'No captured human response. Check capture coverage before a follow-up.')}</p></div><div class="carrier-highlight-actions"><button class="secondary" data-carrier-open="${item.id}" data-carrier-type="${item.type}">Review</button>${readAction}</div></article>`;
+   }).join('')||'<p class="hint">No captured carrier work needs attention. This does not establish complete mailbox coverage.</p>';
+   controls();return true;
+  }catch(e){if(sequence===dashboardSequence)$('carrierAttentionStatus').textContent='Carrier activity needs attention: '+e.message;return false;}
+ }
+ async function dashboardRead(button){
+  if(busy||conversationBusy)return;
+  const input={carrierInboxId:button.dataset.carrierRead,expectedVersion:button.dataset.readVersion,messageId:button.dataset.readMessage,unread:button.dataset.unread==='true'};
+  busy=true;++dashboardSequence;controls();button.setAttribute('aria-busy','true');button.textContent='Saving…';$('carrierAttentionStatus').textContent='Updating carrier read status…';
+  try{await request('carrier-seen',input);const refreshed=await loadDashboard(true);$('carrierAttentionStatus').textContent=!refreshed?'Read status saved. Refresh the dashboard to update its highlights.':input.unread?'Marked as unread.':'Marked as read. A message needing a reply stays in your reply queue.';}
+  catch(e){await loadDashboard(true);$('carrierAttentionStatus').textContent='Read status was not changed: '+e.message;}
+  finally{busy=false;button.removeAttribute('aria-busy');controls();}
+ }
+ $('carrierAttentionRows').onclick=event=>{
+  const read=event.target.closest('[data-carrier-read]');if(read){void dashboardRead(read);return;}
+  const b=event.target.closest('[data-carrier-open]');if(!b)return;location.hash='conversations';window.dispatchEvent(new CustomEvent('fc-open-conversation',{detail:{id:b.dataset.carrierOpen,type:b.dataset.carrierType}}));
+ };
+ window.addEventListener('fc-conversation-action-busy',event=>{conversationBusy=event.detail===true;document.querySelectorAll('[data-carrier-read]').forEach(button=>{button.disabled=busy||conversationBusy;});});
+ window.addEventListener('fc-carrier-read-changed',()=>{void loadDashboard(true);});
  $('carrierAttentionMetrics').onclick=(event)=>{const b=event.target.closest('[data-carrier-work]');if(!b)return;$('replyWork').value=b.dataset.carrierWork;location.hash='conversations';$('replyWork').dispatchEvent(new Event('change'));};
  loadLibrary().catch((e)=>{$('replyLibraryStatus').textContent=e.message;});void loadDashboard(true);setInterval(()=>{if(!document.hidden)void loadDashboard();},15000);
 })();

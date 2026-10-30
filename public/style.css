@@ -4837,6 +4837,9 @@ body.experiment-body { height: auto; min-height: 100vh; overflow: visible; user-
 #assistantBody { min-height:190px; resize:vertical; font:inherit; line-height:1.6; }
 @media(max-width:800px){ .reply-library-grid { grid-template-columns:minmax(0,1fr); } }
 
+.carrier-highlight-actions{display:flex;flex-wrap:wrap;gap:8px;flex-shrink:0;}
+.carrier-highlight-actions button{white-space:nowrap;}
+
 /* Conversation content uses the shared app shell, typography and responsive navigation. */
 .mailroom-active .app-viewport{display:flex;flex-direction:column;overflow:hidden;min-width:0;}
 .mailroom-active .app-viewport > :not(.view-page){flex-shrink:0;}
@@ -4979,3 +4982,7 @@ body.experiment-body { height: auto; min-height: 100vh; overflow: visible; user-
 .reply-config-reuse{padding:12px;border:1px solid var(--border-medium);border-radius:var(--radius-md);margin:16px 0;}
 #replyThread .mailroom-older .mailroom-message-evidence{display:block;}
 @media(max-width:520px){.carrier-record{align-items:flex-start;flex-wrap:wrap;}.mailroom-tabs{gap:0;}.mailroom-tabs button{font-size:12px;}.mailroom-tabs button span{padding:2px 6px;}.mailroom-tools{flex-wrap:wrap;}}
+
+.mailroom-read-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 0 58px;}
+#view-conversations .mailroom-read-actions button{font-size:12px;padding:6px 10px;}
+@media(max-width:520px){.mailroom-read-actions{margin-left:0;}}

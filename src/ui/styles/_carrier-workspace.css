@@ -56,3 +56,6 @@
 .template-field-buttons button { font-size:12px; padding:7px 9px; }
 #assistantBody { min-height:190px; resize:vertical; font:inherit; line-height:1.6; }
 @media(max-width:800px){ .reply-library-grid { grid-template-columns:minmax(0,1fr); } }
+
+.carrier-highlight-actions{display:flex;flex-wrap:wrap;gap:8px;flex-shrink:0;}
+.carrier-highlight-actions button{white-space:nowrap;}

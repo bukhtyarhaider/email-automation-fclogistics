@@ -1,8 +1,14 @@
 # Outreach Desk changelog
 
-Current candidate: **2.2.0-rc.7**. Previous stable package: **2.1.0**.
+Current candidate: **2.2.0-rc.8**. Previous stable package: **2.1.0**.
 
 The repository records package versions 1.0.0 and 2.0.0 before this release. Later updates often kept the same package version; they appear as dated milestones below. The historical Git label V1.1.0 did not change the recorded package version from 2.0.0.
+
+## 2.2.0-rc.8 — 2026-10-30 (release candidate)
+
+- Added direct Mark as read / Mark as unread controls to dashboard carrier alerts and the latest incoming conversation message.
+- Dashboard highlights, unread counts and conversation read state refresh together, while reply tasks and unsaved draft text remain intact. New evidence stays unread and stale requests are rejected.
+- Added visible saving/error feedback and responsive controls using the shared design. Provider flags, approvals and sending behavior remain unchanged.
 
 ## 2.2.0-rc.7 — 2026-10-30 (release candidate)
 

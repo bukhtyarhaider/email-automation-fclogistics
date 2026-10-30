@@ -140,3 +140,7 @@
 .reply-config-reuse{padding:12px;border:1px solid var(--border-medium);border-radius:var(--radius-md);margin:16px 0;}
 #replyThread .mailroom-older .mailroom-message-evidence{display:block;}
 @media(max-width:520px){.carrier-record{align-items:flex-start;flex-wrap:wrap;}.mailroom-tabs{gap:0;}.mailroom-tabs button{font-size:12px;}.mailroom-tabs button span{padding:2px 6px;}.mailroom-tools{flex-wrap:wrap;}}
+
+.mailroom-read-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 0 58px;}
+#view-conversations .mailroom-read-actions button{font-size:12px;padding:6px 10px;}
+@media(max-width:520px){.mailroom-read-actions{margin-left:0;}}

@@ -1,5 +1,15 @@
 # Outreach Desk 2 validation
 
+## Direct dashboard/message read controls — 2.2.0-rc.8 — October 30, 2026
+
+Added Mark as read / Mark as unread beside Review on dashboard carrier alerts and below the latest incoming message's sender in Conversations. Both use the existing carrier/message/version-bound read endpoint. Marking read refreshes unread counters/highlights and the selected conversation while preserving draft text and reply tasks; new incoming evidence stays unread. Dashboard requests retain the displayed evidence version, serialize against conversation work and display saving/error feedback. A successful save with a failed dashboard refresh reports that the view still needs refreshing. Earlier messages cannot silently clear a newer incoming message through these quick controls.
+
+Final `FC_BROWSER_TESTS=1 FC_UI_SCREENSHOT_DIR=outputs/carrier-rc8-final npm test`: **207/207 JavaScript tests and 12/12 Python tests passed**, with no failures/skips. Integrated API/browser coverage is **12/12**, including the new two-way read/unread actions, persisted state after reload, retained unsaved reply text, preserved Needs reply membership, stale-version rejection after a new reply, no page errors and desktop/mobile bounds. Existing approval, capture, protection and sender tests remain passing. Syntax checks passed for **94 JavaScript and 2 Python files**, and `git diff --check` passed.
+
+Read-state mutations in verification used isolated synthetic fixtures. The real workspace was checked for button placement without changing the user's unread state, approving a draft, sending mail or changing provider flags. The local app was idle before refresh; existing send history and mailbox configuration were retained. Read markers remain local to this PC. rc.8 stays on the existing feature branch, with rc.7 retained as the previous checkpoint/package; no remote push, main merge or team rollout was performed.
+
+The explicit-allowlist ZIP is checked against repository source bytes and starts in an empty extracted workspace with capture off and preview sending blocked. Existing installed dependencies are reused. Customer data, credentials, raw mail, screenshots and browser profiles are excluded. Native Windows and other-PC installation remain outside this local check.
+
 ## Conversation reliability audit — 2.2.0-rc.7 — October 30, 2026
 
 The audit began with a clean feature checkout and a passing baseline of **200/200 JavaScript tests and 12/12 Python tests**. Four new synthetic cases reproduced gaps in same-second incoming/outgoing order, dashboard attention beyond the first page, native outgoing contact activity without thread references, and Closed/Signed reply tasks. These failures were fixed. A fifth case verifies unlinked native outgoing history counts toward the configured follow-up maximum. Browser regression coverage now checks the fixes for stale status-edit overwrite after a detail refresh and the read/unread action label. Reserved mailbox IDs now protect internal scan records.

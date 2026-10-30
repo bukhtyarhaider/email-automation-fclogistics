@@ -1,4 +1,18 @@
-# Conversation reliability design QA — 2.2.0-rc.7
+# Direct read controls design QA — 2.2.0-rc.8
+
+final result: passed
+
+The existing dashboard and shared conversation design remain the source. A secondary Mark as read / Mark as unread action now sits beside Review on dashboard alerts and below the latest incoming message's sender in Conversations. Explicit Read/Unread text accompanies the message action. Standard secondary-button, typography, spacing and surface tokens are reused; no shell or navigation replacement was introduced.
+
+Native browser verification checked the actual rc.8 app at `http://127.0.0.1:4317/`. `outputs/carrier-rc8-qa/message-read.jpg` and `dashboard-read.jpg` show the controls in context. The designated real carrier was already marked read, so the control correctly offered Mark as unread while Needs reply stayed visible. Verification used navigation only; no real read action, draft approval or email send was performed. Warning/error logs were empty. Customer screenshots are private development evidence and are excluded from the package.
+
+Synthetic browser interaction verified both directions, persistence after reload, immediate dashboard/list/message synchronization, retained draft text, stale-request rejection after a new incoming message, and preserved reply tasks. Desktop and **390 × 844** mobile screenshots are under `outputs/carrier-rc8-final/`; message actions and dashboard action groups wrap without horizontal page overflow. The earlier wording library, exact approvals, status-edit recovery and common-shell mobile checks also pass.
+
+Final regression: **207/207 JavaScript tests and 12/12 Python tests**, no failures/skips; integrated browser/API suite **12/12**. No actionable P0/P1/P2 issue remains in this addition's scope. Read state remains local to the tool on this PC. Prior QA records below retain the earlier full source/implementation design comparisons and acceptance limits.
+
+---
+
+# Previous conversation reliability design QA — 2.2.0-rc.7
 
 final result: passed
 
