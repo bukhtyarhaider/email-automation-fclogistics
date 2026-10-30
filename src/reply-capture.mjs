@@ -11,7 +11,7 @@ export function replyCaptureConfig(env = process.env, clock = Date.now) {
   if (!Array.isArray(mailboxes) || mailboxes.length > 20) throw new Error('Use a reply-mailbox JSON array with at most 20 accounts.');
   const seen = new Set(), accounts = new Set();
   for (const c of mailboxes) {
-    if (!c || !/^[a-z0-9_-]{1,50}$/i.test(c.id || '') || ['__proto__','constructor','prototype','_capture'].includes(c.id) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email || '') || typeof c.host !== 'string' || !c.host || seen.has(c.id) || accounts.has(c.email.toLowerCase())) throw new Error('Reply mailboxes need unique IDs/emails and a host.');
+    if (!c || !/^[a-z0-9_-]{1,50}$/i.test(c.id || '') || ['__proto__','constructor','prototype','_capture','_history','_progress'].includes(c.id) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email || '') || typeof c.host !== 'string' || !c.host || seen.has(c.id) || accounts.has(c.email.toLowerCase())) throw new Error('Reply mailboxes need unique, nonreserved IDs/emails and a host.');
     if (c.password || c.pass || c.accessToken || c.token) throw new Error('Use environment-variable references for reply mailbox secrets.');
     for (const key of ['passwordEnv','accessTokenEnv']) if (c[key] && !/^[A-Z_][A-Z0-9_]*$/i.test(c[key])) throw new Error('Use a valid environment-variable name for credentials.');
     c.email = c.email.toLowerCase(); c.user ||= c.email;

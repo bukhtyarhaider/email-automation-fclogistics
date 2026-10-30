@@ -1,8 +1,16 @@
 # Outreach Desk changelog
 
-Current candidate: **2.2.0-rc.6**. Previous stable package: **2.1.0**.
+Current candidate: **2.2.0-rc.7**. Previous stable package: **2.1.0**.
 
 The repository records package versions 1.0.0 and 2.0.0 before this release. Later updates often kept the same package version; they appear as dated milestones below. The historical Git label V1.1.0 did not change the recorded package version from 2.0.0.
+
+## 2.2.0-rc.7 — 2026-10-30 (release candidate)
+
+- Select dashboard attention from the entire carrier backlog before pagination; preserve stable ordering for incoming/outgoing messages sharing a header second.
+- Preserve unsaved carrier status edits by carrier and bind saves to the original edited version. Refreshes cannot overwrite concurrent changes; an explicit reload action recovers the saved status.
+- Closed/Signed workflow labels clear reply tasks until new incoming evidence arrives. Correct the read/unread action label after an update.
+- Include recent exact-participant native outgoing history in follow-up waiting periods, even without thread references. Reserve internal capture IDs to protect scan progress.
+- Keep approval, native mailbox Send, signatures, duplicate/uncertainty/opt-out protections and the existing shared design.
 
 ## 2.2.0-rc.6 — 2026-10-30 (release candidate)
 

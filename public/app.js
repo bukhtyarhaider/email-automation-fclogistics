@@ -4010,7 +4010,7 @@ document.querySelectorAll(".nav-link").forEach((link) => {
   }
   function error(message) { $('replyError').hidden = !message; $('replyError').textContent = message; }
   const mailroom=production&&$('mailroomWorkspace');
-  const threadMessages=()=>detail?.carrierHistory?.messages||detail?.messages||[];const findMessage=(id)=>threadMessages().find(m=>m.id===id)||detail?.messages?.find(m=>m.id===id);let carrierStatusDirty=false;
+  const threadMessages=()=>detail?.carrierHistory?.messages||detail?.messages||[];const findMessage=(id)=>threadMessages().find(m=>m.id===id)||detail?.messages?.find(m=>m.id===id);const carrierStatusDrafts=new Map();let renderedCarrierStatus=null;
   const friendly=(value)=>({interested:'Interested',positive:'Positive',negative:'Not interested',neutral:'Needs a look',pricing:'Pricing question',how_it_works:'Service question',opt_out:'Opt-out',needs_review:'Needs match',unknown:'Waiting',out_of_office:'Out of office',automated:'Automatic reply',bounce:'Delivery notice',later:'Later'})[value]||value||'Waiting';
   function markSelection(){if(!mailroom)return;document.querySelectorAll('#mailroomList [data-reply]').forEach((b)=>{const active=b.dataset.reply===selection?.id;b.classList.toggle('selected',active);b.setAttribute('aria-pressed',String(active));});}
   function renderMailroomRows(){
@@ -4037,7 +4037,18 @@ document.querySelectorAll(".nav-link").forEach((link) => {
     const older=earlier.length?'<details id="mailroomOlder" class="mailroom-older" '+(previousOpen?'open':'')+'><summary>Earlier emails with this carrier ('+earlier.length+')</summary>'+earlier.map(message).join('')+'</details>':'';
     $('replyThread').insertAdjacentHTML('afterbegin',older);$('mailroomThreadHistory').innerHTML=originals+messages.map(message).join('');
     $('carrierRecord').hidden=!history;$('carrierStatusPanel').hidden=!history;
-    if(history){$('carrierRecordLabel').textContent=history.recipient+' · '+({in_review:'In review',active:'Active conversation',follow_up:'Follow up',waiting:'Waiting',signed:'Signed',closed:'Closed'})[history.carrierStatus];$('carrierHistoryNote').textContent=history.messages.length+' captured email(s) across '+history.roots.length+' tool send(s). '+(history.reviewRequired?'Latest email needs thread review before a reply draft.':'Earlier email chains remain available below.');if(!carrierStatusDirty){$('carrierStage').value=history.carrierStatus;$('carrierStatusNote').value=history.note;const d=history.followUpAt&&new Date(history.followUpAt);$('carrierFollowUpAt').value=d?new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16):'';}$('carrierSeen').textContent=history.unread?'Mark history read':'Mark history unread';}
+    if(history){
+      const names={in_review:'In review',active:'Active conversation',follow_up:'Follow up',waiting:'Waiting',signed:'Signed',closed:'Closed'};
+      $('carrierRecordLabel').textContent=history.recipient+' · '+names[history.carrierStatus]+(history.newSinceStatus?' · New reply':'');
+      $('carrierHistoryNote').textContent=history.messages.length+' captured email(s) across '+history.roots.length+' tool send(s). '+(history.reviewRequired?'Latest email needs thread review before a reply draft.':'Earlier email chains remain available below.');
+      const draft=carrierStatusDrafts.get(history.carrierInboxId),d=history.followUpAt&&new Date(history.followUpAt);
+      const fields={carrierStage:draft?.stage||history.carrierStatus,carrierStatusNote:draft?.note??history.note,carrierFollowUpAt:draft?.followUpAt??(d?new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16):'')};
+      for(const [id,value]of Object.entries(fields))if($(id).value!==value)$(id).value=value;
+      $('carrierStatusReload').hidden=!draft;
+      if(renderedCarrierStatus!==history.carrierInboxId)$('carrierStatusResult').textContent='';renderedCarrierStatus=history.carrierInboxId;
+      if(draft&&draft.expectedVersion!==history.statusVersion)$('carrierStatusResult').textContent='Carrier history or status changed while you were editing. Your edits are retained. Reload the saved status before making a new change.';
+      $('carrierSeen').textContent=history.unread?'Mark history read':'Mark history unread';
+    }
     $('mailroomHold').hidden=!c?.hold;$('mailroomHold').textContent=c?.hold?'Contact held · '+c.hold:'';$('mailroomResolve').hidden=Boolean(root);
     const inbound=messages.filter((m)=>m.direction==='inbound'&&m.kind==='human'&&!['review','ignored'].includes(m.match));
     $('mailroomReplyHistory').textContent=`${inbound.length} matched human ${inbound.length===1?'reply':'replies'} · ${root?.account||messages[0]?.account||''}. Header dates are sender-reported. Quoted text may be omitted; inspect the original mailbox for complete context.`;
@@ -4045,7 +4056,8 @@ document.querySelectorAll(".nav-link").forEach((link) => {
   }
   function controls() {
     const blocked=busy||deskBusy;
-    for (const id of ['replyHistory','replyDemo','replyImport','replyRefresh','replyThreadRefresh','replyReviewSave','replyBackfill','replyIgnore','replyUnignore',...(mailroom?['carrierStatusSave','carrierSeen']:[])]) $(id).disabled = blocked;
+    for (const id of ['replyHistory','replyDemo','replyImport','replyRefresh','replyThreadRefresh','replyReviewSave','replyBackfill','replyIgnore','replyUnignore',...(mailroom?['carrierStatusSave','carrierStatusReload','carrierSeen']:[])]) $(id).disabled = blocked;
+    if(mailroom)$('carrierSeen').disabled=blocked||!detail?.carrierHistory?.latestInboundId;
     $('replyReviewSave').disabled = blocked || !selectedMessage || findMessage(selectedMessage)?.match === 'ignored';
     $('replyScan').disabled = blocked || !report?.capture.enabled || report.capture.running;
     $('replyBackfill').disabled = blocked || report?.capture.running;
@@ -4060,7 +4072,7 @@ document.querySelectorAll(".nav-link").forEach((link) => {
     $('replyStatus').textContent = 'Processing reply evidence…';
     try { const note = await fn(); await load(); $('replyStatus').textContent = note || 'Reply action complete. No email was sent.'; }
     catch (e) { error(e.message);if(mailroom&&button.id.startsWith('carrier'))$('carrierStatusResult').textContent=e.message+' Your status draft is retained.'; $('replyStatus').textContent = 'Needs attention. Your review draft/file selection is retained.'; }
-    finally { busy = false;button.removeAttribute('aria-busy');if(!queueButton)button.textContent = text; controls(); if(pendingOpen&&!deskBusy){const next=pendingOpen;pendingOpen=null;window.dispatchEvent(new CustomEvent("fc-open-conversation",{detail:next}));} }
+    finally { busy = false;button.removeAttribute('aria-busy');if(!queueButton&&button.textContent==='Working…')button.textContent = text; controls(); if(pendingOpen&&!deskBusy){const next=pendingOpen;pendingOpen=null;window.dispatchEvent(new CustomEvent("fc-open-conversation",{detail:next}));} }
   }
   function syncSelect(id, entries) {
     const value = $(id).value;
@@ -4092,7 +4104,7 @@ document.querySelectorAll(".nav-link").forEach((link) => {
     controls();
     if(mailroom&&!selection&&report.rows.length&&location.hash==='#conversations'&&!busy&&!deskBusy){selection={id:report.rows[0].id,type:report.rows[0].type};await loadDetail(false);}
     const selectedRow=production&&selection&&report.rows.find((r)=>r.id===selection.id);
-    if(!deskBusy&&selectedRow&&detail&& !$('replyInspector').hidden&&(selectedRow.count!==detail.messages.length||(selectedRow.latestHistoryId&&selectedRow.latestHistoryId!==detail.carrierHistory?.latestHistoryId)||(selectedRow.sourceMessageId&&!detail.messages.some((m)=>m.id===selectedRow.sourceMessageId))))await loadDetail();
+    if(!deskBusy&&selectedRow&&detail&& !$('replyInspector').hidden&&(selectedRow.count!==detail.messages.length||(selectedRow.statusVersion&&selectedRow.statusVersion!==detail.carrierHistory?.statusVersion)||(selectedRow.latestHistoryId&&selectedRow.latestHistoryId!==detail.carrierHistory?.latestHistoryId)||(selectedRow.sourceMessageId&&!detail.messages.some((m)=>m.id===selectedRow.sourceMessageId))))await loadDetail();
   }
   if(mailroom)window.addEventListener('fc-conversation-detail',(event)=>{const data=event.detail;if(selection&&(data.root?.id===selection.id||data.messages.some((m)=>m.id===selection.id))){detail=data;renderMailroomThread(data);}});
   function rememberDraft() { if (selectedMessage) drafts.set(selectedMessage, { category:$('replyReviewCategory').value, note:$('replyReviewNote').value, rootId:$('replyLink').value, confirm:$('replyLinkConfirm').checked }); }
@@ -4120,7 +4132,7 @@ document.querySelectorAll(".nav-link").forEach((link) => {
     if(production) window.dispatchEvent(new CustomEvent('fc-conversation-detail',{detail}));
     if(threadMessages().length) selectReview(threadMessages().some((m) => m.id === selectedMessage) ? selectedMessage : (threadMessages().findLast(m=>m.direction==='inbound')||threadMessages().at(-1)).id);else { selectedMessage=null;$('replyReviewPanel').hidden=true;controls(); }
   }
-  $(mailroom?'mailroomList':'replyRows').onclick = (event) => { if(deskBusy)return; const button = event.target.closest('[data-reply]'); if (!button) return; rememberDraft(); selectedMessage = null; $('replyInspector').hidden = true; $('replyReviewPanel').hidden = true; carrierStatusDirty=false;selection = { id:button.dataset.reply, type:button.dataset.type }; action(button, () => loadDetail(false)); };
+  $(mailroom?'mailroomList':'replyRows').onclick = (event) => { if(deskBusy)return; const button = event.target.closest('[data-reply]'); if (!button) return; rememberDraft(); selectedMessage = null; $('replyInspector').hidden = true; $('replyReviewPanel').hidden = true; selection = { id:button.dataset.reply, type:button.dataset.type }; action(button, () => loadDetail(false)); };
   const reviewMessageClick = (event) => { const button = event.target.closest('[data-review-message]'); if (button) { selectReview(button.dataset.reviewMessage); if(mailroom){if(!$('mailroomDetailsDialog').open)$('mailroomDetailsDialog').showModal();$('replyReviewNote').focus();}else $('replyReviewPanel').scrollIntoView({ behavior:'smooth', block:'center' }); } };
   $('replyThread').onclick=reviewMessageClick;if(mailroom)$('mailroomThreadHistory').onclick=reviewMessageClick;
   $('replyClose').onclick = () => { rememberDraft();$('replyInspector').hidden=true;if(mailroom){$('mailroomWorkspace').dataset.threadOpen='false';$('mailroomEmpty').hidden=false;}};
@@ -4148,8 +4160,9 @@ document.querySelectorAll(".nav-link").forEach((link) => {
   });
   if(mailroom){
     $('carrierManage').onclick=()=>{$('mailroomDetailsDialog').showModal();$('carrierStage').focus();};
-    for(const id of ['carrierStage','carrierFollowUpAt','carrierStatusNote'])$(id).oninput=()=>{carrierStatusDirty=true;};
-    $('carrierStatusSave').onclick=()=>action($('carrierStatusSave'),async()=>{const h=detail.carrierHistory;await request('/api/conversations/carrier-status',{carrierInboxId:h.carrierInboxId,expectedVersion:h.statusVersion,stage:$('carrierStage').value,note:$('carrierStatusNote').value,followUpAt:$('carrierFollowUpAt').value?new Date($('carrierFollowUpAt').value).toISOString():null});carrierStatusDirty=false;await loadDetail();$('carrierStatusResult').textContent='Carrier status saved. No email was sent.';return 'Carrier status saved.';});
+    for(const id of ['carrierStage','carrierFollowUpAt','carrierStatusNote'])$(id).oninput=()=>{const h=detail.carrierHistory,prior=carrierStatusDrafts.get(h.carrierInboxId);carrierStatusDrafts.set(h.carrierInboxId,{expectedVersion:prior?.expectedVersion||h.statusVersion,stage:$('carrierStage').value,note:$('carrierStatusNote').value,followUpAt:$('carrierFollowUpAt').value});$('carrierStatusReload').hidden=false;};
+    $('carrierStatusSave').onclick=()=>action($('carrierStatusSave'),async()=>{const h=detail.carrierHistory,draft=carrierStatusDrafts.get(h.carrierInboxId);await request('/api/conversations/carrier-status',{carrierInboxId:h.carrierInboxId,expectedVersion:draft?.expectedVersion||h.statusVersion,stage:$('carrierStage').value,note:$('carrierStatusNote').value,followUpAt:$('carrierFollowUpAt').value?new Date($('carrierFollowUpAt').value).toISOString():null});carrierStatusDrafts.delete(h.carrierInboxId);await loadDetail();$('carrierStatusResult').textContent='Carrier status saved. No email was sent.';return 'Carrier status saved.';});
+    $('carrierStatusReload').onclick=()=>action($('carrierStatusReload'),async()=>{await loadDetail();carrierStatusDrafts.delete(detail.carrierHistory.carrierInboxId);renderMailroomThread(detail);$('carrierStatusResult').textContent='Saved carrier status reloaded. Unsaved status edits discarded.';return 'Saved carrier status reloaded.';});
     $('carrierSeen').onclick=()=>action($('carrierSeen'),async()=>{const h=detail.carrierHistory;await request('/api/conversations/carrier-seen',{carrierInboxId:h.carrierInboxId,expectedVersion:h.statusVersion,messageId:h.latestInboundId,unread:!h.unread});await loadDetail();return 'Carrier history read state saved.';});
   }
   $('replyRefresh').onclick = () => action($('replyRefresh'), async () => {});
@@ -4158,7 +4171,7 @@ document.querySelectorAll(".nav-link").forEach((link) => {
   $('replySearch').onkeydown = (e) => { if (e.key === 'Enter') { offset = 0; $('replyRefresh').click(); } };
   $('replyPrev').onclick = () => { offset = Math.max(0,offset - 25); action($('replyPrev'), async () => {}); };
   $('replyNext').onclick = () => { offset += 25; action($('replyNext'), async () => {}); };
-  if (production) window.addEventListener('fc-open-conversation',(event)=>{if(busy||deskBusy){pendingOpen=event.detail;return;}rememberDraft();carrierStatusDirty=false;selection=event.detail;selectedMessage=null;$('replyInspector').hidden=true;void action($('replyRefresh'),()=>loadDetail(false));});
+  if (production) window.addEventListener('fc-open-conversation',(event)=>{if(busy||deskBusy){pendingOpen=event.detail;return;}rememberDraft();selection=event.detail;selectedMessage=null;$('replyInspector').hidden=true;void action($('replyRefresh'),()=>loadDetail(false));});
   if(production)window.addEventListener('fc-reply-desk-busy',(event)=>{deskBusy=event.detail===true;controls();if(!deskBusy){if(pendingOpen){const next=pendingOpen;pendingOpen=null;window.dispatchEvent(new CustomEvent('fc-open-conversation',{detail:next}));}else void load().catch((e)=>error(e.message));}});
   if (production) window.addEventListener('fc-conversation-search', (event) => { $('replySearch').value=event.detail;offset=0;void load().catch((e)=>error(e.message)); });
   if (production) window.addEventListener('fc-conversation-view', () => { if(!busy&&!deskBusy) void request('/api/experiment/replies/history',{}).then(load).catch((e)=>error(e.message)); });
@@ -4220,7 +4233,7 @@ document.querySelectorAll(".nav-link").forEach((link) => {
  function error(message=''){for(const id of ['assistantError','mailroomApprovalError']){const el=$(id);if(el){el.hidden=!message;el.textContent=message;}}}
  function remember(){if(!detail?.root||!local)return;local.body=$('assistantBody').value;local.templateId=$('assistantTemplate').value;unsaved.set(detail.root.id,{...local});}
  function controls(){if(publishedBusy!==busy){publishedBusy=busy;window.dispatchEvent(new CustomEvent('fc-reply-desk-busy',{detail:busy}));}const c=detail?.assistant,canDraft=c&&!c.hold&&!c.pendingReviewCount&&(!c.noReply||c.followUpReady),approved=c?.draft?.status==='approved'&&c.draftCurrent&&!local?.dirty;
-  for(const e of document.querySelectorAll('#replyAssistant input,#replyAssistant textarea,#replyAssistant select,#replyAssistant button,.reply-library input,.reply-library select,.reply-library textarea,.reply-library button,#mailroomDetailsDialog input,#mailroomDetailsDialog textarea,#mailroomDetailsDialog select,#mailroomDetailsDialog button:not([data-close-mailroom]):not(#carrierStatusSave):not(#carrierSeen),#mailroomApprovalDialog input,#mailroomApprovalDialog button:not([data-close-mailroom])'))e.disabled=busy;
+  for(const e of document.querySelectorAll('#replyAssistant input,#replyAssistant textarea,#replyAssistant select,#replyAssistant button,.reply-library input,.reply-library select,.reply-library textarea,.reply-library button,#mailroomDetailsDialog input,#mailroomDetailsDialog textarea,#mailroomDetailsDialog select,#mailroomDetailsDialog button:not([data-close-mailroom]):not(#carrierStatusSave):not(#carrierStatusReload):not(#carrierSeen),#mailroomApprovalDialog input,#mailroomApprovalDialog button:not([data-close-mailroom])'))e.disabled=busy;
   $('replyMarkRead').disabled=busy||!c?.latestInboundId;$('replyMarkUnread').disabled=busy||!c?.latestInboundId;
   $('assistantSuggest').disabled=busy||!canDraft;$('assistantSaveDraft').disabled=busy||!canDraft||!$('assistantBody').value.trim();
   $('assistantApprove').disabled=busy||!c?.draft||!c.draftCurrent||local?.dirty||c.draft.status!=='draft'||!$('assistantApproveConfirm').checked||!$('assistantApprovalNote').value.trim();

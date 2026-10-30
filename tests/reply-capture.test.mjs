@@ -21,6 +21,7 @@ test('live capture requires its own explicit configuration; credentials use TLS/
  const disabled=new ReplyCapture({replies,env:{FC_MONITOR_ENABLED:'1'},clientFactory:()=>{invoked++;}});
  assert.throws(()=>disabled.start(),/disabled/);assert.equal(invoked,0);
  assert.throws(()=>replyCaptureConfig({...envFor(),FC_EXPERIMENT_REPLY_MAILBOXES:JSON.stringify([{id:'x',email:account,host:'x',password:'secret'}])}),/references/);
+ for(const id of ['_capture','_history','_progress','__proto__'])assert.throws(()=>replyCaptureConfig({...envFor(),FC_EXPERIMENT_REPLY_MAILBOXES:JSON.stringify([{id,email:account,host:'mail.example.invalid'}])}),/nonreserved/);
  const env=envFor(),calls=[];
  const capture=new ReplyCapture({replies,env,clock:()=>fixed,clientFactory:(opts)=>{assert.equal(opts.tls.rejectUnauthorized,true);assert.equal(opts.tls.minVersion,'TLSv1.2');assert.equal(opts.logger,false);assert.equal(opts.auth.pass,'PRIVATE_IMAP_PASSWORD');return fakeClient([],calls);}});
  await capture.run(replyCaptureConfig(env,()=>fixed));

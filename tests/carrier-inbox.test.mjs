@@ -51,3 +51,26 @@ test('unlinked outgoing email does not manufacture an incoming response, unread 
 test('earlier ordinary outgoing context does not block a newer matched carrier response',async(t)=>{
  const f=await workspace(t);await f.ops.replies.ingest(old(eml({from:account,to:recipient,reference:null,id:'<earlier-outgoing@example.com>',text:'Earlier contact context.'})),account);await f.ops.replies.ingest(eml({text:'I am interested.'}),account);const row=(await list(f)).rows[0],d=await f.ops.assistant.detail(row.id,'conversation');assert.equal(d.assistant.pendingReviewCount,0);assert.equal(d.carrierHistory.messages.length,2);assert.equal(row.carrierStatus,'active');
 });
+
+test('a later captured incoming reply with the same header second as an outgoing reply still needs attention',async(t)=>{
+ const f=await workspace(t);await f.ops.replies.ingest(eml({from:account,to:recipient,id:'<same-second-out@example.com>',text:'Which lanes work for you?'}),account);
+ await f.ops.replies.ingest(eml({id:'<same-second-in@example.com>',text:'Can you help with Texas lanes?'}),account);
+ assert.equal((await list(f)).rows[0].needsReply,true);
+});
+test('dashboard finds attention across the entire carrier backlog rather than the first page',async(t)=>{
+ const f=await workspace(t);f.ops.assistant.clock=()=>Date.parse('2026-11-02T12:00:00Z');
+ await f.ops.replies.transaction(s=>{const original=Object.values(s.roots)[0];original.sentAt='2026-10-01T12:00:00Z';for(let i=0;i<30;i++){const id=String(i+1).padStart(64,'0');s.roots[id]={...original,id,recipient:`recent-${i}@example.com`,sentAt:'2026-11-01T12:00:00Z',messageIds:[]};}});
+ const first=await list(f);assert.equal(first.rows.some(r=>r.recipient===recipient),false);const dashboard=await f.ops.assistant.dashboard();assert.equal(dashboard.summary.followUpReady,1);assert(dashboard.highlights.some(r=>r.recipient===recipient));
+});
+test('recent native outgoing contact history postpones follow-up even without thread references',async(t)=>{
+ const f=await workspace(t);f.ops.assistant.clock=()=>Date.parse('2026-10-31T13:00:00Z');await f.ops.replies.transaction(s=>{Object.values(s.roots)[0].sentAt='2026-10-01T12:00:00Z';});
+ await f.ops.replies.ingest(eml({from:account,to:recipient,reference:null,id:'<recent-independent-out@example.com>',text:'Are you available next week?'}),account);
+ const row=(await list(f)).rows[0],d=await f.ops.assistant.detail(row.id,'conversation');assert.equal(d.assistant.followUpReady,false);assert.equal(d.assistant.dueAt,'2026-11-01T12:00:00.000Z');await assert.rejects(f.ops.assistant.draft({rootId:row.id,expectedContext:d.assistant.version,requestId:'too-soon-after-independent-out'}),/not eligible/);
+});
+test('native outgoing contact history counts toward the follow-up limit without requiring thread references',async(t)=>{
+ const f=await workspace(t);f.ops.assistant.clock=()=>Date.parse('2026-11-10T12:00:00Z');await f.ops.replies.ingest(eml({from:account,to:recipient,reference:null,id:'<independent-followup@example.com>',text:'Checking whether dispatch support is useful.'}),account);
+ const row=(await list(f)).rows[0],d=await f.ops.assistant.detail(row.id,'conversation');assert.equal(d.assistant.followUps,1);assert.equal(d.assistant.followUpReady,false);await assert.rejects(f.ops.assistant.draft({rootId:row.id,expectedContext:d.assistant.version,requestId:'repeat-native-followup'}),/not eligible/);
+});
+test('closing or signing a carrier clears its reply task until another incoming message arrives',async(t)=>{
+ for(const stage of ['closed','signed']){const f=await workspace(t);await f.ops.replies.ingest(eml({text:'I am interested.'}),account);const row=(await list(f)).rows[0];await f.ops.inbox.update({carrierInboxId:row.carrierInboxId,expectedVersion:row.statusVersion,stage});assert.equal((await list(f,{work:'needs_reply'})).total,0);await f.ops.replies.ingest(eml({id:`<new-after-${stage}@example.com>`,text:'One more question.'}),account);assert.equal((await list(f,{work:'needs_reply'})).total,1);}
+});

@@ -1,4 +1,18 @@
-# Carrier history and shared Conversations design QA — 2.2.0-rc.6
+# Conversation reliability design QA — 2.2.0-rc.7
+
+final result: passed
+
+The established shared shell and Mailroom layout remain the design source. This iteration changes tracking, status-edit recovery and action feedback; it introduces no new visual direction. Current source: Templates at `http://127.0.0.1:4317/#templates`, captured as `outputs/carrier-rc7-qa/reference-templates.jpg`. Current implementation: `outputs/carrier-rc7-qa/active-carriers.jpg` from the real authorized mailbox at `http://127.0.0.1:4317/#conversations`. Both are **1280 × 720 native screenshot pixels**, without stretching. The combined `shared-shell-comparison.jpg` was inspected; common titlebar, sidebar, footer, typography, colors, account and version match, with only the expected navigation/content differences.
+
+The real app displays rc.7, two active carriers and one carrier needing a reply. The known carrier's six captured mailbox messages and one original tool send are retained. Its status dialog was inspected without editing or saving records; `carrier-status.jpg` shows the labeled stage/date/note controls, readable focus treatment and common secondary buttons. Long subjects truncate within the bounded reader; the message and composer scroll without page overflow. Customer screenshots remain private development outputs and are excluded from distribution.
+
+New behavior uses the existing status paragraph and button styles. Unsaved status forms are retained by carrier and bound to their original version. A conflict explains the change, retains text and exposes **Reload saved status**, an explicit discard/reload action. Read/unread labels show the next action. New incoming evidence after Closed/Signed has a visible New reply label. The browser regression verifies these states, concurrent-update rejection, preserved text, recovery, mobile bounds and existing exact approval controls using synthetic data. Manual native desktop verification found no warning/error logs. No real status, approval or mailbox flag was changed.
+
+Final regression: **206/206 JavaScript tests and 12/12 Python tests**, no failures/skips. Integrated browser/API cases: **11/11**. Existing mobile and shared-shell comparisons remain covered. No actionable P0/P1/P2 visual issue remains in this iteration's scope. This check does not verify Windows or team-PC installation; the provider Message-ID reconciliation is separately recorded in VALIDATION.md. Earlier rc.6/rc.5/rc.4 comparisons below remain historical evidence.
+
+---
+
+# Previous carrier history and shared Conversations design QA — 2.2.0-rc.6
 
 final result: passed
 
