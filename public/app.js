@@ -265,6 +265,7 @@ function updateControls() {
 
 async function refresh() {
   state = await api("/api/state");
+  if ($("releasePreviewBanner")) $("releasePreviewBanner").hidden = !state.previewMode;
   if ($("appVersion")) $("appVersion").textContent = `Desktop v${state.appVersion}`;
   for (const key of ["total", "ready", "excluded", "sent"]) {
     const el = $(key);
@@ -929,7 +930,9 @@ if ($("upload"))
       await refresh();
       fillCampaign();
       $("upload").value = "";
-      notice("Campaign imported successfully.");
+      window.dispatchEvent(new CustomEvent("fc-import-view", { detail: state.activeCampaign }));
+      location.hash = "imports";
+      notice("Workbook uploaded. Review the mapping, save a revision and activate it before enabling outreach.");
     });
 
 
@@ -1629,6 +1632,8 @@ $("historyRefresh").onclick = () => action($("historyRefresh"), loadHistory);
 $("historyPrev").onclick = () => { historyOffset = Math.max(0, historyOffset - 25); loadHistory().catch((e) => notice(e.message)); };
 $("historyNext").onclick = () => { historyOffset += 25; loadHistory().catch((e) => notice(e.message)); };
 
+$("historyConversations").onclick = () => { if (!historySelected) return; location.hash="conversations"; window.dispatchEvent(new CustomEvent("fc-conversation-search", { detail:historySelected.to })); };
+
 let catalogData = null, catalogEditId = null;
 async function loadCatalog() {
   $("catalogStatus").textContent = "Loading catalog…";
@@ -1815,6 +1820,7 @@ function renderLeadDetails(lead, message, warnings) {
     </div>
 
     ${warningsHtml}
+    <section class="carrier-evidence"><h4>Carrier identity &amp; source</h4>${lead.carrier ? `<p>${escape(lead.carrier.identityStatus)} · USDOT ${escape(lead.carrier.dot || 'unresolved')} · ${escape(lead.carrier.id)}</p><p>Source: ${escape(lead.carrier.provenance.sourceLabel)} · Acquired: ${escape(lead.carrier.provenance.acquiredAt || 'unknown')} · Contact permission: ${escape(lead.carrier.provenance.permission)}</p><p>Source-reported identity; authority has not been verified.</p>` : '<p>Legacy / unreviewed import. Review and activate a revision to attach stable identity and source evidence.</p>'}<button class="secondary" data-conversation-email="${escape(lead.email)}">View captured conversations</button></section>
 
     <!-- Core Contact Information Card -->
     <div class="lead-details-card">
@@ -3730,7 +3736,7 @@ function renderSuppressionList() {
             `<li>
               <div>
                 <strong>${escape(e)}</strong>
-                <div class="hint" style="margin: 2px 0 0 0;">${escape(r)}</div>
+                <div class="hint" style="margin: 2px 0 0 0;">${escape(String(r).replace(/Captured carrier opt-out: [a-f0-9]{64}/g, "Captured carrier opt-out — review in Carrier conversations"))}</div>
               </div>
               <button class="secondary danger-hover" style="font-size: 11px; padding: 4px 10px;" data-unsuppress="${escape(e)}" title="Remove from Do Not Contact list">Remove</button>
             </li>`,
@@ -3777,6 +3783,8 @@ function navigate(viewName) {
     "dashboard",
     "leads",
     "campaigns",
+    "imports",
+    "conversations",
     "templates",
     "live-activity",
     "activity",
@@ -3787,6 +3795,7 @@ function navigate(viewName) {
   ];
   const target = validViews.includes(viewName) ? viewName : "dashboard";
 
+  document.body.classList.toggle("mailroom-active",target==="conversations");
   document.querySelectorAll(".view-page").forEach((el) => {
     el.classList.toggle("active", el.id === `view-${target}`);
   });
@@ -3795,6 +3804,8 @@ function navigate(viewName) {
     link.classList.toggle("active", link.dataset.view === target);
   });
 
+  if (target === "imports" && state) window.dispatchEvent(new CustomEvent("fc-import-view", { detail: state.activeCampaign }));
+  if (target === "conversations" && state) window.dispatchEvent(new Event("fc-conversation-view"));
   if (target === "catalog" && state) void loadCatalog().catch((e) => notice(e.message));
   if (target === "activity" && state) void loadHistory().catch((e) => notice(e.message));
   if (target === "tracking" && state) void loadTracking().catch((e) => notice(e.message));
@@ -3809,10 +3820,572 @@ window.addEventListener("hashchange", () => {
 
 // Ensure mouse click removes focus ring
 document.querySelectorAll(".nav-link").forEach((link) => {
+  if(!link.getAttribute("aria-label"))link.setAttribute("aria-label",link.textContent.trim());
+  link.title=link.getAttribute("aria-label");
   link.addEventListener("click", () => {
     link.blur();
   });
 });
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const production = !!$('view-imports');
+  const route = (url) => production ? url.replace('/api/experiment/', '/api/') : url;
+  let busy = false, saved = null, baseline = null, reviewedCampaign = null, previewId = null, workspace = null, workspaceOffset = 0;
+  async function request(url, data) {
+    const response = await fetch(route(url), data === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FC-Request': '1' }, body: JSON.stringify(data) });
+    const value = await response.json();
+    if (!response.ok) throw new Error(value.error || 'Review failed.');
+    return value;
+  }
+  function controls() {
+    $('reviewCampaign').disabled = busy;
+    $('reviewLoad').disabled = busy || !$('reviewCampaign').value;
+    $('reviewPreview').disabled = busy || !saved;
+    $('reviewReset').disabled = busy || !saved;
+    $('reviewMapping').disabled = busy;
+    $('reviewStatusColumns').disabled = busy;
+    for (const id of ['repairSource', 'repairAcquired', 'repairPermission', 'repairConfirm', 'workspaceSearch']) $(id).disabled = busy;
+    $('repairApply').disabled = busy || !previewId || !$('repairConfirm').checked || !$('repairSource').value.trim();
+    for (const id of ['workspaceRefresh', 'workspaceFind', 'workspaceDraft']) $(id).disabled = busy;
+    $('workspaceDraft').disabled = busy || !workspace?.activeRevision;
+    $('workspaceFind').disabled = busy || !workspace?.activeRevision;
+    $('workspaceRevision').disabled = busy || !workspace?.activeRevision;
+    $('workspaceRestore').disabled = busy || !workspace?.activeRevision || (production ? !workspace?.activationToken : $('workspaceRevision').value === workspace.activeRevision);
+    if (production) $('workspaceUndo').disabled=busy || workspace?.activations?.at(-1)?.kind!=='activated';
+    $('workspacePrev').disabled = busy || workspaceOffset === 0;
+    $('workspaceNext').disabled = busy || workspaceOffset + 25 >= (workspace?.total || 0);
+  }
+  async function run(button, fn) {
+    if (busy) return;
+    busy = true; const label = button.textContent;
+    button.textContent = 'Working…'; $('reviewError').hidden = true;
+    $('reviewStatus').textContent = 'Reading the workbook and checking columns…'; controls();
+    try { const note = await fn(); $('reviewStatus').textContent = note || (production ? (button.id === 'workspaceRestore' ? 'Revision activated. Campaign is paused; inspect leads before enabling it.' : (button.id === 'repairApply' ? 'Revision saved. Activation is a separate step; outreach has not started.' : 'Review complete. Outreach has not started.')) : button.id === 'repairApply' ? 'Experiment revision saved. Original data and sending settings are unchanged.' : button.id === 'workspaceRestore' ? 'Experiment revision restored. Original data and sending settings are unchanged.' : 'Review complete. Source files and sending settings are unchanged.'); }
+    catch (error) { $('reviewError').textContent = error.message; $('reviewError').hidden = false; $('reviewStatus').textContent = 'Review needs attention. Your mapping draft is retained.'; }
+    finally { busy = false; button.textContent = label; controls(); }
+  }
+  function render(report) {
+    $('reviewResults').hidden = false; $('repairPanel').hidden = false;
+    previewId = report.mode === 'preview' ? report.previewId : null;
+    $('repairConfirm').checked = false;
+    $('repairPreviewNote').textContent = previewId ? production ? 'This exact preview is ready to save as a reviewed revision.' : 'This exact preview is ready to save to an experiment copy.' : 'Preview your proposal before saving.';
+    $('reviewHeading').textContent = report.mode === 'preview' ? 'Proposed mapping · preview only' : 'Saved mapping · review only';
+    $('reviewBasis').textContent = report.basis;
+    const identity = report.identitySummary;
+    $('reviewIdentity').textContent = identity ? `Identity preview: ${identity.sourceDotCarriers} carriers grouped by source USDOT; ${identity.provisionalRows} provisional rows; ${identity.conflictRows} identifier conflicts; ${identity.layoutRows} layout-review rows. Source identifiers are not externally verified.` : '';
+    const metrics = [['Parsed rows', 'rows'], ['Rows with layout issues', 'flaggedRows'], ['Sheets without status', 'missingStatusSheets'], ['Invalid / missing email', 'invalidEmailRows'], ['Extra rows sharing email', 'duplicateEmailRows']];
+    if (production) renderMappingWizard(report);
+    $('reviewMetrics').innerHTML = metrics.map(([label, key]) => `<div class="experiment-metric"><span>${escape(label)}</span><strong>${report.summary[key].toLocaleString()}</strong></div>`).join('');
+    const delta = report.summary.flaggedRows - baseline.flaggedRows;
+    $('reviewChange').textContent = report.mode === 'preview' ? `${delta > 0 ? '+' : ''}${delta} flagged rows versus saved mapping. Nothing applied.` : 'Raw samples are bounded; issue counts cover all parsed rows.';
+    $('reviewSheets').innerHTML = report.sheets.map((sheet) => {
+      const issues = [sheet.flaggedRows ? `${sheet.flaggedRows} row/header mismatches` : '', sheet.missingStatus ? 'Missing Status column' : '', !sheet.emailColumn ? 'Missing Email mapping; rows not imported' : '', sheet.hidden ? 'Hidden worksheet' : ''].filter(Boolean);
+      const candidates = Object.entries(sheet.review.emailColumns).sort((a,b) => b[1] - a[1]).map(([col,n]) => `${col}: ${n} email-shaped values`).join(' · ') || 'None found';
+      const headers = Object.entries(sheet.headers).map(([col,value]) => `<tr><th>${escape(col)}</th><td>${escape(value)}</td></tr>`).join('');
+      const samples = sheet.review.samples.map((sample) => `<p class="experiment-sample">Row ${sample.row}${sample.issue ? ` · ${escape(sample.issue)}` : ''}</p><div class="experiment-scroll"><table><thead><tr><th>Column</th><th>Original header</th><th>Original cell value (up to 200 characters)</th></tr></thead><tbody>${Object.entries(sample.cells).map(([col,value]) => `<tr><th>${escape(col)}</th><td>${escape(sheet.headers[col] || '(unlabelled)')}</td><td>${escape(value)}</td></tr>`).join('')}</tbody></table></div>`).join('');
+      return `<article class="experiment-sheet"><h3>${escape(sheet.name)}</h3><p>${sheet.rows} parsed rows · Email: ${escape(sheet.emailColumn || 'unmapped')} · Status: ${escape(sheet.statusColumn || 'unmapped')}</p><p class="experiment-issues">${escape(issues.join(' · ') || 'No layout/status issues detected. This is not a full eligibility check.')}</p><p class="hint">Email-column candidates: ${escape(candidates)}</p>${sheet.missingStatus && sheet.review.unusedStatusColumn ? `<p class="hint">Unused column for a new Status header: ${escape(sheet.review.unusedStatusColumn)}</p>` : ''}<details><summary>Original headers</summary><div class="experiment-scroll"><table><thead><tr><th>Column</th><th>Header</th></tr></thead><tbody>${headers}</tbody></table></div></details><details><summary>Sample source rows</summary>${samples || '<p class="hint">No source rows available.</p>'}</details></article>`;
+    }).join('') || '<p>No worksheets found.</p>';
+  }
+  async function loadSaved() {
+    const report = await request('/api/experiment/import-review', { campaignId: $('reviewCampaign').value });
+    reviewedCampaign = report.campaignId; saved = report.mapping; baseline = report.summary;
+    $('reviewMapping').value = JSON.stringify(saved, null, 2); $('reviewStatusColumns').value = '{}'; render(report);
+    workspaceOffset = 0; await loadWorkspace();
+  }
+  $('reviewLoad').onclick = () => run($('reviewLoad'), loadSaved);
+  $('reviewReset').onclick = () => run($('reviewReset'), loadSaved);
+  $('reviewPreview').onclick = () => run($('reviewPreview'), async () => {
+    const mapping = JSON.parse($('reviewMapping').value);
+    render(await request('/api/experiment/import-review', { campaignId: reviewedCampaign, mapping, addStatusColumns: JSON.parse($('reviewStatusColumns').value) }));
+  });
+  $('reviewCampaign').onchange = () => {
+    saved = null; baseline = null; reviewedCampaign = null; previewId = null; workspace = null;
+    workspaceOffset = 0; $('workspaceSearch').value = ''; $('repairSource').value = ''; $('repairAcquired').value = ''; $('repairPermission').value = 'unknown'; $('repairConfirm').checked = false;
+    $('reviewResults').hidden = true; $('reviewError').hidden = true; $('repairPanel').hidden = true; $('workspacePanel').hidden = true;
+    $('reviewStatus').textContent = 'Choose Review saved mapping to inspect this campaign.'; controls();
+    if ($('reviewCampaign').value) run($('workspaceRefresh'), loadWorkspace);
+  };
+  function invalidate() {
+    previewId = null; $('repairConfirm').checked = false;
+    $('repairPreviewNote').textContent = 'Proposal changed. Preview again before saving.'; controls();
+  }
+  $('reviewMapping').oninput = invalidate; $('reviewStatusColumns').oninput = invalidate;
+  $('repairSource').oninput = controls; $('repairConfirm').onchange = controls;
+  async function loadWorkspace() {
+    const campaignId = $('reviewCampaign').value;
+    if (!campaignId) return;
+    const query = new URLSearchParams({ campaignId, offset: workspaceOffset, q: $('workspaceSearch').value });
+    workspace = await request('/api/experiment/imports?' + query);
+    $('workspacePanel').hidden = false;
+    $('workspaceNote').textContent = !workspace.activeRevision ? 'No experiment revisions yet. Preview a mapping, enter its source details and save a revision.' : workspace.sourceUnavailable ? 'Source workbook is unavailable. Your saved experiment revision is retained.' : workspace.sourceChanged ? 'Source workbook changed since this revision. Review the source again before a new repair.' : 'Saved in the separate experiment workspace. Original campaign files are unchanged.';
+    if (production) $('workspaceNote').textContent = workspace.publishedRevision ? `Campaign uses revision ${workspace.publishedRevision}. ${workspace.campaignEnabled ? 'Campaign enabled.' : 'Campaign paused.'} Saved revisions remain separate until activated.` : 'No reviewed revision has been activated for this campaign. Save and activate one to connect its identity and provenance to leads.';
+    const selected = $('workspaceRevision').value;
+    $('workspaceRevision').innerHTML = workspace.revisions.map((r) => `<option value="${escape(r.revisionId)}">${escape(new Date(r.importedAt).toLocaleString())} · ${escape(r.sourceLabel)}${r.revisionId === (production ? workspace.publishedRevision : workspace.activeRevision) ? ' · campaign uses this' : ''}</option>`).join('');
+    if (workspace.revisions.some((r) => r.revisionId === selected)) $('workspaceRevision').value = selected;
+    else if (workspace.activeRevision) $('workspaceRevision').value = workspace.activeRevision;
+    downloadLinks();
+    const summary = workspace.identitySummary;
+    $('workspaceIdentity').textContent = summary ? `${summary.carriers} recorded identities · ${summary.sourceDotCarriers} grouped by source USDOT · ${summary.provisionalRows} provisional rows · ${summary.conflictRows} identifier conflicts · ${summary.layoutRows} layout-review rows · ${summary.protectedRows} protected rows` : '';
+    $('workspaceRows').innerHTML = workspace.records.map((r) => `<tr><td>${escape(r.company)}<br>${escape(r.email)}</td><td>${escape(r.identityStatus)}<br>USDOT: ${escape(r.dot || 'unresolved')}<br><code>${escape(r.carrierId)}</code></td><td>${escape(r.provenance.sourceLabel)}<br>${escape(r.provenance.sheet)} · row ${r.provenance.row}<br>Acquired: ${escape(r.provenance.acquiredAt || 'unknown')}<br>Permission: ${escape(r.provenance.permission)}<br>Import: <code>${escape(r.provenance.importId)}</code></td><td>${escape((production ? [...new Set(r.protection.map((reason) => reason.replace(/Captured carrier opt-out: [a-f0-9]{64}/g, 'Captured carrier opt-out (see Conversations)')))] : r.protection).join('; ') || 'No prior-contact marker captured. This is not permission to send.')}</td></tr>`).join('') || '<tr><td colspan="4">No saved records match this view.</td></tr>';
+    $('workspacePage').textContent = `${workspace.total ? workspace.offset + 1 : 0}–${Math.min(workspace.offset + workspace.records.length, workspace.total)} of ${workspace.total} records in the active revision`;
+    controls();
+  }
+  $('repairApply').onclick = () => run($('repairApply'), async () => {
+    await request('/api/experiment/import-apply', { previewId, confirmExperiment: $('repairConfirm').checked,
+      provenance: { label: $('repairSource').value, acquiredAt: $('repairAcquired').value, permission: $('repairPermission').value } });
+    previewId = null; $('repairConfirm').checked = false;
+    $('repairPreviewNote').textContent = production ? 'Revision saved. Select it below and activate it when ready.' : 'Experiment revision saved. To save another repair, preview again.';
+    workspaceOffset = 0; $('workspaceRevision').value = ''; await loadWorkspace();
+  });
+  $('workspaceRefresh').onclick = () => run($('workspaceRefresh'), loadWorkspace);
+  $('workspaceFind').onclick = () => { workspaceOffset = 0; run($('workspaceFind'), loadWorkspace); };
+  function downloadLinks() {
+    const id = $('workspaceRevision').value;
+    $('workspaceDownloads').hidden = !id;
+    for (const [element, kind] of [['workspaceWorking', 'working'], ['workspaceOriginal', 'original'], ['workspaceMapping', 'mapping']]) $(element).href = route('/api/experiment/import-download') + '?' + new URLSearchParams({ revisionId: id, kind });
+  }
+  $('workspaceRevision').onchange = () => { controls(); downloadLinks(); };
+  $('workspaceDraft').onclick = () => run($('workspaceDraft'), async () => {
+    const revision = workspace?.revisions.find((r) => r.revisionId === $('workspaceRevision').value);
+    if (!revision) return;
+    if (!saved) await loadSaved();
+    $('reviewMapping').value = JSON.stringify(revision.mapping, null, 2);
+    $('reviewStatusColumns').value = JSON.stringify(revision.addStatusColumns, null, 2);
+    $('repairSource').value = revision.sourceLabel; $('repairAcquired').value = revision.acquiredAt || '';
+    $('repairPermission').value = revision.permission;
+    invalidate(); $('reviewMapping').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  $('workspaceRestore').onclick = () => {
+    if (production) {
+      if (!confirm('Use this reviewed revision for the campaign? A separate working workbook will be created. Previous workbooks and contact protections are retained. Outreach will stay paused.')) return;
+      return run($('workspaceRestore'), async () => { const value = await request('/api/import-activate', { campaignId:$('reviewCampaign').value, revisionId:$('workspaceRevision').value, expectedToken:workspace.activationToken, confirmActivation:true }); await loadWorkspace(); window.dispatchEvent(new Event('fc-import-activated')); return value.message; });
+    }
+    if (!confirm('Restore this saved revision in the experiment workspace? All revisions and contact protections will be retained. Original campaign data will stay unchanged.')) return;
+    run($('workspaceRestore'), async () => { await request('/api/experiment/import-restore', { revisionId: $('workspaceRevision').value, confirmExperiment: true }); previewId = null; workspaceOffset = 0; await loadWorkspace(); });
+  };
+  $('workspacePrev').onclick = () => { workspaceOffset = Math.max(0, workspaceOffset - 25); run($('workspacePrev'), loadWorkspace); };
+  $('workspaceNext').onclick = () => { workspaceOffset += 25; run($('workspaceNext'), loadWorkspace); };
+  async function loadCampaigns(preselect) {
+    const { campaigns, activeCampaign } = await request('/api/experiment/campaigns');
+    const chosen = preselect || $('reviewCampaign').value || (production ? activeCampaign : '');
+    $('reviewCampaign').innerHTML = '<option value="">Choose a campaign…</option>' + campaigns.map((c) => `<option value="${escape(c.id)}" ${c.available || c.hasWorkspace ? '' : 'disabled'}>${escape(c.name)}${c.available ? '' : ' · workbook unavailable'}</option>`).join('');
+    if (campaigns.some((c) => c.id === chosen)) $('reviewCampaign').value = chosen;
+    $('reviewStatus').textContent = campaigns.length ? 'Choose a campaign and review its mapping. Unavailable source files cannot be reviewed.' : 'Upload a workbook in Leads Workspace to begin.';
+    controls();
+  }
+  function renderMappingWizard(report) {
+    let mapping; try { mapping = JSON.parse($('reviewMapping').value || '{}'); } catch { return; }
+    $('reviewMappingWizard').innerHTML = report.sheets.map((sheet) => {
+      const columns = Object.entries(sheet.headers);
+      const select = (field, label, automatic) => `<label>${label}<select data-map-sheet="${escape(sheet.name)}" data-map-field="${field}"><option value="">Automatic (${escape(automatic || 'not detected')})</option>${columns.map(([col,header]) => `<option value="${col}" ${mapping[sheet.name]?.[field]===col?'selected':''}>${col} · ${escape(header || '(unlabelled)')}</option>`).join('')}</select></label>`;
+      return `<div class="mapping-sheet"><h3>${escape(sheet.name)}</h3>${select('email','Email column',sheet.emailColumn)}${select('carrier legal name','Company column',columns.find(([,h]) => /^(company|company name|carrier legal name|legal name)$/i.test(h))?.[0])}${select('status','Outreach status column',sheet.statusColumn)}${sheet.review.unusedStatusColumn?`<button type="button" class="secondary" data-status-sheet="${escape(sheet.name)}" data-status-column="${sheet.review.unusedStatusColumn}">Add Status header in unused column ${sheet.review.unusedStatusColumn}</button>`:''}</div>`;
+    }).join('');
+  }
+  if (production) {
+    $('workspaceUndo').onclick=()=>{if(!confirm('Restore the previous campaign workbook and pause outreach? Saved revisions, send history and contact protections remain.'))return;run($('workspaceUndo'),async()=>{const value=await request('/api/import-undo',{campaignId:$('reviewCampaign').value,expectedToken:workspace.activationToken,confirmActivation:true});await loadWorkspace();window.dispatchEvent(new Event('fc-import-activated'));return value.message;});};
+    $('reviewMappingWizard').onchange = (event) => { const select=event.target.closest('[data-map-sheet]'); if (!select) return; try { const value=JSON.parse($('reviewMapping').value || '{}'); const fields=value[select.dataset.mapSheet] ||= {}; if(select.value)fields[select.dataset.mapField]=select.value;else delete fields[select.dataset.mapField]; $('reviewMapping').value=JSON.stringify(value,null,2); invalidate(); } catch { $('reviewError').hidden=false;$('reviewError').textContent='Fix the advanced JSON before changing column selections.'; } };
+    $('reviewMappingWizard').onclick = (event) => { const b=event.target.closest('[data-status-sheet]');if(!b)return;try{const value=JSON.parse($('reviewStatusColumns').value || '{}');value[b.dataset.statusSheet]=b.dataset.statusColumn;$('reviewStatusColumns').value=JSON.stringify(value,null,2);const mapping=JSON.parse($('reviewMapping').value||'{}');(mapping[b.dataset.statusSheet]||={}).status=b.dataset.statusColumn;$('reviewMapping').value=JSON.stringify(mapping,null,2);invalidate();}catch{$('reviewError').hidden=false;$('reviewError').textContent='Fix the Status header JSON before adding a header.';} };
+    window.addEventListener('fc-import-view', (event) => { if (busy) return; void loadCampaigns(event.detail).then(() => { if ($('reviewCampaign').value !== reviewedCampaign) $('reviewCampaign').onchange(); }).catch((e) => { $('reviewError').hidden=false;$('reviewError').textContent=e.message; }); });
+  }
+  loadCampaigns().catch((error) => { $('reviewStatus').textContent = 'Source data could not be loaded.'; $('reviewError').textContent = error.message; $('reviewError').hidden = false; });
+})();
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]);
+  const production = !!$('view-conversations');
+  const route = (url) => production ? url.replace('/api/experiment/reply-detail', '/api/conversation-detail').replace('/api/experiment/replies', '/api/conversations') : url;
+  const labels = { unclassified:'Not classified', interested:'Interested', pricing:'Pricing question', how_it_works:'How it works', later:'Later', already_has_dispatcher:'Has dispatcher', wrong_contact:'Wrong contact', not_fit:'Not a fit', opt_out:'Opt-out', out_of_office:'Out of office', automated:'Automated', bounce:'Bounce notice' };
+  const options = Object.entries(labels).map(([value,label]) => `<option value="${value}">${label}</option>`).join('');
+  $('replyCategory').insertAdjacentHTML('beforeend', options); $('replyReviewCategory').innerHTML = options;
+  let busy = false, offset = 0, report = null, selection = null, detail = null, selectedMessage = null, lastLoad = 0, loadSequence = 0;
+  const drafts = new Map();let deskBusy=false,pendingOpen=null;
+  let captureToolsInitialized = false,detailSequence=0;
+  const time = (s) => s ? new Date(s).toLocaleString() : 'unknown';
+  async function request(url, data) {
+    const response = await fetch(route(url), data === undefined ? {} : { method:'POST', headers:{ 'Content-Type':'application/json', 'X-FC-Request':'1' }, body:JSON.stringify(data) });
+    const value = await response.json(); if (!response.ok) throw new Error(value.error || 'Reply action failed.'); return value;
+  }
+  function error(message) { $('replyError').hidden = !message; $('replyError').textContent = message; }
+  const mailroom=production&&$('mailroomWorkspace');
+  const threadMessages=()=>detail?.carrierHistory?.messages||detail?.messages||[];const findMessage=(id)=>threadMessages().find(m=>m.id===id)||detail?.messages?.find(m=>m.id===id);const carrierStatusDrafts=new Map();let renderedCarrierStatus=null;
+  const friendly=(value)=>({interested:'Interested',positive:'Positive',negative:'Not interested',neutral:'Needs a look',pricing:'Pricing question',how_it_works:'Service question',opt_out:'Opt-out',needs_review:'Needs match',unknown:'Waiting',out_of_office:'Out of office',automated:'Automatic reply',bounce:'Delivery notice',later:'Later'})[value]||value||'Waiting';
+  function markSelection(){if(!mailroom)return;document.querySelectorAll('#mailroomList [data-reply]').forEach((b)=>{const active=b.dataset.reply===selection?.id;b.classList.toggle('selected',active);b.setAttribute('aria-pressed',String(active));});}
+  function renderMailroomRows(){
+    const focusedRow=document.activeElement?.closest('#mailroomList [data-reply]')?.dataset.reply;
+    const compactTime=(value)=>{if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?'':d.toDateString()===new Date().toDateString()?d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):d.toLocaleDateString([],{month:'short',day:'numeric'});};
+    $('mailroomList').innerHTML=report.rows.map((r)=>`<button type="button" title="${escape(r.recipient)}" class="mailroom-card ${r.id===selection?.id?'selected':''}" data-reply="${escape(r.id)}" data-type="${r.type}" aria-pressed="${r.id===selection?.id}"><span class="mailroom-card-top"><strong>${escape(r.contactName||r.company||r.recipient)}</strong><time>${escape(compactTime(r.lastReplyAt||r.at))}</time></span>${r.contactName&&r.company&&r.company!==r.recipient?'<span class="mailroom-card-company">'+escape(r.company)+'</span>':''}${r.contactName||r.company!==r.recipient?'':'<span class="mailroom-card-address">'+escape(r.recipient)+'</span>'}<span class="mailroom-card-subject">${escape(r.subject)}</span><span class="mailroom-card-excerpt">${escape(r.excerpt||'No captured human reply. Check scan coverage.')}</span><span class="mailroom-badge ${r.needsReply||r.intent?.intent==='interested'?'warm':''}">${escape(r.type==='review'?'Needs match':r.needsReply?'Needs reply':r.noReply?'Waiting':friendly(r.intent?.intent))}${r.unread?' · unread':''}</span>${r.carrierStatus?'<span class="carrier-stage-label">'+escape(({in_review:'In review',active:'Active conversation',follow_up:'Follow up',waiting:'Waiting',signed:'Signed',closed:'Closed'})[r.carrierStatus]||r.carrierStatus)+(r.followUpAt?' · '+escape(time(r.followUpAt)):'')+'</span>':''}</button>`).join('')||'<div class="mailroom-list-empty"><strong>No conversations in this queue</strong><p>Try All, change the filters, or scan your previous replies.</p></div>';
+    if(focusedRow)Array.from($('mailroomList').querySelectorAll('[data-reply]')).find((b)=>b.dataset.reply===focusedRow)?.focus({preventScroll:true});
+    $('mailroomActiveCount').textContent=report.summary.active||0;$('mailroomReviewCount').textContent=report.summary.inReview||0;$('mailroomNeedsCount').textContent=report.summary.needsReply;$('mailroomAllCount').textContent=report.group==='carriers'?report.summary.carriers:report.summary.conversations+report.summary.needsMatch;$('mailroomWaitingCount').textContent=report.summary.noReply;
+    document.querySelectorAll('[data-mailroom-work]').forEach((b)=>b.setAttribute('aria-pressed',String(b.dataset.mailroomWork===$('replyWork').value)));
+    $('replyPage').textContent=report.total?`${offset+1}–${Math.min(offset+report.rows.length,report.total)} of ${report.total}`:'0 conversations';
+    $('replyStopCapture').hidden=!report.capture.running;
+    $('mailroomFilterNote').hidden=!selection||report.rows.some((r)=>r.id===selection.id);$('mailroomFilterNote').textContent='This selected conversation is outside the current filters.';
+  }
+  function renderMailroomThread(data){
+    const c=data.assistant,history=data.carrierHistory,messages=history?.messages||data.messages,root=data.root,previousOpen=$('mailroomOlder')?.open;
+    const stated=c?.fields.contactName;const person=stated?.confirmed?.value||(!stated?.conflict&&stated?.candidates.length===1?stated.candidates[0].value:null)||messages.findLast((m)=>m.direction==='inbound')?.senderName||root?.company||root?.recipient;
+    const initials=(name)=>String(name||'?').split(/\s+/).slice(0,2).map((s)=>s[0]).join('').toUpperCase();
+    const message=(m)=>{const own=m.direction==='outbound',name=own?'You':m.senderName||person||m.from[0]||'Unknown sender';return `<article class="mailroom-message ${own?'outbound':''}"><header class="mailroom-message-heading"><span class="profile-avatar mailroom-avatar">${escape(initials(name))}</span><div class="mailroom-sender"><strong>${escape(name)}</strong><span>${escape(m.from.join(', '))}</span></div><time title="${m.date?'Sender-reported date':'Capture time'}">${escape(time(m.date||m.capturedAt))}</time></header>${!own?`<span class="mailroom-badge ${c?.intent?.sentiment==='positive'?'warm':''}">${escape(m.match==='review'?'Contact history · thread unlinked':friendly(m.category==='unclassified'?c?.intent?.intent:m.category))} · ${m.classificationSource==='manual'?'reviewed':'suggested'}</span>`:''}${history&&m.id===history.latestInboundId?`<div class="mailroom-read-actions"><span class="hint" role="status">${history.unread?'Unread':'Read'}</span><button class="secondary" data-message-seen="${m.id}" data-unread="${!history.unread}" title="Update this carrier’s read status in Outreach Desk">${history.unread?'Mark as read':'Mark as unread'}</button></div>`:''}<pre>${escape(m.bodyUnavailable?'Body unavailable. Inspect the original mailbox before responding.':m.text||'No new text was extracted. Inspect the original email for full context.')}</pre><details class="mailroom-message-evidence"><summary>Message details</summary><p>To ${escape(m.to?.join(', ')||m.account)} · ${escape(m.match)} · ${escape(m.source.type)}${m.source.folder?' / '+escape(m.source.folder):''} · captured ${escape(time(m.capturedAt))}</p><pre>${escape(m.messageId||'(No Message-ID)')}\n${escape(m.references.join('\n'))}</pre><button class="secondary" data-review-message="${m.id}">Review message</button></details></article>`;};
+    const latestCarrier=history?messages.findLast(m=>m.direction==='inbound'&&m.kind==='human')||messages.findLast(m=>m.direction==='inbound'):null;let focus=messages.findIndex((m)=>m.id===(latestCarrier?.id||c?.lastMessageId));if(focus<0)focus=Math.max(0,messages.length-1);
+    const earlier=messages.slice(0,focus),latest=messages.slice(focus);
+    const original=root?`<article class="mailroom-message outbound"><strong>Original email · sent by this tool</strong><p class="hint">${escape(root.account)} → ${escape(root.recipient)} · ${escape(time(root.sentAt))}</p><pre>${escape(root.bodyUnavailable?'The original body is not retained here. Confirmed tracking history anchors this send; inspect its mailbox copy.':root.body||'(Original body not retained)')}</pre></article>`:'';
+    $('replyThread').innerHTML=latest.map(message).join('')+(!latest.length&&root?'<p class="hint mailroom-waiting-note">No captured carrier reply on this thread. Check the scan coverage before following up.</p>':'');
+    const originals=history?history.roots.map(r=>'<article class="mailroom-message outbound"><strong>Tool send · '+escape(time(r.sentAt))+'</strong><p>'+escape(r.subject)+'</p><pre>'+escape(r.bodyUnavailable?'Original body is not retained.':r.body)+'</pre></article>').join(''):original;
+    const older=earlier.length?'<details id="mailroomOlder" class="mailroom-older" '+(previousOpen?'open':'')+'><summary>Earlier emails with this carrier ('+earlier.length+')</summary>'+earlier.map(message).join('')+'</details>':'';
+    $('replyThread').insertAdjacentHTML('afterbegin',older);$('mailroomThreadHistory').innerHTML=originals+messages.map(message).join('');
+    $('carrierRecord').hidden=!history;$('carrierStatusPanel').hidden=!history;
+    if(history){
+      const names={in_review:'In review',active:'Active conversation',follow_up:'Follow up',waiting:'Waiting',signed:'Signed',closed:'Closed'};
+      $('carrierRecordLabel').textContent=history.recipient+' · '+names[history.carrierStatus]+(history.newSinceStatus?' · New reply':'');
+      $('carrierHistoryNote').textContent=history.messages.length+' captured email(s) across '+history.roots.length+' tool send(s). '+(history.reviewRequired?'Latest email needs thread review before a reply draft.':'Earlier email chains remain available below.');
+      const draft=carrierStatusDrafts.get(history.carrierInboxId),d=history.followUpAt&&new Date(history.followUpAt);
+      const fields={carrierStage:draft?.stage||history.carrierStatus,carrierStatusNote:draft?.note??history.note,carrierFollowUpAt:draft?.followUpAt??(d?new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,16):'')};
+      for(const [id,value]of Object.entries(fields))if($(id).value!==value)$(id).value=value;
+      $('carrierStatusReload').hidden=!draft;
+      if(renderedCarrierStatus!==history.carrierInboxId)$('carrierStatusResult').textContent='';renderedCarrierStatus=history.carrierInboxId;
+      if(draft&&draft.expectedVersion!==history.statusVersion)$('carrierStatusResult').textContent='Carrier history or status changed while you were editing. Your edits are retained. Reload the saved status before making a new change.';
+      $('carrierSeen').textContent=history.unread?'Mark history read':'Mark history unread';
+    }
+    $('mailroomHold').hidden=!c?.hold;$('mailroomHold').textContent=c?.hold?'Contact held · '+c.hold:'';$('mailroomResolve').hidden=Boolean(root);
+    const inbound=messages.filter((m)=>m.direction==='inbound'&&m.kind==='human'&&!['review','ignored'].includes(m.match));
+    $('mailroomReplyHistory').textContent=`${inbound.length} matched human ${inbound.length===1?'reply':'replies'} · ${root?.account||messages[0]?.account||''}. Header dates are sender-reported. Quoted text may be omitted; inspect the original mailbox for complete context.`;
+    markSelection();
+  }
+  function controls() {
+    const blocked=busy||deskBusy;
+    for (const id of ['replyHistory','replyDemo','replyImport','replyRefresh','replyThreadRefresh','replyReviewSave','replyBackfill','replyIgnore','replyUnignore',...(mailroom?['carrierStatusSave','carrierStatusReload','carrierSeen']:[])]) $(id).disabled = blocked;
+    if(mailroom)$('carrierSeen').disabled=blocked||!detail?.carrierHistory?.latestInboundId;
+    $('replyReviewSave').disabled = blocked || !selectedMessage || findMessage(selectedMessage)?.match === 'ignored';
+    $('replyScan').disabled = blocked || !report?.capture.enabled || report.capture.running;
+    $('replyBackfill').disabled = blocked || report?.capture.running;
+    for (const id of ['replyReviewCategory','replyReviewNote','replyLink','replyLinkConfirm',...(mailroom?['carrierStage','carrierFollowUpAt','carrierStatusNote']:[])]) $(id).disabled = blocked;
+    for (const id of ['replyMode','replyMailbox','replyCategory','replySearch',...(production?['replyWork',...(mailroom?['replyGrouping']:[])]:[])]) $(id).disabled = blocked;
+    document.querySelectorAll('[data-reply], [data-review-message], [data-mailroom-work], [data-message-seen]').forEach((button) => { button.disabled = blocked; });
+    $('replyPrev').disabled = blocked || offset === 0; $('replyNext').disabled = blocked || offset + 25 >= (report?.total || 0);
+  }
+  async function action(button, fn) {
+    if (busy||deskBusy) return;
+    busy = true;if(production)window.dispatchEvent(new CustomEvent('fc-conversation-action-busy',{detail:true})); const text = button.textContent,queueButton=button.hasAttribute('data-mailroom-work');button.setAttribute('aria-busy','true');if(!queueButton)button.textContent = 'Working…'; controls(); error('');
+    $('replyStatus').textContent = 'Processing reply evidence…';
+    try { const note = await fn(); await load(); $('replyStatus').textContent = note || 'Reply action complete. No email was sent.'; }
+    catch (e) { error(e.message);if(mailroom&&button.id.startsWith('carrier'))$('carrierStatusResult').textContent=e.message+' Your status draft is retained.'; $('replyStatus').textContent = 'Needs attention. Your review draft/file selection is retained.'; }
+    finally { busy = false;if(production)window.dispatchEvent(new CustomEvent('fc-conversation-action-busy',{detail:false}));button.removeAttribute('aria-busy');if(!queueButton&&button.textContent==='Working…')button.textContent = text; controls(); if(pendingOpen&&!deskBusy){const next=pendingOpen;pendingOpen=null;window.dispatchEvent(new CustomEvent("fc-open-conversation",{detail:next}));} }
+  }
+  function syncSelect(id, entries) {
+    const value = $(id).value;
+    $(id).innerHTML = (id === 'replyMailbox' ? '<option value="">All mailboxes</option>' : '<option value="">Choose a mailbox…</option>') + entries.map((a) => `<option value="${escape(a.email)}">${escape(a.email)}${a.demo ? ' · sample' : ''}</option>`).join('');
+    if (entries.some((a) => a.email === value) || !value) $(id).value = value;
+  }
+  async function load() {
+    const sequence = ++loadSequence;
+    const params = new URLSearchParams({ mode:$('replyMode').value, mailbox:$('replyMailbox').value, category:$('replyCategory').value, q:$('replySearch').value, work:production?$('replyWork').value:'all', ...(mailroom?{group:$('replyGrouping').value}:{}), offset });
+    const value = await request('/api/experiment/replies?' + params); if (sequence !== loadSequence) return;
+    report = value; offset = report.offset; lastLoad = Date.now();
+    syncSelect('replyMailbox', report.accounts.filter((a) => a.demo === ($('replyMode').value === 'demo')));
+    syncSelect('replyImportAccount', report.accounts);
+    const metrics = production ? [['Contacts who replied','respondedContacts'],['Captured human replies','humanMessages'],['Needs my reply','needsReply'],['Needs conversation match','needsMatch']] : [['Human reply candidates','humanMessages'],['Needs conversation match','needsMatch'],['Automatic replies','automatedMessages'],['Bounce notices','bounceNotices'],['Protected opt-out contacts','protectedContacts']];
+    $('replyMetrics').innerHTML = metrics.map(([label,key]) => `<div class="experiment-metric"><span>${label}</span><strong>${report.summary[key]}</strong></div>`).join('');
+    $('replyMetricNote').textContent = report.note;
+    $('replyProtection').hidden = !report.protectionNote; $('replyProtection').textContent = report.protectionNote || '';
+    $('replyCoverage').textContent = `${report.coverage.rootsWithMessageIds} of ${report.coverage.roots} loaded source conversations have outbound Message-IDs. Missing IDs need Sent reconciliation or explicit manual review.`;
+    const capture = report.capture;
+    if(production){const scan=capture.historyScan;$('replyScanProgress').textContent=capture.running?`${scan?.status==='Running'?'Historical scan':'Mailbox sync'} in progress${scan?.currentFolder?' · '+scan.currentMailbox+' / '+scan.currentFolder:''}${scan?.scanned?' · '+scan.scanned+' message checks':''}${capture.progress&&scan?.status==='Running'?' · activity '+time(capture.progress.at):''}. You can stop and resume safely.`:scan?`Last historical scan: ${scan.status} · ${scan.scanned||0} message checks. ${scan.status==='Complete'?'Available folders checked; uncertain matches remain in review.':'Run the scan again to resume saved progress.'}`:capture.enabled?'Scan all previous replies to tool-sent emails, including available archived messages.':capture.setupCandidates?.length?'Mailbox login is available, but conversation capture is off. Open Mailbox tools → capture settings to reuse it and authorize a scan.':'Conversation capture is off. Open Mailbox tools to set up authorized Inbox access; browser sign-in alone does not enable capture.';}
+
+    if (production) { if(!captureToolsInitialized){$('replyCaptureTools').open=(report.summary.humanMessages+report.summary.automatedMessages+report.summary.bounceNotices+report.summary.needsMatch)===0;captureToolsInitialized=true;} $('replyCaptureSummary').textContent='Capture & mailbox setup · ' + (capture.configurationError || capture.captureError || capture.mailboxes.some((m)=>m.status==='Needs attention') ? 'Needs attention' : capture.running ? 'Checking mailboxes…' : capture.enabled ? 'Live capture enabled' : 'Live capture off'); window.dispatchEvent(new CustomEvent('fc-capture-status', { detail:capture })); $('replyProtectionDelivery').textContent = `${capture.protectionHealth}. ${capture.sharedProtection.enabled ? 'Coordinator protection updates pending: ' + capture.sharedProtection.pending + '. Shared sending protections are checked before each send.' : 'Independent PC: captured opt-outs protect this PC. Other PCs need the shared coordinator.'}`; }
+    $('replyCaptureNote').textContent = capture.configurationError || `${capture.enabled ? 'Live read-only capture enabled' : 'Live capture off'} · ${capture.auto ? 'Automatic checks enabled' : 'Manual checks only'}${capture.running ? ' · Checking mailboxes…' : ''}${capture.since ? ` · Initial backfill since ${capture.since} · ${capture.allFolders?'All available response folders':'Inbox and Sent folders'}` : ''}. ${production ? 'EML imports do not connect to a provider.' : 'Samples and EML imports do not connect to a provider.'}`;
+    $('replyMonitor').innerHTML = (capture.captureError ? `<div class="reply-monitor">${escape(capture.captureError.message)}</div>` : '') + capture.mailboxes.map((m) => `<div class="reply-monitor"><strong>${escape(m.email)} · ${escape(m.status)}</strong><p class="hint">Credentials: ${m.credentialsConfigured ? 'configured' : 'missing'} · Last successful check: ${escape(time(m.checkedAt))} · Next eligible check: ${escape(time(m.nextAt))}</p>${m.message ? `<p>${escape(m.message)}</p>` : ''}${(m.folders || []).map((f) => `<p class="hint">${escape(f.folder)} · ${f.processed} scanned this check${f.error?' · Folder failed; incomplete coverage':''} · ${f.more ? 'Backfill incomplete; more messages remain' : 'Current search page completed'} · UID ${f.lastUid}</p>`).join('')}</div>`).join('');
+    if(mailroom)renderMailroomRows();else {
+    $('replyRows').innerHTML = report.rows.map((r) => `<tr><td>${r.company&&r.company!==r.recipient?'<strong>'+escape(r.company)+'</strong><br>':''}${escape(r.recipient)}</td><td>${escape(r.subject)}<br>${escape(r.account)}${production&&r.excerpt?'<p class="hint">'+escape(r.excerpt.slice(0,130))+'</p>':''}</td><td>${production?`<strong>${escape(r.intent?.intent||'unknown')}</strong><br>${r.unread?'New / unread · ':''}${r.needsReply?'Needs your reply':r.repliedElsewhere?'Replied in another thread':r.noReply?'No captured reply':''}<br>${escape(r.draftStatus||'')}`:`${r.classificationSource==='manual'?'Reviewed':'Suggested'}: ${escape(labels[r.category]||r.category)}`}</td><td>${production?(r.responded?`<strong>${r.replyCount} human ${r.replyCount===1?'reply':'replies'}</strong><br>First: ${escape(time(r.firstReplyAt))}<br>Latest: ${escape(time(r.lastReplyAt))}`:r.type==='review'?'Needs matching review<br>'+escape(r.reason):'No matched human reply'):`${escape(r.match)}${r.paused?'<br>Experiment follow-up paused':''}<br>${r.count} captured message(s)`}</td><td><button class="secondary" data-reply="${escape(r.id)}" data-type="${r.type}">View</button></td></tr>`).join('') || (production?'<tr><td colspan="5">No matching replies yet. Run the historical scan, or choose All tool-sent conversations to see emails awaiting a captured response.</td></tr>':'<tr><td colspan="5">No captured conversations match. Load samples, import EML, or configure read-only capture.</td></tr>');
+    $('replyPage').textContent = `${report.total ? offset + 1 : 0}–${Math.min(offset + report.rows.length, report.total)} of ${report.total} matching conversations/review items`;
+    }
+    controls();
+    if(mailroom&&!selection&&report.rows.length&&location.hash==='#conversations'&&!busy&&!deskBusy){selection={id:report.rows[0].id,type:report.rows[0].type};await loadDetail(false);}
+    const selectedRow=production&&selection&&report.rows.find((r)=>r.id===selection.id);
+    if(!deskBusy&&selectedRow&&detail&& !$('replyInspector').hidden&&(selectedRow.count!==detail.messages.length||(selectedRow.carrierInboxId&&selectedRow.unread!==detail.carrierHistory?.unread)||(selectedRow.statusVersion&&selectedRow.statusVersion!==detail.carrierHistory?.statusVersion)||(selectedRow.latestHistoryId&&selectedRow.latestHistoryId!==detail.carrierHistory?.latestHistoryId)||(selectedRow.sourceMessageId&&!detail.messages.some((m)=>m.id===selectedRow.sourceMessageId))))await loadDetail();
+  }
+  if(mailroom)window.addEventListener('fc-conversation-detail',(event)=>{const data=event.detail;if(selection&&(data.root?.id===selection.id||data.messages.some((m)=>m.id===selection.id))){detail=data;renderMailroomThread(data);}});
+  function rememberDraft() { if (selectedMessage) drafts.set(selectedMessage, { category:$('replyReviewCategory').value, note:$('replyReviewNote').value, rootId:$('replyLink').value, confirm:$('replyLinkConfirm').checked }); }
+  function selectReview(id) {
+    rememberDraft(); selectedMessage = id;
+    const message = findMessage(id), draft = drafts.get(id);
+    $('replyReviewPanel').hidden = false; $('replyReviewCategory').value = draft?.category || message.category; $('replyReviewNote').value = draft?.note ?? message.reviewNote;
+    $('replyReviewEvidence').textContent = `${message.classificationSource === 'manual' ? 'Manually reviewed' : 'Rule suggestion'} · ${message.reason} · ${message.suggestion.reason}`;
+    $('replyMatchPanel').hidden = message.match !== 'review';
+    $('replyLink').innerHTML = '<option value="">Select a conversation…</option>' + (detail.carrierHistory?.roots||detail.candidates).map((r) => `<option value="${r.id}">${escape(r.recipient)} · ${escape(r.subject)}</option>`).join('');
+    $('replyLink').value = draft?.rootId || ''; $('replyLinkConfirm').checked = draft?.confirm || false;
+    $('replyIgnore').hidden = message.match !== 'review'; $('replyUnignore').hidden = message.match !== 'ignored'; controls();
+  }
+  async function loadDetail(preserve = true) {
+    if (preserve) rememberDraft();
+    const sequence=++detailSequence,target={...selection};if(mailroom){$('mailroomWorkspace').dataset.threadOpen='true';$('mailroomEmpty').hidden=true;$('mailroomLoading').hidden=false;}
+    let next;try{next=await request('/api/experiment/reply-detail?'+new URLSearchParams(target));}finally{if(mailroom&&sequence===detailSequence)$('mailroomLoading').hidden=true;}
+    if(sequence!==detailSequence||selection?.id!==target.id||selection?.type!==target.type)return;
+    const sameThread=detail?.root?.id===next.root?.id&&detail?.messages?.[0]?.id===next.messages?.[0]?.id;detail=next;
+    $('replyInspector').hidden = false; $('replyThreadTitle').textContent = threadMessages().findLast((m)=>m.direction==='inbound')?.subject || detail.root?.subject || 'Message needs a conversation match';
+    if(mailroom){renderMailroomThread(detail);if(!sameThread)$('replyInspector').scrollTop=0;}else {
+    const initial = detail.root ? `<article class="reply-message outbound"><h3>${detail.root.source==='carrier_inbound'?'Carrier-started conversation · reviewed sender':'Original send · source history'}</h3><p class="hint">${escape(detail.root.account)} → ${escape(detail.root.recipient)} · ${escape(time(detail.root.sentAt))}</p><p class="hint">${detail.root.carrierId ? 'Source carrier ID: ' + escape(detail.root.carrierId) : 'Carrier identity unresolved / not linked'} · ${detail.root.demo ? 'Sample data' : escape(detail.root.campaignName)}</p><pre>${escape(detail.root.bodyUnavailable?'Original body is not retained here. This send is anchored by confirmed tool tracking history; inspect its original mailbox copy.':detail.root.body)}</pre>${detail.root.bodyTruncated ? '<p class="hint">Source body truncated for this view.</p>' : ''}</article>` : '';
+    $('replyThread').innerHTML = initial + detail.messages.map((m) => `<article class="reply-message ${m.direction === 'outbound' ? 'outbound' : ''}"><h3>${escape(m.from.join(', ') || 'Unknown sender')} · ${escape(m.kind)}</h3><p class="hint">${escape(m.subject)} · ${escape(m.match)} · ${escape(m.classificationSource === 'manual' ? 'Reviewed' : 'Suggested')}: ${escape(labels[m.category])}</p><p class="hint">Header date: ${escape(time(m.date))} · Captured: ${escape(time(m.capturedAt))} · ${escape(m.source.type)}${m.source.folder ? ' / ' + escape(m.source.folder) + ' / UID ' + m.source.uid : ''}</p><pre>${escape(m.bodyUnavailable ? 'Body unavailable. Inspect the original mailbox before linking or classifying.' : m.text || '(No new text extracted; inspect the original message.)')}</pre>${m.textTruncated ? '<p class="hint">New-text view truncated at 24,000 characters.</p>' : ''}<details><summary>Message reference evidence</summary><pre>${escape(m.messageId || '(No Message-ID)')}\n${escape(m.references.join('\n'))}</pre></details><button class="secondary" data-review-message="${m.id}">Review message</button></article>`).join('');
+    }
+    if(production) window.dispatchEvent(new CustomEvent('fc-conversation-detail',{detail}));
+    if(threadMessages().length) selectReview(threadMessages().some((m) => m.id === selectedMessage) ? selectedMessage : (threadMessages().findLast(m=>m.direction==='inbound')||threadMessages().at(-1)).id);else { selectedMessage=null;$('replyReviewPanel').hidden=true;controls(); }
+  }
+  $(mailroom?'mailroomList':'replyRows').onclick = (event) => { if(deskBusy)return; const button = event.target.closest('[data-reply]'); if (!button) return; rememberDraft(); selectedMessage = null; $('replyInspector').hidden = true; $('replyReviewPanel').hidden = true; selection = { id:button.dataset.reply, type:button.dataset.type }; action(button, () => loadDetail(false)); };
+  const reviewMessageClick = (event) => { const read=event.target.closest('[data-message-seen]');if(read){void changeCarrierRead(read,read.dataset.messageSeen,read.dataset.unread==='true');return;} const button = event.target.closest('[data-review-message]'); if (button) { selectReview(button.dataset.reviewMessage); if(mailroom){if(!$('mailroomDetailsDialog').open)$('mailroomDetailsDialog').showModal();$('replyReviewNote').focus();}else $('replyReviewPanel').scrollIntoView({ behavior:'smooth', block:'center' }); } };
+  $('replyThread').onclick=reviewMessageClick;if(mailroom)$('mailroomThreadHistory').onclick=reviewMessageClick;
+  $('replyClose').onclick = () => { rememberDraft();$('replyInspector').hidden=true;if(mailroom){$('mailroomWorkspace').dataset.threadOpen='false';$('mailroomEmpty').hidden=false;}};
+  $('replyThreadRefresh').onclick = () => action($('replyThreadRefresh'), () => loadDetail());
+  $('replyReviewSave').onclick = () => action($('replyReviewSave'), async () => {
+    await request('/api/experiment/replies/review', { messageId:selectedMessage, expectedReview:findMessage(selectedMessage)?.reviewVersion, category:$('replyReviewCategory').value, note:$('replyReviewNote').value, rootId:$('replyLink').value, confirmLink:$('replyLinkConfirm').checked });
+    drafts.delete(selectedMessage); await loadDetail(false); return 'Reply review saved. Captured opt-outs protect normal outreach. No message was sent.';
+  });
+  for (const [id, method] of [['replyIgnore','ignore'],['replyUnignore','restore']]) $(id).onclick = () => action($(id), async () => {
+    await request('/api/experiment/replies/review', { messageId:selectedMessage, expectedReview:findMessage(selectedMessage)?.reviewVersion, action:method, note:$('replyReviewNote').value });
+    drafts.delete(selectedMessage); await loadDetail(false); return method === 'ignore' ? 'Review item ignored with history/protections retained.' : 'Item returned to the matching review queue.';
+  });
+  $('replyHistory').onclick = () => action($('replyHistory'), async () => { const r = await request('/api/experiment/replies/history', {}); return `Loaded ${r.roots} source conversations; ${r.withMessageIds} currently have Message-IDs in source history.`; });
+  $('replyDemo').onclick = () => action($('replyDemo'), async () => { await request('/api/experiment/replies/demo', {}); $('replyMode').value = 'demo'; $('replyMailbox').value = ''; $('replyCategory').value = ''; $('replySearch').value = ''; offset = 0; return 'Sample inbox loaded. No real email was sent or fetched.'; });
+  $('replyScan').onclick = () => action($('replyScan'), async () => { await request('/api/experiment/replies/scan', {}); $('replyMode').value = 'real'; $('replyMailbox').value = ''; $('replyCategory').value = ''; $('replySearch').value = ''; offset = 0; return 'Historical scan started. All available pages are checked; monitor progress and partial errors above.'; });
+  $('replyBackfill').onclick = () => action($('replyBackfill'), async () => { await request('/api/experiment/replies/backfill', {}); return 'Reply cursors reset. Existing messages/reviews/protections retained; the next enabled check rescans the configured lookback.'; });
+  $('replyImport').onclick = () => action($('replyImport'), async () => {
+    const file = $('replyEml').files[0], mailbox = $('replyImportAccount').value;
+    if (!file || !mailbox) throw new Error('Choose a mailbox and EML file.');
+    if (file.size > 2_000_000) throw new Error('Use an EML file up to 2 MB.');
+    const response = await fetch(route('/api/experiment/replies/import') + '?' + new URLSearchParams({ mailbox }), { method:'POST', headers:{ 'X-FC-Request':'1', 'Content-Type':'message/rfc822' }, body:file });
+    const r = await response.json(); if (!response.ok) throw new Error(r.error);
+    $('replyMode').value = mailbox === 'demo.dispatch@example.invalid' ? 'demo' : 'real'; $('replyMailbox').value = ''; $('replyCategory').value = ''; $('replySearch').value = ''; offset = 0;
+    return r.ignored ? 'No known contact/reference matched. Message was not retained.' : r.duplicate ? 'This message was already captured; no duplicate added.' : 'EML evidence imported. Inspect its match and suggested category.';
+  });
+  if(mailroom){
+    $('carrierManage').onclick=()=>{$('mailroomDetailsDialog').showModal();$('carrierStage').focus();};
+    for(const id of ['carrierStage','carrierFollowUpAt','carrierStatusNote'])$(id).oninput=()=>{const h=detail.carrierHistory,prior=carrierStatusDrafts.get(h.carrierInboxId);carrierStatusDrafts.set(h.carrierInboxId,{expectedVersion:prior?.expectedVersion||h.statusVersion,stage:$('carrierStage').value,note:$('carrierStatusNote').value,followUpAt:$('carrierFollowUpAt').value});$('carrierStatusReload').hidden=false;};
+    $('carrierStatusSave').onclick=()=>action($('carrierStatusSave'),async()=>{const h=detail.carrierHistory,draft=carrierStatusDrafts.get(h.carrierInboxId);await request('/api/conversations/carrier-status',{carrierInboxId:h.carrierInboxId,expectedVersion:draft?.expectedVersion||h.statusVersion,stage:$('carrierStage').value,note:$('carrierStatusNote').value,followUpAt:$('carrierFollowUpAt').value?new Date($('carrierFollowUpAt').value).toISOString():null});carrierStatusDrafts.delete(h.carrierInboxId);await loadDetail();$('carrierStatusResult').textContent='Carrier status saved. No email was sent.';return 'Carrier status saved.';});
+    $('carrierStatusReload').onclick=()=>action($('carrierStatusReload'),async()=>{await loadDetail();carrierStatusDrafts.delete(detail.carrierHistory.carrierInboxId);renderMailroomThread(detail);$('carrierStatusResult').textContent='Saved carrier status reloaded. Unsaved status edits discarded.';return 'Saved carrier status reloaded.';});
+    $('carrierSeen').onclick=()=>changeCarrierRead($('carrierSeen'),detail.carrierHistory.latestInboundId,!detail.carrierHistory.unread);
+  }
+  function changeCarrierRead(button,messageId,unread){return action(button,async()=>{const h=detail.carrierHistory;await request('/api/conversations/carrier-seen',{carrierInboxId:h.carrierInboxId,expectedVersion:h.statusVersion,messageId,unread});await loadDetail();window.dispatchEvent(new Event('fc-carrier-read-changed'));return unread?'Marked as unread.':'Marked as read. Reply tasks stay open until answered.';});}
+  $('replyRefresh').onclick = () => action($('replyRefresh'), async () => {});
+  for (const id of ['replyMode','replyMailbox','replyCategory',...(production?['replyWork',...(mailroom?['replyGrouping']:[])]:[])]) $(id).onchange = () => { if (id === 'replyMode') $('replyMailbox').value = '';if(id==='replyGrouping')$('replyWork').value='all'; offset = 0; action($('replyRefresh'), async () => {}); };
+  if(mailroom){let searchTimer;$('replySearch').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{offset=0;void load().catch((e)=>error(e.message));},300);};document.querySelectorAll('[data-mailroom-work]').forEach((b)=>{b.onclick=()=>{if(['active','in_review'].includes(b.dataset.mailroomWork))$('replyGrouping').value='carriers';$('replyWork').value=b.dataset.mailroomWork;offset=0;void action(b,async()=>{});};});}
+  $('replySearch').onkeydown = (e) => { if (e.key === 'Enter') { offset = 0; $('replyRefresh').click(); } };
+  $('replyPrev').onclick = () => { offset = Math.max(0,offset - 25); action($('replyPrev'), async () => {}); };
+  $('replyNext').onclick = () => { offset += 25; action($('replyNext'), async () => {}); };
+  if (production) window.addEventListener('fc-open-conversation',(event)=>{if(busy||deskBusy){pendingOpen=event.detail;return;}rememberDraft();selection=event.detail;selectedMessage=null;$('replyInspector').hidden=true;void action($('replyRefresh'),()=>loadDetail(false));});
+  if(production)window.addEventListener('fc-reply-desk-busy',(event)=>{deskBusy=event.detail===true;controls();if(!deskBusy){if(pendingOpen){const next=pendingOpen;pendingOpen=null;window.dispatchEvent(new CustomEvent('fc-open-conversation',{detail:next}));}else void load().catch((e)=>error(e.message));}});
+  if (production) window.addEventListener('fc-conversation-search', (event) => { $('replySearch').value=event.detail;offset=0;void load().catch((e)=>error(e.message)); });
+  if (production) window.addEventListener('fc-conversation-view', () => { if(!busy&&!deskBusy) void request('/api/experiment/replies/history',{}).then(load).catch((e)=>error(e.message)); });
+  load().then(() => { $('replyStatus').textContent = production ? 'Ready. Import a reply or configure authorized read-only capture.' : 'Ready. Choose samples, an EML import, or explicitly enabled live capture.'; }).catch((e) => error(e.message));
+  setInterval(() => { if (!document.hidden && (!production || location.hash==='#conversations') && !busy && (report?.capture.running || Date.now() - lastLoad >= 15000)) void load().catch((e) => error(e.message)); }, 1500);
+})();
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  if (!$('view-conversations')) return;
+  const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let loaded = false, dirty = false, saving = false, mailboxes = [], setupCandidates=[];
+  const field = (key,label,value='',type='text') => `<label>${label}<input data-config-field="${key}" type="${type}" value="${escape(value)}" ${key==='port'?'min="1" max="65535"':''}></label>`;
+  function renderMailboxes() {
+    $('replyConfigMailboxes').innerHTML = mailboxes.map((c,index) => `<article class="reply-config-mailbox" data-config-index="${index}"><h3>Mailbox ${index+1}</h3><div class="reply-config-grid">${field('id','Unique mailbox ID',c.id)}${field('email','Sending identity / email',c.email,'email')}${field('host','IMAP host',c.host)}${field('user','Login user (blank uses email)',c.user)}${field('port','TLS port',c.port||993,'number')}${field('inboxFolder','Inbox folder',c.inboxFolder||'INBOX')}${field('sentFolder','Sent folder (blank auto-detects)',c.sentFolder)}${field('passwordEnv','Password environment variable',c.passwordEnv)}${field('accessTokenEnv','OAuth token environment variable',c.accessTokenEnv)}<label>Provider<select data-config-field="provider">${[['custom','Private Email / other'],['gmail','Gmail'],['yahoo','Yahoo'],['outlook','Outlook']].map(([v,l])=>`<option value="${v}" ${(c.provider||'custom')===v?'selected':''}>${l}</option>`).join('')}</select></label><label>Authentication<select data-config-field="authMode">${[['password','Provider password'],['app_password','Provider app password'],['oauth','OAuth token']].map(([v,l])=>`<option value="${v}" ${(c.authMode||'password')===v?'selected':''}>${l}</option>`).join('')}</select></label></div><button type="button" class="secondary" data-config-remove="${index}">Remove from capture configuration</button><p class="hint">Removing configuration retains captured messages and opt-outs. Gmail/Yahoo password access requires an approved app password; Outlook requires OAuth. Tokens must be enrolled/refreshed through the provider.</p></article>`).join('') || '<p class="hint">No live mailboxes configured. You can still import an authorized EML export.</p>';
+  }
+  function readMailboxes() {
+    return Array.from(document.querySelectorAll('[data-config-index]'), (element) => {
+      const config = {};
+      for (const input of element.querySelectorAll('[data-config-field]')) {
+        const value = input.value.trim(); if(value)config[input.dataset.configField]=input.dataset.configField==='port'?Number(value):value;
+      }
+      return config;
+    });
+  }
+  window.addEventListener('fc-capture-status', ({detail}) => {
+    const shared = detail.sharedProtection;setupCandidates=detail.setupCandidates||[];const selected=$('replyExistingMailbox').value;$('replyExistingMailbox').innerHTML='<option value="">Choose a saved mailbox setup…</option>'+setupCandidates.map(c=>'<option value="'+escape(c.id)+'">'+escape(c.name+' · '+c.email)+(c.credentialsConfigured?' · login available':' · credential missing')+'</option>').join('');$('replyExistingMailbox').value=selected;$('replyUseExistingMailbox').disabled=!setupCandidates.length;$('replyExistingMailboxNote').textContent=setupCandidates.length?'Existing delivery-monitor setup is available. Reuse it, enable capture, authorize read-only access and save.':'No matching delivery-monitor setup found. Add the mailbox and its credential environment-variable name below.';
+    $('replyStopCapture').disabled=!detail.running;
+    $('replyConfigNote').textContent = `${detail.configurationSource || ''} · ${detail.protectionHealth || ''}. ${shared?.enabled ? `${shared.pending} opt-out(s) awaiting coordinator sync.` : 'Independent PC: opt-outs are local. Configure the team coordinator for shared sending protection.'}`;
+    if(loaded||dirty||!detail.configuration)return;
+    loaded=true;const c=detail.configuration;mailboxes=c.mailboxes;
+    $('replyConfigEnabled').checked=c.enabled;$('replyConfigAuto').checked=c.auto;$('replyConfigSince').value=c.since;$('replyConfigBatch').value=c.batch;$('replyConfigAll').checked=c.allHistory===true;$('replyConfigAllFolders').checked=c.allFolders===true;$('replyConfigPages').value=c.pages||5;$('replyConfigSince').disabled=c.allHistory===true;renderMailboxes();
+  });
+  $('replyUseExistingMailbox').onclick=()=>{const c=setupCandidates.find(c=>c.id===$('replyExistingMailbox').value);if(!c){notice('Choose an existing mailbox setup first.');return;}mailboxes=readMailboxes();if(mailboxes.some(m=>m.email?.toLowerCase()===c.email)){notice('That mailbox is already in the capture settings.');return;}const {name,credentialsConfigured,...config}=c;mailboxes.push(config);dirty=true;renderMailboxes();notice('Mailbox setup added to your settings draft. Enable capture, authorize read-only access and save.');};
+  $('replyConfigAll').onchange=()=>{$('replyConfigSince').disabled=$('replyConfigAll').checked;dirty=true;};
+  $('replyStopCapture').onclick=async()=>{try{await api('/api/conversations/stop-capture',{});notice('Stopping capture. Saved messages and cursors are retained.');}catch(e){notice(e.message);}};
+  $('replyConfigPanel').oninput=()=>{dirty=true;};
+  $('replyConfigAdd').onclick=()=>{if(saving)return;mailboxes=readMailboxes();if(mailboxes.length>=20){notice('Up to 20 mailboxes are supported.');return;}mailboxes.push({id:'mailbox'+(mailboxes.length+1)});dirty=true;renderMailboxes();};
+  $('replyConfigMailboxes').onclick=(event)=>{const b=event.target.closest('[data-config-remove]');if(!b||saving)return;mailboxes=readMailboxes();mailboxes.splice(Number(b.dataset.configRemove),1);dirty=true;renderMailboxes();};
+  $('replyConfigSave').onclick=async()=>{
+    if(saving)return;saving=true;const b=$('replyConfigSave');b.textContent='Saving…';b.disabled=true;
+    try {await api('/api/conversations/config',{enabled:$('replyConfigEnabled').checked,auto:$('replyConfigAuto').checked,since:$('replyConfigSince').value,batch:Number($('replyConfigBatch').value),allHistory:$('replyConfigAll').checked,allFolders:$('replyConfigAllFolders').checked,pages:Number($('replyConfigPages').value),mailboxes:readMailboxes(),confirmReadOnly:$('replyConfigConfirm').checked});loaded=false;dirty=false;$('replyConfigConfirm').checked=false;window.dispatchEvent(new Event('fc-conversation-view'));notice('Read-only capture configuration saved. Secret values were not stored.');}
+    catch(e){notice(e.message);$('replyConfigNote').textContent=e.message+' Your settings draft is retained.';}
+    finally{saving=false;b.textContent='Save capture settings';b.disabled=false;}
+  };
+  $('openImportReview').onclick=()=>{location.hash='imports';window.dispatchEvent(new CustomEvent('fc-import-view',{detail:state.activeCampaign}));};
+  window.addEventListener('fc-import-activated',async()=>{selected.clear();previewId=null;offset=0;await refresh();fillCampaign();await loadLeads();});
+  document.addEventListener('click',(event)=>{const button=event.target.closest('[data-conversation-email]');if(!button)return;closePreviewDrawer();location.hash='conversations';window.dispatchEvent(new CustomEvent('fc-conversation-search',{detail:button.dataset.conversationEmail}));});
+})();
+
+(() => {
+ const $=(id)=>document.getElementById(id);if(!$('replyAssistant'))return;
+ const esc=(s)=>String(s??'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const names={company:'Carrier/company name',phone:'Phone',equipment:'Equipment / trailer',zip:'ZIP code',contactName:'Contact name',truckCount:'Truck count',dot:'USDOT',mc:'MC',availability:'Availability',lanes:'Preferred lanes'};
+ const date=(s)=>s?new Date(s).toLocaleString():'Unknown';
+ let detail=null,library=null,local=null,busy=false,templateEdit=null,lastDashboard=0,dashboardSequence=0,conversationBusy=false;
+ const unsaved=new Map(),libraryDrafts=new Map();let wording=null,caret={start:0,end:0},publishedBusy=false;
+ const request=(route,data)=>api('/api/conversations/'+route,data);
+ function error(message=''){for(const id of ['assistantError','mailroomApprovalError']){const el=$(id);if(el){el.hidden=!message;el.textContent=message;}}}
+ function remember(){if(!detail?.root||!local)return;local.body=$('assistantBody').value;local.templateId=$('assistantTemplate').value;unsaved.set(detail.root.id,{...local});}
+ function controls(){if(publishedBusy!==busy){publishedBusy=busy;window.dispatchEvent(new CustomEvent('fc-reply-desk-busy',{detail:busy}));}const c=detail?.assistant,canDraft=c&&!c.hold&&!c.pendingReviewCount&&(!c.noReply||c.followUpReady),approved=c?.draft?.status==='approved'&&c.draftCurrent&&!local?.dirty;
+  for(const e of document.querySelectorAll('#replyAssistant input,#replyAssistant textarea,#replyAssistant select,#replyAssistant button,.reply-library input,.reply-library select,.reply-library textarea,.reply-library button,#mailroomDetailsDialog input,#mailroomDetailsDialog textarea,#mailroomDetailsDialog select,#mailroomDetailsDialog button:not([data-close-mailroom]):not(#carrierStatusSave):not(#carrierStatusReload):not(#carrierSeen),#mailroomApprovalDialog input,#mailroomApprovalDialog button:not([data-close-mailroom])'))e.disabled=busy;
+  document.querySelectorAll('[data-carrier-read]').forEach(button=>{button.disabled=busy||conversationBusy;});
+  $('replyMarkRead').disabled=busy||!c?.latestInboundId;$('replyMarkUnread').disabled=busy||!c?.latestInboundId;
+  $('assistantSuggest').disabled=busy||!canDraft;$('assistantSaveDraft').disabled=busy||!canDraft||!$('assistantBody').value.trim();
+  $('assistantApprove').disabled=busy||!c?.draft||!c.draftCurrent||local?.dirty||c.draft.status!=='draft'||!$('assistantApproveConfirm').checked||!$('assistantApprovalNote').value.trim();
+  $('assistantCancelDraft').disabled=busy||!['draft','approved'].includes(c?.draft?.status);
+  $('assistantReviewOpen').disabled=busy||!canDraft||!$('assistantBody').value.trim()||(!local?.dirty&&c.draft?.status==='approved'&&c.draftCurrent);
+  $('assistantCopy').disabled=busy||!approved;$('assistantReportSent').disabled=busy||!approved||!$('assistantSentConfirm').checked||!$('assistantSentNote').value.trim();
+  if($('mailroomApprovedActions'))$('mailroomApprovedActions').hidden=!approved;if($('mailroomSentReport'))$('mailroomSentReport').hidden=!approved&&c?.draft?.status!=='reported_sent';if($('mailroomWorkspace'))$('assistantSaveDraft').hidden=!local?.dirty;
+  $('assistantMailbox').hidden=!approved||!c?.mailboxUrl;if(approved&&c.mailboxUrl)$('assistantMailbox').href=c.mailboxUrl;else $('assistantMailbox').removeAttribute('href');
+ }
+ async function refreshDetail(){if(!detail?.root)return;const next=await api('/api/conversation-detail?'+new URLSearchParams({id:detail.root.id,type:'conversation'}));window.dispatchEvent(new CustomEvent('fc-conversation-detail',{detail:next}));window.dispatchEvent(new Event('fc-conversation-view'));await loadDashboard(true);}
+ async function act(button,fn){if(busy)return;remember();busy=true;const label=button.textContent;button.textContent='Working…';error();controls();$('assistantStatus').textContent='Saving / checking conversation evidence…';try{const result=await fn();await refreshDetail();$('assistantStatus').textContent=result||'Saved. No email was sent.';}catch(e){error(e.message);if(!detail?.assistant){$('replyError').hidden=false;$('replyError').textContent=e.message;}$('assistantStatus').textContent='Needs attention. Your draft is retained; refresh changed evidence before approving.';}finally{busy=false;button.textContent=label;controls();}}
+ function render(){
+  const c=detail?.assistant;$('replyAssistant').hidden=!c;$('replyStartThread').hidden=true;
+  if(!c){local=null;wording=null;showWording();controls();return;}
+  if(wording&&(wording.rootId!==detail.root.id||wording.contextVersion!==c.version))wording=null;
+  const remembered=unsaved.get(detail.root.id);local=remembered||{body:c.draft?.body||'',id:['draft','approved'].includes(c.draft?.status)?c.draft.id:null,version:c.draft?.version,contextVersion:c.version,templateId:c.draft?.templateId||'',requestId:crypto.randomUUID(),dirty:false};
+  if(!local.dirty){local={...local,body:c.draft?.body||'',id:['draft','approved'].includes(c.draft?.status)?c.draft.id:null,version:c.draft?.version,contextVersion:c.version};}
+  if($('assistantBody').value!==local.body)$('assistantBody').value=local.body;
+  const options=detail.templates||[];$('assistantTemplate').innerHTML='<option value="">Choose suggested template for this intent</option>'+options.map((t)=>`<option value="${t.id}">${esc(t.name)} · ${esc(t.category)}</option>`).join('');$('assistantTemplate').value=local.templateId||'';
+  $('assistantIntent').innerHTML=`<h3>${esc(c.intent.intent)} · ${esc(c.intent.sentiment)}</h3><p>${esc(c.intent.reason)} (${esc(c.intent.confidence)})</p><p>${c.hold?'Contact held: '+esc(c.hold):c.pendingReviewCount?`${c.pendingReviewCount} pending contact message(s) need matching review.`:c.needsReply?'A matched human response needs your attention.':c.noReply?`No captured human reply. ${c.followUpReady?'Follow-up is eligible for a reviewed draft.':'Next eligible follow-up: '+esc(date(c.dueAt))+'. Check capture coverage first.'}`:'Outbound activity or an operator report follows the latest carrier response.'}</p><p>${c.unread?'New/unread carrier evidence.':'Latest viewed carrier evidence is marked read.'}</p>`;
+  $('assistantDetails').innerHTML=Object.entries(c.fields).map(([field,value])=>`<article class="assistant-field"><strong>${esc(names[field])}</strong><p>${value.confirmed?`Reviewed carrier statement: ${esc(value.confirmed.value)} · ${esc(date(value.confirmed.confirmedAt))}`:'Not confirmed'}${value.conflict?' · Conflicting values need review':''}${value.staleConfirmation?' · Earlier confirmation needs source review':''}</p><label>Candidate to confirm<select data-carrier-field="${field}"><option value="">Keep unresolved / keep current confirmation</option>${value.candidates.map((v)=>`<option value="${esc(encodeURIComponent(JSON.stringify(v)))}">${esc(v.value)} · message ${esc(v.messageId.slice(0,10))}</option>`).join('')}</select></label>${value.candidates.map((v)=>`<details><summary>${esc(v.value)} · ${esc(v.confidence)} source</summary><pre>${esc(v.excerpt)}</pre><p class="hint">Message ${esc(v.messageId)} · ${esc(v.from)}</p></details>`).join('')||'<p class="hint">No supported value extracted. Ask the carrier or cite a clear source message below.</p>'}</article>`).join('');
+  $('assistantManualField').innerHTML=Object.entries(names).map(([key,name])=>`<option value="${key}">${name}</option>`).join('');$('assistantManualSource').innerHTML=detail.messages.filter((m)=>m.kind==='human'&&m.direction==='inbound'&&m.match!=='ignored'&&m.match!=='review').map((m)=>`<option value="${m.id}">${esc(m.from[0])} · ${esc(m.subject)} · ${esc(date(m.date||m.capturedAt))}</option>`).join('');
+  $('assistantDraftBasis').textContent=`Your mailbox: ${c.account}`;
+  $('assistantDraftState').textContent=local.dirty?'Unsaved edits':c.draft?`${({draft:'Draft saved',approved:'Approved',cancelled:'Draft cancelled',reported_sent:'You marked this sent'})[c.draft.status]||c.draft.status} · version ${c.draft.version}${c.draftCurrent?'':' · conversation changed; review again'}. ${c.sentCopyMatches.length?'A matching Sent copy is captured; inspect it before replying again.':''}`:c.hold?'Drafting held: '+c.hold:c.pendingReviewCount?'Resolve the conversation match before drafting.':c.noReply&&!c.followUpReady?'Follow-up is not eligible yet. Check capture coverage and contact details.':'Write freely. Review your reply before approving it.';
+  if($('mailroomApprovalRecipient')){$('mailroomApprovalRecipient').textContent=`From ${c.account} → ${c.replyTo} · ${c.subject}`;$('mailroomApprovalBody').textContent=c.draft?.body||'';}
+  $('assistantHistory').innerHTML=c.draftHistory.map((d)=>`<details><summary>${esc(d.status)} · ${esc(date(d.createdAt))} · version ${d.version}</summary><p>${esc(d.approvalNote||'No approval recorded')} ${esc(d.reportNote||'')}</p><pre>${esc(d.body)}</pre>${(d.previousVersions||[]).map((v)=>`<details><summary>Earlier version ${v.version} · ${esc(v.status)}</summary><pre>${esc(v.body)}</pre></details>`).join('')}</details>`).join('')||'<p class="hint">No saved draft history.</p>';
+  renderSavedReplies();showWording();$('assistantApproveConfirm').checked=false;$('assistantDetailsConfirm').checked=false;controls();
+ }
+ window.addEventListener('fc-conversation-detail',(event)=>{remember();if(detail?.root?.id!==event.detail.root?.id){$('assistantStatus').textContent='';error();}detail=event.detail;render();});
+ $('assistantBody').oninput=()=>{if(local){local.body=$('assistantBody').value;local.dirty=true;$('assistantApproveConfirm').checked=false;$('assistantDraftState').textContent='Unsaved edits';controls();}};
+ $('assistantTemplate').onchange=()=>{if(local)local.templateId=$('assistantTemplate').value;};
+ $('assistantSuggest').onclick=()=>previewWording($('assistantSuggest'));
+ $('assistantSaveDraft').onclick=()=>act($('assistantSaveDraft'),async()=>{await request('draft',{rootId:detail.root.id,id:local.id,expectedVersion:local.version,expectedContext:detail.assistant.version,body:$('assistantBody').value,requestId:local.requestId});unsaved.delete(detail.root.id);local=null;return 'Edited draft saved. Earlier approval no longer applies.';});
+ $('assistantNewDraft').onclick=()=>{if(local?.dirty&&!confirm('Discard the current unsaved text and start a new draft?'))return;local={body:'',id:null,requestId:crypto.randomUUID(),dirty:true,templateId:''};unsaved.set(detail.root.id,local);$('assistantBody').value='';controls();};
+ for(const id of ['assistantApproveConfirm','assistantApprovalNote','assistantSentConfirm','assistantSentNote'])$(id).oninput=controls;
+ $('assistantApprove').onclick=()=>act($('assistantApprove'),async()=>{await request('approve',{id:detail.assistant.draft.id,expectedVersion:detail.assistant.draft.version,expectedContext:detail.assistant.version,confirm:$('assistantApproveConfirm').checked,note:$('assistantApprovalNote').value});unsaved.delete(detail.root.id);local=null;$('mailroomApprovalDialog')?.close();return 'Exact draft approved. No message sent. Copy it into the correct native mailbox reply.';});
+ $('assistantCopy').onclick=()=>act($('assistantCopy'),async()=>{const r=await request('approved?'+new URLSearchParams({id:detail.assistant.draft.id}));await navigator.clipboard.writeText(r.draft.body);return 'Approved text copied. Open the original carrier thread and paste above your signature; send manually.';});
+ $('assistantMailbox').onclick=(event)=>{if(busy||local?.dirty||!detail?.assistant?.draftCurrent){event.preventDefault();error('Review and approve the current draft before opening its mailbox.');}};
+ $('assistantCancelDraft').onclick=()=>act($('assistantCancelDraft'),async()=>{await request('cancel-draft',{id:detail.assistant.draft.id,expectedVersion:detail.assistant.draft.version});unsaved.delete(detail.root.id);local=null;return 'Saved draft and its approval cancelled. History retained; no email was sent.';});
+ $('assistantReportSent').onclick=()=>act($('assistantReportSent'),async()=>{await request('report-sent',{id:detail.assistant.draft.id,expectedVersion:detail.assistant.draft.version,confirm:$('assistantSentConfirm').checked,note:$('assistantSentNote').value});unsaved.delete(detail.root.id);local=null;$('assistantSentConfirm').checked=false;return 'Recorded as operator-reported mailbox action, not verified submission or delivery.';});
+ $('assistantConfirmDetails').onclick=()=>act($('assistantConfirmDetails'),async()=>{const fields=Array.from(document.querySelectorAll('[data-carrier-field]')).filter((el)=>el.value).map((el)=>{const candidate=JSON.parse(decodeURIComponent(el.value));return {field:el.dataset.carrierField,value:candidate.value,messageId:candidate.messageId};});await request('confirm-details',{rootId:detail.root.id,expectedContext:detail.assistant.version,confirm:$('assistantDetailsConfirm').checked,note:$('assistantDetailsNote').value,fields});return 'Selected carrier-stated details saved with their source evidence.';});
+ $('assistantManualConfirm').onclick=()=>act($('assistantManualConfirm'),async()=>{await request('confirm-details',{rootId:detail.root.id,expectedContext:detail.assistant.version,confirm:$('assistantDetailsConfirm').checked,note:$('assistantDetailsNote').value,fields:[{field:$('assistantManualField').value,value:$('assistantManualValue').value,messageId:$('assistantManualSource').value,excerpt:$('assistantManualQuote').value}]});return 'Cited carrier-stated value saved. This is not independent verification.';});
+ for(const [id,unread]of [['replyMarkRead',false],['replyMarkUnread',true]])$(id).onclick=()=>act($(id),async()=>{await request('seen',{rootId:detail.root.id,expectedContext:detail.assistant.version,messageId:detail.assistant.latestInboundId,unread});return unread?'Marked unread for dashboard tracking.':'Viewed carrier evidence marked read.';});
+ $('replyStartThread').onclick=()=>act($('replyStartThread'),async()=>{const m=detail.messages[0],r=await request('start-thread',{messageId:m.id,expectedReview:m.reviewVersion,confirm:$('replyLinkConfirm').checked,note:$('replyReviewNote').value});location.hash='conversations';window.dispatchEvent(new CustomEvent('fc-open-conversation',{detail:{id:r.rootId,type:'conversation'}}));return 'Known-carrier conversation created from reviewed inbound evidence.';});
+ function renderSavedReplies(){
+  const query=$('assistantSavedSearch').value.trim().toLowerCase(),items=(detail?.templates||[]).filter((t)=>[t.name,t.category,t.body].some((v)=>String(v).toLowerCase().includes(query)));
+  $('assistantSavedCards').innerHTML=items.map((t)=>`<button type="button" class="saved-reply-card secondary" data-saved-reply="${esc(t.id)}"><strong>${esc(t.name)}</strong><span>${esc(t.category)} · v${t.version}</span><span>${esc(t.body.slice(0,150))}</span></button>`).join('')||'<p class="hint">No saved replies match. You can write your own response above.</p>';
+ }
+ function showWording(){
+  $('assistantWordingPreview').hidden=!wording;
+  if(wording){$('assistantWordingName').textContent=wording.name+' · v'+wording.templateVersion+' preview';$('assistantWordingText').textContent=wording.body;}
+ }
+ async function previewWording(button,templateId){return act(button,async()=>{
+  const selected=(detail.templates||[]).find((t)=>t.id===templateId),params={rootId:detail.root.id,expectedContext:detail.assistant.version};
+  if(selected){params.templateId=selected.id;params.templateVersion=selected.version;}
+  wording=await request('template-preview?'+new URLSearchParams(params));showWording();return 'Preview ready. Insert or replace text when you want; your draft is unchanged.';
+ });}
+ function applyWording(replace){
+  if(busy||!wording)return;
+  if(wording.rootId!==detail.root.id||wording.contextVersion!==detail.assistant.version){error('Conversation changed. Preview the wording again.');return;}
+  const editor=$('assistantBody');if(replace&&editor.value.trim()&&!confirm('Replace the current reply text? The saved draft history is retained.'))return;
+  if(replace)editor.value=wording.body;else{const start=Math.min(caret.start,editor.value.length),end=Math.max(start,Math.min(caret.end,editor.value.length));let text=wording.body;if(start&&/\S/.test(editor.value[start-1]))text=' '+text;if(end<editor.value.length&&/\S/.test(editor.value[end]))text+=' ';editor.setRangeText(text,start,end,'end');}
+  local.templateId=wording.templateId;$('assistantTemplate').value=wording.templateId;editor.dispatchEvent(new Event('input'));wording=null;showWording();editor.focus();$('assistantStatus').textContent='Wording inserted. Edit freely, then save and review the exact reply.';
+ }
+ $('assistantSavedSearch').oninput=renderSavedReplies;
+ $('assistantSavedCards').onclick=(event)=>{const b=event.target.closest('[data-saved-reply]');if(b){$('assistantSavedReplies').open=false;void previewWording(b,b.dataset.savedReply);}};
+ $('assistantInsertWording').onclick=()=>applyWording(false);$('assistantReplaceWording').onclick=()=>applyWording(true);$('assistantDismissWording').onclick=()=>{wording=null;showWording();};
+ for(const type of ['select','keyup','click'])$('assistantBody').addEventListener(type,()=>{caret={start:$('assistantBody').selectionStart,end:$('assistantBody').selectionEnd};});
+ $('assistantReviewOpen').onclick=()=>act($('assistantReviewOpen'),async()=>{
+  if(local?.dirty||!detail.assistant.draftCurrent||detail.assistant.draft?.status!=='draft'){
+   await request('draft',{rootId:detail.root.id,id:local.id,expectedVersion:local.version,expectedContext:detail.assistant.version,body:$('assistantBody').value,requestId:local.requestId});unsaved.delete(detail.root.id);local=null;await refreshDetail();
+  }
+  const c=detail.assistant;if(!c.draftCurrent||c.draft?.status!=='draft')throw new Error('The conversation changed. Review the latest evidence before approving.');
+  $('assistantReview').open=true;$('assistantApproveConfirm').checked=false;$('mailroomApprovalDialog')?.showModal();$('assistantApprovalNote').focus();return 'Check the exact text and recipient, then approve when ready.';
+ });
+ $('assistantSaveAsWording').onclick=()=>{
+  const body=$('assistantBody').value;if(!body.trim()){error('Write a reply first.');return;}rememberLibrary();const pending=libraryDrafts.get('new');if(pending?.body&&pending.body!==body&&!confirm('Replace the unsaved new wording in the library?'))return;
+  libraryDrafts.set('new',{name:'',body,category:detail?.assistant?.intent?.intent||'neutral',active:true});chooseLibrary('');if($('mailroomLibraryDialog')&&!$('mailroomLibraryDialog').open)$('mailroomLibraryDialog').showModal();document.querySelector('.reply-library').open=true;$('replyLibraryName').focus();$('replyLibraryStatus').textContent='Name this wording and replace any client-specific details with fields before reusing it. Nothing saved yet.';
+ };
+ function renderLibrary(){
+  const q=$('replyLibrarySearch').value.trim().toLowerCase(),items=(library?.templates||[]).filter((t)=>[t.name,t.category,t.body].some((v)=>String(v).toLowerCase().includes(q)));
+  $('replyLibraryCards').innerHTML=items.map((t)=>`<button class="saved-reply-card secondary" type="button" data-library-reply="${esc(t.id)}"><strong>${esc(t.name)}${t.active?'':' · archived'}</strong><span>${esc(t.category)} · v${t.version}</span><span>${esc(t.body.slice(0,130))}</span></button>`).join('')||'<p class="hint">No saved replies match.</p>';
+  $('replyLibraryVersion').textContent=templateEdit?'Editing saved version '+templateEdit.version+'. Earlier versions are retained.':'New saved wording. The library does not send emails.';
+ }
+ function rememberLibrary(){
+  libraryDrafts.set(templateEdit?.id||'new',{name:$('replyLibraryName').value,body:$('replyLibraryBody').value,category:$('replyLibraryCategory').value,active:$('replyLibraryActive').checked,version:templateEdit?.version});
+ }
+ function chooseLibrary(id){
+  const saved=library?.templates.find((t)=>t.id===id),draft=libraryDrafts.get(id||'new'),value=draft||saved||{name:'',body:'',category:'neutral',active:true};
+  templateEdit=saved?{...saved,version:draft?.version||saved.version}:null;$('replyLibrarySelect').value=id||'';$('replyLibraryName').value=value.name;$('replyLibraryBody').value=value.body;$('replyLibraryCategory').value=['interested','positive','pricing','how_it_works','neutral','negative','follow_up'].includes(value.category)?value.category:'neutral';$('replyLibraryActive').checked=value.active!==false;renderLibrary();
+ }
+ async function loadLibrary(){
+  library=await request('library');const selected=templateEdit?.id||$('replyLibrarySelect').value;
+  $('replyLibrarySelect').innerHTML='<option value="">New saved wording…</option>'+library.templates.map((t)=>`<option value="${esc(t.id)}">${esc(t.name)}${t.active?'':' · archived'}</option>`).join('');$('replyLibrarySelect').value=selected;
+  $('replyLibraryVariables').textContent='Insert fields below where you need them. Phone/equipment/ZIP fields require reviewed values; next_question asks one useful missing detail.';
+  $('replyLibraryFields').innerHTML=library.variables.map((v)=>`<button class="secondary" type="button" data-template-field="${esc(v)}">${esc(({contact_name:'Contact name',carrier_name:'Carrier/company',carrier_phone:'Reviewed phone',equipment:'Reviewed equipment',zip:'Reviewed ZIP',next_question:'Next question',confirmation_questions:'Next question (older field)',business_name:'Our company',sender_name:'Sender name'})[v]||v)}</button>`).join('');$('replyFollowDays').value=library.preferences.followUpDays;$('replyFollowMax').value=library.preferences.maxFollowUps;renderLibrary();
+ }
+ $('replyLibrarySelect').onchange=()=>{const next=$('replyLibrarySelect').value;rememberLibrary();chooseLibrary(next);};
+ $('replyLibraryCards').onclick=(event)=>{const b=event.target.closest('[data-library-reply]');if(b){rememberLibrary();chooseLibrary(b.dataset.libraryReply);}};
+ $('replyLibrarySearch').oninput=renderLibrary;
+ $('replyLibraryNew').onclick=()=>{rememberLibrary();chooseLibrary('');$('replyLibraryName').focus();};
+ $('replyLibraryFields').onclick=(event)=>{const b=event.target.closest('[data-template-field]');if(!b)return;const editor=$('replyLibraryBody');editor.setRangeText('{{'+b.dataset.templateField+'}}',editor.selectionStart,editor.selectionEnd,'end');editor.focus();rememberLibrary();};
+ async function libraryAction(button,fn){if(busy)return;busy=true;controls();const label=button.textContent;button.textContent='Saving…';$('replyLibraryStatus').textContent='Saving your wording…';try{await fn();await loadLibrary();$('replyLibraryStatus').textContent='Saved. Your wording is available for preview in conversations.';}catch(e){$('replyLibraryStatus').textContent=e.message+' Your editor text is retained.';}finally{busy=false;button.textContent=label;controls();}}
+ const saveWording=(button,copy)=>libraryAction(button,async()=>{const previousKey=templateEdit?.id||'new',r=await request('template',{id:copy?undefined:templateEdit?.id,expectedVersion:copy?undefined:templateEdit?.version,name:$('replyLibraryName').value,category:$('replyLibraryCategory').value,body:$('replyLibraryBody').value,active:$('replyLibraryActive').checked});if(!copy)libraryDrafts.delete(previousKey);templateEdit=r.template;$('replyLibraryBody').value=r.template.body;await refreshDetail();});
+ $('replyLibrarySave').onclick=()=>saveWording($('replyLibrarySave'),false);$('replyLibraryCopy').onclick=()=>saveWording($('replyLibraryCopy'),true);
+ $('replyFollowSave').onclick=()=>libraryAction($('replyFollowSave'),()=>request('preferences',{followUpDays:Number($('replyFollowDays').value),maxFollowUps:Number($('replyFollowMax').value)}));
+ async function loadDashboard(force=false){
+  if(!force&&(busy||Date.now()-lastDashboard<15000))return;
+  const sequence=++dashboardSequence;
+  try{
+   const r=await request('dashboard');if(sequence!==dashboardSequence)return;lastDashboard=Date.now();
+   $('carrierAttentionStatus').textContent='Captured local carrier activity · '+new Date().toLocaleTimeString()+'. No automatic conversation sending.';
+   const metrics=[['New / unread','unread','unread'],['Needs my reply','needsReply','needs_reply'],['Interested','interested','interested'],['Draft approvals','awaitingApproval','approval'],['Follow-up eligible','followUpReady','follow_up']];
+   $('carrierAttentionMetrics').innerHTML=metrics.map(([label,key,work])=>`<button class="secondary" data-carrier-work="${work}"><strong>${r.summary[key]}</strong><span>${label}</span></button>`).join('');
+   $('carrierAttentionRows').innerHTML=r.highlights.map(item=>{
+    const readAction=item.carrierInboxId&&item.latestInboundId?`<button class="secondary" data-carrier-read="${esc(item.carrierInboxId)}" data-read-version="${esc(item.statusVersion)}" data-read-message="${esc(item.latestInboundId)}" data-unread="${!item.unread}" title="Update this carrier’s read status in Outreach Desk" aria-label="${item.unread?'Mark as read':'Mark as unread'} for ${esc(item.recipient)}">${item.unread?'Mark as read':'Mark as unread'}</button>`:'';
+    return `<article class="carrier-highlight ${item.unread?'unread':''}"><div><strong>${esc(item.recipient)}</strong><p>${esc(item.intent?.intent||item.category)} · ${esc(item.subject)}${item.unread?' · New/unread':item.latestInboundId?' · Read':''}</p><p>${esc(item.excerpt||'No captured human response. Check capture coverage before a follow-up.')}</p></div><div class="carrier-highlight-actions"><button class="secondary" data-carrier-open="${item.id}" data-carrier-type="${item.type}">Review</button>${readAction}</div></article>`;
+   }).join('')||'<p class="hint">No captured carrier work needs attention. This does not establish complete mailbox coverage.</p>';
+   controls();return true;
+  }catch(e){if(sequence===dashboardSequence)$('carrierAttentionStatus').textContent='Carrier activity needs attention: '+e.message;return false;}
+ }
+ async function dashboardRead(button){
+  if(busy||conversationBusy)return;
+  const input={carrierInboxId:button.dataset.carrierRead,expectedVersion:button.dataset.readVersion,messageId:button.dataset.readMessage,unread:button.dataset.unread==='true'};
+  busy=true;++dashboardSequence;controls();button.setAttribute('aria-busy','true');button.textContent='Saving…';$('carrierAttentionStatus').textContent='Updating carrier read status…';
+  try{await request('carrier-seen',input);const refreshed=await loadDashboard(true);$('carrierAttentionStatus').textContent=!refreshed?'Read status saved. Refresh the dashboard to update its highlights.':input.unread?'Marked as unread.':'Marked as read. Removed from dashboard highlights; the conversation remains available in Conversations.';}
+  catch(e){await loadDashboard(true);$('carrierAttentionStatus').textContent='Read status was not changed: '+e.message;}
+  finally{busy=false;button.removeAttribute('aria-busy');controls();}
+ }
+ $('carrierAttentionRows').onclick=event=>{
+  const read=event.target.closest('[data-carrier-read]');if(read){void dashboardRead(read);return;}
+  const b=event.target.closest('[data-carrier-open]');if(!b)return;location.hash='conversations';window.dispatchEvent(new CustomEvent('fc-open-conversation',{detail:{id:b.dataset.carrierOpen,type:b.dataset.carrierType}}));
+ };
+ window.addEventListener('fc-conversation-action-busy',event=>{conversationBusy=event.detail===true;document.querySelectorAll('[data-carrier-read]').forEach(button=>{button.disabled=busy||conversationBusy;});});
+ window.addEventListener('fc-carrier-read-changed',()=>{void loadDashboard(true);});
+ $('carrierAttentionMetrics').onclick=(event)=>{const b=event.target.closest('[data-carrier-work]');if(!b)return;$('replyWork').value=b.dataset.carrierWork;location.hash='conversations';$('replyWork').dispatchEvent(new Event('change'));};
+ loadLibrary().catch((e)=>{$('replyLibraryStatus').textContent=e.message;});void loadDashboard(true);setInterval(()=>{if(!document.hidden)void loadDashboard();},15000);
+})();
+
+(() => {
+  const $=(id)=>document.getElementById(id);if(!$('mailroomWorkspace'))return;
+  const open=(id)=>{const dialog=$(id);if(!dialog.open)dialog.showModal();};
+  $('mailroomToolsOpen').onclick=()=>open('mailroomToolsDialog');$('mailroomEmptyTools').onclick=()=>{open('mailroomToolsDialog');$('replyCaptureTools').open=true;};
+  $('mailroomFiltersOpen').onclick=()=>open('mailroomFiltersDialog');
+  for(const id of ['mailroomDetailsOpen','mailroomCarrierDetails'])$(id).onclick=()=>open('mailroomDetailsDialog');
+  $('mailroomManageLines').onclick=()=>{open('mailroomLibraryDialog');document.querySelector('.reply-library').open=true;};
+  $('mailroomResolve').onclick=()=>{open('mailroomDetailsDialog');$('replyReviewNote').focus();};
+  document.querySelectorAll('[data-close-mailroom]').forEach((b)=>{b.onclick=()=>$(b.dataset.closeMailroom).close();});
+  window.addEventListener('hashchange',()=>{if(location.hash!=='#conversations')document.querySelectorAll('.mailroom-dialog[open]').forEach((d)=>d.close());});
+})();
 
 // Initial boot
 navigate(location.hash.replace("#", ""));

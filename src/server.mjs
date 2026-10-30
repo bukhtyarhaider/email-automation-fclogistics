@@ -26,11 +26,15 @@ import { startPixelServer } from "./pixel-server.mjs";
 import { domainHealth } from "./domain-health.mjs";
 import { FirebaseSync } from "./firebase-sync.mjs";
 import { historyReport, historyCsv, csv, saveFollowUp } from "./history-report.mjs";
+import { StateFile } from "./state-file.mjs";
+import { CarrierWorkspace } from "./carrier-workspace.mjs";
+import { sharedReplyHold } from './conversation-assistant.mjs';
 import { APP_VERSION, releaseCatalog, saveReleaseNote } from "./release-catalog.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = path.resolve(process.env.FC_DATA_DIR || path.join(ROOT, "data"));
 const PORT = Number(process.env.PORT || 4317);
+const PREVIEW_MODE = process.env.FC_RELEASE_PREVIEW === "1";
 const mail = new MailBrowser({ dataDirectory: DATA });
 await fs.mkdir(DATA, { recursive: true, mode: 0o700 });
 await fs.chmod(DATA, 0o700);
@@ -163,33 +167,17 @@ let busy = false,
   shuttingDown = false;
 const team = new TeamClient(() => state.settings.team);
 let teamSnapshot = { records: {}, suppression: {} };
-let persistTail = Promise.resolve();
-function persist() {
-  const content = JSON.stringify(state, null, 2);
-  const run = async () => {
-    const tmp = `${storePath}.tmp`;
-    const h = await fs.open(tmp, "w", 0o600);
-    try {
-      await h.writeFile(content);
-      await h.sync();
-    } finally {
-      await h.close();
-    }
-    await fs.rename(tmp, storePath);
-    if (process.platform !== "win32") {
-      const d = await fs.open(DATA, "r");
-      try {
-        await d.sync();
-      } finally {
-        await d.close();
-      }
-    }
-  };
-  persistTail = persistTail.then(run, run);
-  return persistTail;
-}
+const stateFile = new StateFile({ state, file: storePath });
+const persist = () => stateFile.save();
 const monitor = new MailboxMonitor({ state, persist });
 const firebaseSync = new FirebaseSync({ state, persist, dataDirectory: DATA });
+let contactCacheKey = '', contactCache = [];
+function knownCarrierContacts() { const key = `${campaignRevision}:${campaignData.size}`; if(key !== contactCacheKey){contactCache=[...campaignData.values()].flatMap((d)=>d.leads);contactCacheKey=key;}return contactCache; }
+const carriers = new CarrierWorkspace({ dataDir: DATA, state, persist, team, contacts:knownCarrierContacts,replyGuard:(email)=>state.settings.team.enabled?sharedReplyHold(teamSnapshot,email):null,
+  commitCampaign: (campaign, next) => stateFile.save({ campaign, next }),
+  python: process.env.FC_PYTHON || (process.platform === "win32" ? "python" : "python3"),
+  readWorkbook: (file, mapping) => python("read", file, mapping) });
+await carriers.initialize();
 function track(item) {
   let record = state.tracking.records[item.trackingId];
   if (!record) record = createRecord(state.tracking, { to: item.recipient, subject: item.subject }, {
@@ -281,11 +269,8 @@ async function reload(c = activeCampaign()) {
     return;
   }
   try {
-    const parsed = await python(
-      "read",
-      filePath,
-      c.mapping || {},
-    );
+    const parsed = await carriers.enrich(c, await python("read", filePath, c.mapping || {}));
+    delete c.loadError;
     for (const l of parsed.leads) {
       l.hidden = parsed.sheets.find((s) => s.part === l.part)?.hidden;
       l.campaignId = c.id;
@@ -293,6 +278,7 @@ async function reload(c = activeCampaign()) {
     campaignData.set(c.id, parsed);
     campaignRevision++;
   } catch (err) {
+    c.loadError = "Workbook or reviewed identity evidence is unavailable. Restore its backup or review the import again.";
     console.warn(`[Workbook] Failed to load workbook for campaign "${c.name || c.id}":`, err.message);
     campaignData.set(c.id, { sheets: [], leads: [] });
   }
@@ -383,12 +369,12 @@ function candidates(campaignId = state.activeCampaign) {
   const seen = new Set();
   return data.leads.map((l) => ({
     ...l,
-    blocked:
-      c?.sheets?.length && !c.sheets.includes(l.sheet)
+    blocked: carriers.guard(l.email) || l.importProtection || (c?.reviewRequired ? "Review and activate this uploaded workbook before outreach" : null) ||
+      (c?.sheets?.length && !c.sheets.includes(l.sheet)
         ? "Worksheet not selected for this campaign"
-        : reason(l, globalState, seen),
-    lastAttempt:
-      state.history[l.email] || teamSnapshot.records[l.email] || null,
+        : reason(l, globalState, seen)),
+    lastAttempt: (() => { const item = state.history[l.email] || teamSnapshot.records[l.email];
+      return item ? Object.fromEntries(['status','sendStatus','at','confirmedAt','accountEmail','subject','evidence','trackingId','syncNeeded'].filter((key) => item[key] !== undefined).map((key) => [key,item[key]])) : null; })(),
   }));
 }
 function eligible(id, campaignId = state.activeCampaign) {
@@ -508,7 +494,7 @@ async function sendPrepared() {
       lead,
       message: p.message,
       persist,
-      send: () => mail.send(),
+      send: () => mail.send({ beforeSubmit: () => { const hold = carriers.guard(lead.email); if (hold) throw new Error(hold); } }),
       syncStatus,
       event,
       onConfirmed: () => {
@@ -735,7 +721,7 @@ async function startAutomation(input) {
   await persist();
   void runner();
 }
-async function importWorkbook(source, bytes) {
+async function importWorkbook(source, bytes, reviewRequired = false) {
   if (!bytes && (!source || path.extname(source).toLowerCase() !== ".xlsx"))
     throw new Error("Choose an .xlsx workbook.");
   const file = `leads-${randomUUID()}.xlsx`,
@@ -752,7 +738,8 @@ async function importWorkbook(source, bytes) {
     id: randomUUID(),
     name: bytes ? source : path.basename(source),
     workbook: { file, name: bytes ? source : path.basename(source) },
-    enabled: true,
+    enabled: !reviewRequired,
+    reviewRequired,
     sheets: [],
     mapping: {},
   };
@@ -790,6 +777,8 @@ const server = http.createServer(async (req, res) => {
       return response(res, { error: "Invalid host" }, 403);
     const url = new URL(req.url, `http://${expected}`),
       pathname = url.pathname;
+    if (PREVIEW_MODE && ["/api/connect", "/api/resume", "/api/prepare", "/api/send", "/api/start", "/api/batch", "/api/tracking/seed-send", "/api/conversations/scan"].includes(pathname))
+      return response(res, { error: "Sample preview: sending and mailbox connections are disabled." }, 403);
     if (req.method === "POST") {
       if (
         req.headers.origin &&
@@ -800,6 +789,7 @@ const server = http.createServer(async (req, res) => {
         return response(res, { error: "Invalid origin" }, 403);
       if (req.headers["x-fc-request"] !== "1")
         return response(res, { error: "Missing request header" }, 403);
+      if (pathname === "/api/conversations/stop-capture") {req.resume();carriers.capture.stop();return response(res,{ok:true,message:"Stopping read-only scan; saved progress is retained."});}
       if (pathname === "/api/stop") {
         state.automation.enabled = false;
         state.automation.message = "Stopping after the current operation…";
@@ -876,10 +866,41 @@ const server = http.createServer(async (req, res) => {
           );
           if (!name.toLowerCase().endsWith(".xlsx"))
             throw new Error("Choose an .xlsx file.");
-          await importWorkbook(path.basename(name), Buffer.concat(chunks));
+          await importWorkbook(path.basename(name), Buffer.concat(chunks), true);
           return response(res, { ok: true });
         }
+        if (pathname === "/api/conversations/import") {
+          let size = 0; const chunks = [];
+          for await (const chunk of req) { size += chunk.length; if (size > 2_000_000) throw new Error("EML limit is 2 MB."); chunks.push(chunk); }
+          if(url.searchParams.get("mailbox")?.toLowerCase() === "demo.dispatch@example.invalid") throw new Error("Sample data is not imported into the real inbox.");
+          return response(res, await carriers.replies.ingest(Buffer.concat(chunks), url.searchParams.get("mailbox"), { type: "eml" }));
+        }
         const input = await body(req);
+        if (["/api/import-review", "/api/import-apply", "/api/import-activate", "/api/import-undo"].includes(pathname)) {
+          if (prepared || mail.prepared) throw new Error("Close the prepared message before changing imports.");
+          if (pathname !== "/api/import-review" && state.automation.enabled) throw new Error("Stop outreach before saving or activating a revision.");
+          if (pathname === "/api/import-review") return response(res, await carriers.imports.review(input));
+          if (pathname === "/api/import-apply") return response(res, await carriers.imports.apply(input));
+          const value = pathname === "/api/import-undo" ? await carriers.undo(input) : await carriers.activate(input);
+          await reload(state.campaigns.find((c) => c.id === input.campaignId));
+          event("Activated reviewed import revision; campaign remains paused.", { kind: "import", campaignId: input.campaignId, revisionId: input.revisionId });
+          return response(res, { ok: true, message: value.message });
+        }
+        if (pathname.startsWith("/api/conversations/")) {
+          const action = pathname.slice("/api/conversations/".length);
+          const assistantRoutes={draft:'draft',approve:'approve','report-sent':'reportSent','cancel-draft':'cancelDraft',seen:'seen','confirm-details':'confirmDetails','template':'saveTemplate',preferences:'preferences','start-thread':'startConversation'};
+          if (Object.hasOwn(assistantRoutes,action)) {if(["draft","approve"].includes(action))await syncTeam();return response(res,await carriers.assistant[assistantRoutes[action]](input));}
+          if (action === "stop-capture") {carriers.capture.stop();return response(res,{ok:true,message:"Stopping read-only capture; saved cursors/messages remain."});}
+          if (action === "config" && PREVIEW_MODE && input.enabled) throw new Error("Sample preview: live capture cannot be enabled.");
+          if (action === "config") return response(res, await carriers.configure(input));
+          if (action === "carrier-status") return response(res,await carriers.inbox.update(input));
+          if (action === "carrier-seen") return response(res,await carriers.inbox.seen(input));
+          if (action === "history") return response(res, await carriers.replies.refreshHistory());
+          if (action === "scan") return response(res, carriers.capture.start({historical:true}));
+          if (action === "backfill") return response(res, await carriers.capture.resetBackfill());
+          if (action === "review") { delete input.actor; return response(res, await carriers.replies.review(input)); }
+          throw new Error("Conversation action not available.");
+        }
         if (pathname === "/api/history/review") {
           const review = saveFollowUp(state, input);
           await persist();
@@ -1151,6 +1172,9 @@ const server = http.createServer(async (req, res) => {
             );
           const c = state.campaigns.find((c) => c.id === input.id);
           if (!c) throw new Error("Campaign not found.");
+          if (state.automation.enabled) throw new Error("Stop outreach before changing campaign settings.");
+          if (input.enabled && c.reviewRequired) throw new Error("Review and activate this uploaded workbook first.");
+          if (JSON.stringify(input.mapping || {}) !== JSON.stringify(c.mapping || {})) throw new Error("Preview and activate mapping changes in Import review. Campaign settings cannot bypass the reviewed revision.");
           const next = {
             ...c,
             name: String(input.name || c.name).slice(0, 200),
@@ -1407,6 +1431,7 @@ const server = http.createServer(async (req, res) => {
             .trim()
             .toLowerCase();
           if (!EMAIL.test(email)) throw new Error("Enter one valid email.");
+          if (carriers.guard(email)) throw new Error("A captured opt-out protects this contact. Review its conversation evidence; category edits do not clear opt-outs.");
           delete state.suppression[email];
           if (teamSnapshot.suppression?.[email])
             delete teamSnapshot.suppression[email];
@@ -1478,6 +1503,21 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method !== "GET")
       return response(res, { error: "Method not allowed" }, 405);
+    if (pathname === "/api/campaigns") {
+      const workspace = await carriers.imports.load();
+      return response(res, { campaigns: state.campaigns.map((c) => ({ id: c.id, name: c.name, available: existsSync(path.join(DATA, c.workbook.file)), hasWorkspace: Object.values(workspace.imports).some((e) => e.campaignId === c.id) })), activeCampaign: state.activeCampaign });
+    }
+    if (pathname === "/api/imports") return response(res, await carriers.importStatus(url.searchParams.get("campaignId"), url.searchParams));
+    if (pathname === "/api/import-download") {
+      const file = await carriers.imports.download(url.searchParams.get("revisionId"), url.searchParams.get("kind"));
+      res.writeHead(200, { "Content-Type": file.type, "Content-Disposition": `attachment; filename="${file.filename.replace("experiment-", "import-")}"`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" }); return res.end(file.bytes);
+    }
+    if (pathname === "/api/conversations") { url.searchParams.set("mode", "real"); return response(res, { ...await carriers.assistant.list(url.searchParams), capture: await carriers.status(), accounts: [...new Set([...(await carriers.replies.accounts()).filter((a)=>!a.demo).map((a)=>a.email),...carriers.configuredAccounts()])].map((email)=>({email,demo:false})) }); }
+    if (pathname === "/api/conversation-detail") return response(res, await carriers.assistant.detail(url.searchParams.get("id"), url.searchParams.get("type")));
+    if (pathname === "/api/conversations/template-preview") return response(res,await carriers.assistant.previewTemplate({rootId:url.searchParams.get("rootId"),expectedContext:url.searchParams.get("expectedContext"),templateId:url.searchParams.get("templateId")||undefined,expectedTemplateVersion:url.searchParams.has("templateVersion")?Number(url.searchParams.get("templateVersion")):undefined}));
+    if (pathname === "/api/conversations/library") return response(res,await carriers.assistant.library());
+    if (pathname === "/api/conversations/dashboard") return response(res,await carriers.assistant.dashboard());
+    if (pathname === "/api/conversations/approved") {await syncTeam();return response(res,await carriers.assistant.approved(url.searchParams.get("id")));}
     if (pathname === "/api/tracking") {
       return response(res, { ...report(state.tracking, url.searchParams),
         monitorEnabled: process.env.FC_MONITOR_ENABLED === "1",
@@ -1500,6 +1540,7 @@ const server = http.createServer(async (req, res) => {
       return response(res, {
         version: 2,
         appVersion: APP_VERSION,
+        previewMode: PREVIEW_MODE,
         workbook: activeCampaign()?.workbook,
         sheets: activeData().sheets,
         counts,
@@ -1511,6 +1552,7 @@ const server = http.createServer(async (req, res) => {
         activeCampaign: state.activeCampaign,
         workerId: state.workerId,
         firebaseSync: firebaseSync.diagnostics(),
+        carrierWorkspace: { error: carriers.error, sharedProtectionPending: Object.keys(state.replySuppressionOutbox || {}).length },
         connected: await mail.isConnected(),
         signInOpen: !!mail.page && !mail.page.isClosed(),
         browserSession: mail.session,
@@ -1746,7 +1788,7 @@ const server = http.createServer(async (req, res) => {
     });
     res.end(await fs.readFile(path.join(ROOT, "public", file)));
   } catch (e) {
-    response(res, { error: cleanError(e.message) }, 400);
+    response(res, { error: cleanError(e.message).replaceAll("experiment workspace", "import archive").replaceAll("experiment copy", "saved revision") }, e.status || 400);
   }
 });
 server.listen(PORT, "127.0.0.1", () =>
@@ -1770,13 +1812,15 @@ const monitorTimer = setInterval(() => {
   }
   void monitor.run().catch(() => { state.tracking.worker.storage = { status: "Needs attention", message: "Monitoring state could not be saved" }; });
   void firebaseSync.sync().catch(() => {});
+  void carriers.flushSuppression().catch(() => {});
+  if (!PREVIEW_MODE && carriers.capture.env.FC_EXPERIMENT_REPLY_CAPTURE_ENABLED === "1" && carriers.capture.env.FC_EXPERIMENT_REPLY_AUTO === "1") { try { carriers.capture.start(); } catch {} }
 }, 15000);
 monitorTimer.unref();
 if (process.env.FC_MONITOR_ENABLED === "1") void monitor.run().catch(() => {});
 void firebaseSync.sync().catch(() => {});
 async function restoreMailbox() {
   const account = profile();
-  if (!account?.email || account.autoReconnect === false) return;
+  if (PREVIEW_MODE || !account?.email || account.autoReconnect === false) return;
   if (connectionSettings(account).connectionMode === "saved" && !(await mail.hasSavedProfile(account))) return;
   if (busy || shuttingDown) return;
   busy = true;
@@ -1788,7 +1832,7 @@ async function restoreMailbox() {
   } finally { busy = false; await persist(); }
 }
 void restoreMailbox().catch(() => {});
-if (state.automation.enabled) void runner();
+if (state.automation.enabled && !PREVIEW_MODE) void runner();
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, async () => {
     if (shuttingDown) return;
@@ -1797,7 +1841,8 @@ for (const signal of ["SIGINT", "SIGTERM"])
     pixelServer?.close();
     clearInterval(monitorTimer);
     monitor.stop();
-    while (busy || monitor.running) await new Promise((r) => setTimeout(r, 100));
+    carriers.stop();
+    while (busy || monitor.running || carriers.capture.running) await new Promise((r) => setTimeout(r, 100));
     await mail.close();
     await persist();
     process.exit(0);

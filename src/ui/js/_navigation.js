@@ -4,6 +4,8 @@ function navigate(viewName) {
     "dashboard",
     "leads",
     "campaigns",
+    "imports",
+    "conversations",
     "templates",
     "live-activity",
     "activity",
@@ -14,6 +16,7 @@ function navigate(viewName) {
   ];
   const target = validViews.includes(viewName) ? viewName : "dashboard";
 
+  document.body.classList.toggle("mailroom-active",target==="conversations");
   document.querySelectorAll(".view-page").forEach((el) => {
     el.classList.toggle("active", el.id === `view-${target}`);
   });
@@ -22,6 +25,8 @@ function navigate(viewName) {
     link.classList.toggle("active", link.dataset.view === target);
   });
 
+  if (target === "imports" && state) window.dispatchEvent(new CustomEvent("fc-import-view", { detail: state.activeCampaign }));
+  if (target === "conversations" && state) window.dispatchEvent(new Event("fc-conversation-view"));
   if (target === "catalog" && state) void loadCatalog().catch((e) => notice(e.message));
   if (target === "activity" && state) void loadHistory().catch((e) => notice(e.message));
   if (target === "tracking" && state) void loadTracking().catch((e) => notice(e.message));
@@ -36,6 +41,8 @@ window.addEventListener("hashchange", () => {
 
 // Ensure mouse click removes focus ring
 document.querySelectorAll(".nav-link").forEach((link) => {
+  if(!link.getAttribute("aria-label"))link.setAttribute("aria-label",link.textContent.trim());
+  link.title=link.getAttribute("aria-label");
   link.addEventListener("click", () => {
     link.blur();
   });

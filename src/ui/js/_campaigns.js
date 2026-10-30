@@ -19,7 +19,9 @@ if ($("upload"))
       await refresh();
       fillCampaign();
       $("upload").value = "";
-      notice("Campaign imported successfully.");
+      window.dispatchEvent(new CustomEvent("fc-import-view", { detail: state.activeCampaign }));
+      location.hash = "imports";
+      notice("Workbook uploaded. Review the mapping, save a revision and activate it before enabling outreach.");
     });
 
 

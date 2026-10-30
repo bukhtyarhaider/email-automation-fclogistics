@@ -108,6 +108,92 @@ class WorkbookTests(unittest.TestCase):
             self.assertNotIn('r="2"', xml)
             self.assertIn('r="1"', xml)
 
+    def test_import_review_and_mapping_preview_leave_every_source_byte_unchanged(self):
+        with zipfile.ZipFile(self.path) as z:
+            parts = {i: z.read(i) for i in z.namelist()}
+        parts["xl/worksheets/sheet1.xml"] = self.xml.replace(cell("H2", "owner@example.com"), cell("H2", "3 months") + cell("O2", "owner@example.com")).encode()
+        with zipfile.ZipFile(self.path, "w") as z:
+            for part, content in parts.items():
+                z.writestr(part, content)
+        original = Path(self.path).read_bytes()
+        saved = workbook.review_import(self.path)
+        self.assertEqual(saved["summary"]["flaggedRows"], 1)
+        self.assertEqual(saved["sheets"][0]["review"]["emailColumns"], {"O": 1})
+        preview = workbook.review_import(self.path, {"Leads": {"email": "O"}})
+        self.assertEqual(preview["summary"]["flaggedRows"], 0)
+        self.assertTrue(preview["readOnly"])
+        self.assertEqual(Path(self.path).read_bytes(), original)
+        self.assertNotIn("review", workbook.read(self.path)["sheets"][0])
+
+    def test_import_review_validates_mappings_and_reports_unmapped_sheet_samples(self):
+        for mapping in [[], {"Leads": []}, {"Leads": {"email": "../H"}}, {"Missing": {"email": "H"}}]:
+            with self.assertRaises(ValueError):
+                workbook.review_import(self.path, mapping)
+        with zipfile.ZipFile(self.path) as z:
+            parts = {i: z.read(i) for i in z.namelist()}
+        parts["xl/worksheets/sheet1.xml"] = self.xml.replace(cell("H1", "Email"), cell("H1", "Unknown")).replace(cell("G1", "Status"), cell("G1", "Unknown status")).encode()
+        with zipfile.ZipFile(self.path, "w") as z:
+            for part, content in parts.items():
+                z.writestr(part, content)
+        report = workbook.review_import(self.path)
+        self.assertEqual(report["summary"]["rows"], 0)
+        self.assertEqual(report["summary"]["missingStatusSheets"], 1)
+        self.assertEqual(report["sheets"][0]["review"]["emailColumns"], {"H": 1})
+        self.assertEqual(report["sheets"][0]["review"]["samples"][0]["row"], 2)
+
+    def test_status_header_added_only_to_experiment_copy_preserves_other_parts_and_cells(self):
+        with zipfile.ZipFile(self.path) as z:
+            parts = {i: z.read(i) for i in z.namelist()}
+        parts["xl/worksheets/sheet1.xml"] = self.xml.replace(cell("G1", "Status"), cell("G1", "Tracking")).encode()
+        with zipfile.ZipFile(self.path, "w") as z:
+            for part, content in parts.items():
+                z.writestr(part, content)
+        original = Path(self.path).read_bytes()
+        working = os.path.join(self.tmp.name, "experiment.xlsx")
+        result = workbook.experiment_import(self.path, {"mapping": {}, "addStatusColumns": {"Leads": "J"}, "output": working})
+        self.assertEqual(result["report"]["summary"]["missingStatusSheets"], 0)
+        self.assertEqual(result["report"]["mapping"], {"Leads": {"status": "J"}})
+        self.assertEqual(workbook.read(working)["leads"][0]["statusCell"], "J2")
+        self.assertEqual(Path(self.path).read_bytes(), original)
+        with zipfile.ZipFile(working) as z:
+            for part, content in parts.items():
+                if part != "xl/worksheets/sheet1.xml":
+                    self.assertEqual(z.read(part), content)
+            xml = z.read("xl/worksheets/sheet1.xml").decode()
+            self.assertIn('<f>1+1</f><v>2</v>', xml)
+            self.assertIn('<c r="G2" s="3"/>', xml)
+            self.assertIn(cell("H2", "owner@example.com"), xml)
+
+    def test_status_header_refuses_existing_cells_invalid_columns_and_conflicting_mapping(self):
+        with zipfile.ZipFile(self.path) as z:
+            parts = {i: z.read(i) for i in z.namelist()}
+        parts["xl/worksheets/sheet1.xml"] = self.xml.replace(cell("G1", "Status"), cell("G1", "Tracking")).encode()
+        with zipfile.ZipFile(self.path, "w") as z:
+            for part, content in parts.items():
+                z.writestr(part, content)
+        original = Path(self.path).read_bytes()
+        for additions in [{"Leads": "G"}, {"Leads": "H"}, {"Leads": "ZZZ"}, {"Missing": "J"}]:
+            with self.assertRaises(ValueError):
+                workbook.experiment_import(self.path, {"addStatusColumns": additions})
+        with self.assertRaises(ValueError):
+            workbook.experiment_import(self.path, {"mapping": {"Leads": {"status": "G"}}, "addStatusColumns": {"Leads": "J"}})
+        with self.assertRaises(ValueError):
+            workbook.experiment_import(self.path, {"mapping": {"Leads": {"Status": "G"}}, "addStatusColumns": {"Leads": "J"}})
+        self.assertEqual(Path(self.path).read_bytes(), original)
+
+    def test_new_status_header_expands_sheet_dimensions_on_either_side(self):
+        with zipfile.ZipFile(self.path) as z:
+            parts = {i: z.read(i) for i in z.namelist()}
+        xml = self.xml.replace(cell("A1", "Carrier Legal Name"), cell("B1", "Carrier Legal Name")).replace(cell("A2", "Example LLC"), cell("B2", "Example LLC")).replace(cell("G1", "Status"), cell("G1", "Tracking")).replace('<sheetData>', '<dimension ref="B1:I2"/><sheetData>')
+        for col, dimension in [("A", "A1:I2"), ("J", "B1:J2")]:
+            with self.subTest(col=col):
+                with zipfile.ZipFile(self.path, "w") as z:
+                    for part, content in parts.items():
+                        z.writestr(part, xml.encode() if part == "xl/worksheets/sheet1.xml" else content)
+                workbook.add_status_columns(self.path, {"Leads": col})
+                with zipfile.ZipFile(self.path) as z:
+                    self.assertIn(f'ref="{dimension}"', z.read("xl/worksheets/sheet1.xml").decode())
+
 
 if __name__ == "__main__":
     unittest.main()

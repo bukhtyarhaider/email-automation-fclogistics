@@ -1,10 +1,11 @@
 {
   "name": "fc-logistics-outreach",
-  "version": "2.1.0",
+  "version": "2.2.0-rc.9",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node src/server.mjs",
+    "experiment": "node scripts/experiment.mjs",
     "launch": "node scripts/launch.mjs",
     "setup": "node scripts/setup.mjs",
     "doctor": "node scripts/doctor.mjs",
@@ -17,7 +18,8 @@
     "firebase-admin": "^13.10.0",
     "imapflow": "^2.4.2",
     "mailparser": "^3.9.39",
-    "playwright": "^1.64.0"
+    "playwright": "^1.64.0",
+    "html-to-text": "10.0.1"
   },
   "engines": {
     "node": ">=20",

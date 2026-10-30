@@ -138,6 +138,7 @@ function renderLeadDetails(lead, message, warnings) {
     </div>
 
     ${warningsHtml}
+    <section class="carrier-evidence"><h4>Carrier identity &amp; source</h4>${lead.carrier ? `<p>${escape(lead.carrier.identityStatus)} · USDOT ${escape(lead.carrier.dot || 'unresolved')} · ${escape(lead.carrier.id)}</p><p>Source: ${escape(lead.carrier.provenance.sourceLabel)} · Acquired: ${escape(lead.carrier.provenance.acquiredAt || 'unknown')} · Contact permission: ${escape(lead.carrier.provenance.permission)}</p><p>Source-reported identity; authority has not been verified.</p>` : '<p>Legacy / unreviewed import. Review and activate a revision to attach stable identity and source evidence.</p>'}<button class="secondary" data-conversation-email="${escape(lead.email)}">View captured conversations</button></section>
 
     <!-- Core Contact Information Card -->
     <div class="lead-details-card">

@@ -5,9 +5,11 @@ data/*
 .env
 .env.*
 !.env.example
+!.env.experiment.example
 __pycache__/
 outputs/
 
 team-data/
 dist/
 .DS_Store
+experiment-data/

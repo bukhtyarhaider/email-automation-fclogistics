@@ -1,5 +1,6 @@
 async function refresh() {
   state = await api("/api/state");
+  if ($("releasePreviewBanner")) $("releasePreviewBanner").hidden = !state.previewMode;
   if ($("appVersion")) $("appVersion").textContent = `Desktop v${state.appVersion}`;
   for (const key of ["total", "ready", "excluded", "sent"]) {
     const el = $(key);

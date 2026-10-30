@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Outreach Desk · Sales Operations</title>
-    <link rel="stylesheet" href="/style.css?v=2.1.0" />
+    <link rel="stylesheet" href="/style.css?v=2.2.0-rc.9" />
   </head>
   <body>
     <div class="app-shell">
@@ -80,6 +80,8 @@
               </svg>
               <span>Campaigns & Sheets</span>
             </a>
+            <a class="nav-link" href="#imports" data-view="imports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 3h12l4 4v14H4zM8 12h8M8 16h8"/></svg><span>Import review &amp; repairs</span></a>
+            <a class="nav-link" href="#conversations" data-view="conversations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4h18v14H7l-4 3zM3 4l9 7 9-7"/></svg><span>Carrier conversations</span></a>
             <a class="nav-link" href="#templates" data-view="templates">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -141,6 +143,7 @@
 
         <!-- Main Viewport -->
         <main class="app-viewport">
+          <p id="releasePreviewBanner" class="carrier-preview-banner" hidden>Sample preview · Sending and live mailbox capture are disabled. Use your normal app window for real inbox capture.</p>
           <!-- Notification Toast -->
           <div id="notice" role="status" hidden></div>
 
@@ -206,6 +209,7 @@
               </div>
             </div>
 
+            <section class="panel carrier-attention"><div class="panel-head"><h2 class="panel-title">Carrier messages needing attention</h2><a class="button secondary" href="#conversations">Open carrier conversations</a></div><p id="carrierAttentionStatus" class="hint" role="status">Loading carrier activity…</p><div id="carrierAttentionMetrics" class="carrier-attention-metrics"></div><div id="carrierAttentionRows"></div></section>
             <!-- Dashboard Operations Grid -->
             <div class="dashboard-grid">
               <!-- Left Column: Runner Status & Pacing -->
@@ -412,7 +416,7 @@
               </div>
               <div class="header-actions">
                 <button id="deleteCampaignBtn" class="danger">Delete campaign</button>
-                <button id="saveCampaign">Save campaign settings</button>
+                <button id="openImportReview" class="secondary">Review or repair mapping</button><button id="saveCampaign">Save campaign settings</button>
               </div>
             </div>
 
@@ -464,7 +468,7 @@
 
                 <div class="form-group">
                   <label for="mapping">JSON Mapping Configuration</label>
-                  <textarea id="mapping" rows="7" spellcheck="false" style="font-family: var(--font-mono); font-size: 12px;"></textarea>
+                  <textarea id="mapping" readonly rows="7" spellcheck="false" style="font-family: var(--font-mono); font-size: 12px;"></textarea>
                 </div>
 
                 <div class="form-group">
@@ -475,6 +479,98 @@
             </div>
           </section>
 
+
+<section class="view-page" id="view-imports"><div class="page-header"><div><p class="page-eyebrow">LEAD DATA</p><h1 class="page-title">Review &amp; repair imports</h1><p class="page-subtitle">Check original rows, correct mappings, and activate a recoverable campaign workbook.</p></div></div>    <section class="panel">
+      <div class="experiment-form"><label for="reviewCampaign">Campaign<select id="reviewCampaign"><option value="">Loading campaigns…</option></select></label><button id="reviewLoad" disabled>Review saved mapping</button></div>
+      <p id="reviewStatus" class="hint" role="status" aria-live="polite">Loading campaigns…</p>
+      <p id="reviewError" class="experiment-error" role="alert" hidden></p>
+    </section>
+    <section id="reviewResults" hidden>
+      <div class="experiment-result-heading"><h2 id="reviewHeading">Saved mapping</h2><span id="reviewChange" class="hint"></span></div>
+      <div id="reviewMetrics" class="experiment-metrics"></div>
+      <p id="reviewBasis" class="hint"></p>
+      <p id="reviewIdentity" class="hint"></p>
+      <div class="experiment-layout">
+        <section class="panel experiment-mapping"><h2>Choose columns</h2><p class="hint">Choose columns that match the original worksheet. Keep outreach Status separate from operating status. Preview before saving.</p><div id="reviewMappingWizard"></div><details><summary>Advanced mapping JSON</summary><label for="reviewMapping">Proposed mapping (JSON)</label><textarea id="reviewMapping" rows="10" spellcheck="false"></textarea><label for="reviewStatusColumns">Add missing Status headers (JSON)</label><textarea id="reviewStatusColumns" rows="3" spellcheck="false">{}</textarea><p class="hint">Example: {"Leads":"D"}. The column must be entirely unused. Only saved copies receive new headers; existing cells are never overwritten.</p></details><div class="experiment-buttons"><button id="reviewPreview">Preview changes</button><button id="reviewReset" class="secondary">Restore saved mapping</button></div><p class="hint">Mapping drafts stay temporary until you explicitly save a reviewed revision. Original files stay unchanged.</p></section>
+        <section class="experiment-sheets"><h2>Worksheet evidence</h2><p class="hint">Email-column candidates are syntax counts, not verified addresses. Mixed layouts may need separate source sheets. Counts alone are not a safe reason to remap a whole worksheet.</p><div id="reviewSheets"></div></section>
+      </div>
+    </section>
+    <section id="repairPanel" class="panel experiment-repair" hidden>
+      <h2>Save this reviewed repair</h2>
+      <p class="hint">Save the exact preview as a new reviewed revision. Each revision keeps its original workbook, repaired copy, mapping and source details. Save first, then explicitly activate the selected revision below. Activation keeps the campaign paused.</p>
+      <div class="experiment-source-fields">
+        <label for="repairSource">Where did these leads come from?<input id="repairSource" maxlength="200" placeholder="Export, supplier, or existing contact list" /></label>
+        <label for="repairAcquired">Source acquisition date (optional)<input id="repairAcquired" type="date" /></label>
+        <label for="repairPermission">Contact permission stated by operator<select id="repairPermission"><option value="unknown">Unknown / not established</option><option value="requested_contact">Carrier requested contact</option><option value="existing_relationship">Existing relationship</option></select></label>
+      </div>
+      <label class="check"><input id="repairConfirm" type="checkbox" />Save this reviewed copy without starting outreach.</label>
+      <button id="repairApply" disabled>Save reviewed revision</button>
+      <p id="repairPreviewNote" class="hint">Preview your proposal before saving.</p>
+    </section>
+    <section id="workspacePanel" class="panel experiment-workspace" hidden>
+      <div class="experiment-result-heading"><h2>Saved revisions</h2><button id="workspaceRefresh" class="secondary">Refresh revisions</button></div>
+      <p id="workspaceNote" class="hint" role="status"></p>
+      <div class="experiment-form"><label for="workspaceRevision">Revision<select id="workspaceRevision"></select></label><button id="workspaceDraft" class="secondary">Use revision as draft</button><button id="workspaceUndo" class="secondary">Undo last activation</button><button id="workspaceRestore" class="secondary">Use selected revision for campaign</button></div>
+      <p class="hint">Activation creates a separate campaign workbook. Previous workbooks, saved revisions, carrier IDs and contact protections are retained. Outreach stays paused until you enable the campaign.</p>
+      <div id="workspaceDownloads" class="experiment-buttons" hidden><a id="workspaceWorking" class="button secondary">Download workbook copy</a><a id="workspaceOriginal" class="button secondary">Download original snapshot</a><a id="workspaceMapping" class="button secondary">Download mapping &amp; provenance</a></div>
+      <p class="hint">Workbook copies retain the source field layout. The saved mapping controls how rows are read; only explicitly added Status headers change workbook cells.</p>
+      <div id="workspaceIdentity" class="experiment-identity-summary"></div>
+      <p class="hint">USDOT grouping is based on source data and has not been verified with FMCSA. Conflicts and layout issues stay in review. No sending eligibility is granted here.</p>
+      <div class="experiment-form"><label for="workspaceSearch">Find a carrier, email, USDOT, or carrier ID<input id="workspaceSearch" type="search" /></label><button id="workspaceFind" class="secondary">Find records</button></div>
+      <div class="experiment-scroll"><table><thead><tr><th>Carrier / contact</th><th>Identity</th><th>Source evidence</th><th>Contact protections</th></tr></thead><tbody id="workspaceRows"></tbody></table></div>
+      <div class="experiment-result-heading"><p id="workspacePage" class="hint"></p><div class="experiment-buttons"><button id="workspacePrev" class="secondary">Previous</button><button id="workspaceNext" class="secondary">Next</button></div></div>
+    </section>
+</section>
+
+<section class="view-page mailroom-page" id="view-conversations">
+  <header class="page-header mailroom-header"><div><p class="page-eyebrow">CARRIER EMAIL</p><h1 class="page-title">Conversations</h1></div><label class="mailroom-mailbox"><span class="sr-only">Mailbox</span><select id="replyMailbox"><option value="">All mailboxes</option></select></label><label class="mailroom-search"><span class="sr-only">Search conversations</span><input id="replySearch" type="search" placeholder="Search conversations, senders, or keywords…"></label></header>
+  <div class="mailroom-toolbar"><nav class="mailroom-tabs" aria-label="Conversation queues"><button type="button" data-mailroom-work="active" aria-pressed="false">Active <span id="mailroomActiveCount">0</span></button><button type="button" data-mailroom-work="needs_reply" aria-pressed="true">Needs reply <span id="mailroomNeedsCount">0</span></button><button type="button" data-mailroom-work="all" aria-pressed="false">All <span id="mailroomAllCount">0</span></button><button type="button" data-mailroom-work="no_reply" aria-pressed="false">Waiting <span id="mailroomWaitingCount">0</span></button><button type="button" data-mailroom-work="in_review" aria-pressed="false">In review <span id="mailroomReviewCount">0</span></button></nav><div class="mailroom-tools"><button id="replyScan" class="secondary" disabled>Scan previous replies</button><button id="replyStopCapture" class="secondary" disabled hidden>Stop scan</button><button id="mailroomFiltersOpen" class="secondary">Filters</button><button id="mailroomToolsOpen" class="secondary">Mailbox tools</button></div></div>
+  <p id="replyScanProgress" class="mailroom-scan-note" role="status" aria-live="polite"></p><p id="replyError" class="experiment-error" role="alert" hidden></p>
+  <div class="mailroom-workspace" id="mailroomWorkspace" data-thread-open="false">
+    <aside class="mailroom-list-pane" aria-label="Carrier conversations"><div id="mailroomList" class="mailroom-list" aria-label="Conversation results"></div><div class="mailroom-pagination"><span id="replyPage" class="hint"></span><button id="replyPrev" class="secondary" aria-label="Previous page">Previous</button><button id="replyNext" class="secondary" aria-label="Next page">Next</button></div></aside>
+    <div class="mailroom-reader-stage"><div id="mailroomEmpty" class="mailroom-empty"><h2>Choose a conversation</h2><p>Read a carrier’s message and write your reply here.</p><button class="secondary" id="mailroomEmptyTools">Set up mailbox capture</button></div><p id="mailroomLoading" class="mailroom-empty" role="status" hidden>Opening conversation…</p>
+      <section id="replyInspector" class="mailroom-reader" hidden>
+        <header class="mailroom-subject-bar"><button id="replyClose" class="secondary mailroom-back">Back to inbox</button><h2 id="replyThreadTitle">Conversation</h2><button id="replyThreadRefresh" class="secondary">Refresh</button><button id="mailroomDetailsOpen" class="secondary">Details</button></header>
+        <div id="carrierRecord" class="carrier-record" hidden><div><strong id="carrierRecordLabel"></strong><p id="carrierHistoryNote" class="hint"></p></div><button id="carrierManage" class="secondary">Carrier status</button></div><p id="mailroomFilterNote" class="hint" hidden></p><div id="replyThread" class="mailroom-thread"></div><p id="mailroomHold" class="mailroom-hold" role="status" hidden></p><button id="mailroomResolve" class="secondary" hidden>Review conversation match</button>
+            <section id="replyAssistant" class="reply-assistant" hidden>
+      <p id="assistantStatus" class="hint" role="status"></p><p id="assistantError" class="experiment-error" role="alert" hidden></p>
+
+      <div class="assistant-draft">
+        <div class="mailroom-compose-heading"><h3>Your reply <span>(draft)</span></h3><p id="assistantDraftBasis" class="hint"></p><button id="mailroomCarrierDetails" class="secondary">Details</button></div>
+        <label for="assistantBody"><span class="sr-only">Write in your own words</span><textarea id="assistantBody" rows="7" maxlength="12000" placeholder="Write a reply in your own words…"></textarea></label>
+        <p id="assistantDraftState" class="hint" role="status" aria-live="polite"></p>
+        <div class="experiment-buttons mailroom-compose-actions"><button id="assistantSaveDraft" class="secondary">Save draft</button><button id="assistantSuggest" class="secondary">Help with wording</button>        <details id="assistantSavedReplies" class="mailroom-saved-lines"><summary>Saved lines</summary><div class="mailroom-lines-popover"><label for="assistantSavedSearch">Find saved replies<input id="assistantSavedSearch" type="search" placeholder="Search name, purpose or wording"></label><div id="assistantSavedCards" class="saved-reply-list"></div><button id="mailroomManageLines" class="secondary">Manage saved replies</button></div></details><button id="assistantReviewOpen" class="primary mailroom-review-primary">Review reply</button></div>
+        <select id="assistantTemplate" hidden aria-hidden="true" tabindex="-1"></select>
+
+        <section id="assistantWordingPreview" class="wording-preview" hidden><h4 id="assistantWordingName"></h4><pre id="assistantWordingText"></pre><p class="hint">Preview only. Choose where to put it, then edit it freely.</p><div class="experiment-buttons"><button id="assistantInsertWording" class="secondary">Insert at cursor</button><button id="assistantReplaceWording" class="secondary">Replace reply</button><button id="assistantDismissWording" class="secondary">Close preview</button></div></section>
+
+        <div id="mailroomApprovedActions" class="experiment-buttons" hidden><button id="assistantCopy" class="secondary">Copy approved reply</button><a id="assistantMailbox" class="button secondary" target="_blank" rel="noopener noreferrer" hidden>Open my mailbox</a></div><p class="hint">You send from your existing mailbox. Use native Reply and paste above your signature.</p>
+        <details id="mailroomSentReport" hidden><summary>After sending in your mailbox</summary><label>Mailbox action evidence<input id="assistantSentNote" maxlength="2000" placeholder="Record what you checked in your mailbox"></label><label class="check"><input id="assistantSentConfirm" type="checkbox">I sent this approved reply myself in the correct mailbox/thread.</label><button id="assistantReportSent" class="secondary">Record my mailbox action</button><p class="hint">Your report, a matching Sent copy and delivery evidence remain separate.</p></details>
+        <details><summary>Draft options &amp; history</summary><div class="experiment-buttons"><button id="assistantNewDraft" class="secondary">New draft</button><button id="assistantCancelDraft" class="secondary">Cancel saved draft / approval</button><button id="assistantSaveAsWording" class="secondary">Save this wording for reuse</button></div><div id="assistantHistory"></div></details>
+      </div>
+
+
+    </section>
+      </section>
+    </div>
+  </div>
+  <dialog id="mailroomFiltersDialog" class="mailroom-dialog" aria-label="Conversation filters"><div class="mailroom-dialog-heading"><h2>Conversation filters</h2><button class="secondary" data-close-mailroom="mailroomFiltersDialog">Close filters</button></div><div class="reply-filters"><label>View<select id="replyGrouping"><option value="carriers">Carriers with full email history</option><option value="threads">Individual tool threads</option></select></label><label hidden for="replyMode">Data<select id="replyMode"><option value="real">Real replies</option><option value="demo">Sample replies</option></select></label><label for="replyWork">Work queue<select id="replyWork"><option value="active">Active conversations</option><option value="in_review">Carriers in review</option><option value="signed">Signed carriers</option><option value="closed">Closed carriers</option><option value="needs_reply" selected>Needs my reply</option><option value="all">All tool-sent conversations</option><option value="replied">Carriers who replied</option><option value="no_reply">No captured carrier reply</option><option value="follow_up">Follow-up eligible</option><option value="unread">New / unread</option><option value="approval">Needs draft approval</option><option value="interested">Interested</option><option value="positive">Positive engagement</option><option value="negative">Negative / opt-out</option><option value="missing_details">Missing carrier details</option></select></label><label for="replyCategory">Category<select id="replyCategory"><option value="">All categories</option><option value="needs_match">Needs conversation match</option><option value="ignored">Ignored review items</option></select></label><button id="replyRefresh" class="secondary">Refresh inbox</button></div><p class="hint">Queues use captured local evidence. Waiting means no captured human reply, rather than proof of silence.</p></dialog>
+  <dialog id="mailroomToolsDialog" class="mailroom-dialog mailroom-wide" aria-label="Mailbox tools"><div class="mailroom-dialog-heading"><h2>Mailbox tools</h2><button class="secondary" data-close-mailroom="mailroomToolsDialog">Close mailbox tools</button></div><p id="replyStatus" class="hint" role="status" aria-live="polite">Loading…</p>  <details id="replyCaptureTools" class="panel reply-tools"><summary id="replyCaptureSummary">Capture &amp; mailbox setup</summary>
+    <div class="experiment-result-heading"><h2>Capture replies</h2><div class="experiment-buttons"><button id="replyHistory" class="secondary">Load local sent history</button><button hidden id="replyDemo" class="secondary">Load sample inbox</button></div></div>
+    <p id="replyCaptureNote" class="hint"></p><p id="replyCoverage" class="hint"></p><div id="replyMonitor"></div>
+    <details id="replyConfigPanel"><summary>Read-only mailbox capture settings</summary><p class="hint">Choose mailboxes you are authorized to read. Passwords/tokens stay in this PC’s .env file; enter their environment-variable names here. TLS is required. Captured coverage and errors remain visible below.</p><div class="reply-config-grid"><label>Capture enabled<input id="replyConfigEnabled" type="checkbox"></label><label>Check automatically<input id="replyConfigAuto" type="checkbox"></label><label class="check"><input id="replyConfigAll" type="checkbox">Read all available history</label><label class="check"><input id="replyConfigAllFolders" type="checkbox">Include archive and other available folders (excluding Drafts)</label><label>Automatic pages per folder/check<input id="replyConfigPages" type="number" min="1" max="10" value="5"></label><label>Automatic sync from<input id="replyConfigSince" type="date"></label><label>Messages per page<input id="replyConfigBatch" type="number" min="1" max="100" value="50"></label></div><div class="reply-config-reuse"><label>Existing mailbox credentials<select id="replyExistingMailbox"><option value="">Choose a saved mailbox setup…</option></select></label><button id="replyUseExistingMailbox" class="secondary" type="button">Use existing mailbox setup</button><p id="replyExistingMailboxNote" class="hint">Reuses environment-variable references only. Save and authorize read-only capture separately.</p></div><div id="replyConfigMailboxes"></div><button id="replyConfigAdd" class="secondary">Add mailbox</button><label class="check"><input id="replyConfigConfirm" type="checkbox">I authorize read-only access to these configured mailboxes.</label><button id="replyConfigSave">Save capture settings</button><p id="replyConfigNote" class="hint"></p><button id="replyBackfill" class="secondary">Restart reply backfill</button><p class="hint">Retains captured messages, reviews and opt-out protections. Folder cursors are restarted only.</p></details>
+    <details><summary>Import one exported reply (.eml)</summary><div class="reply-import-form"><label for="replyImportAccount">Receiving/sending mailbox<select id="replyImportAccount"></select></label><label for="replyEml">Exported message<input id="replyEml" type="file" accept=".eml,message/rfc822" /></label><button id="replyImport" class="secondary">Import EML</button></div><p class="hint">Use an authorized exported message, up to 2 MB. The mailbox needs a confirmed tool-sent email; imported contacts alone are excluded. Unknown contacts/references are not retained. Imported messages receive the same matching and review rules as IMAP capture.</p></details>
+  </details>
+<p id="replyProtection" class="reply-protection" role="status" hidden></p><p id="replyProtectionDelivery" class="hint" role="status"></p><div id="replyMetrics" class="experiment-metrics"></div><p id="replyMetricNote" class="hint"></p></dialog>
+  <dialog id="mailroomDetailsDialog" class="mailroom-dialog mailroom-wide" aria-label="Conversation details"><div class="mailroom-dialog-heading"><h2>Conversation details</h2><button class="secondary" data-close-mailroom="mailroomDetailsDialog">Close details</button></div><section id="carrierStatusPanel" class="carrier-status-panel" hidden><h3>Carrier workflow</h3><label>Status<select id="carrierStage"><option value="waiting">Waiting for a response</option><option value="in_review">In review</option><option value="active">Active conversation</option><option value="follow_up">Follow up</option><option value="signed">Signed</option><option value="closed">Closed</option></select></label><label>Follow-up date<input id="carrierFollowUpAt" type="datetime-local"></label><label>Status / follow-up note<textarea id="carrierStatusNote" maxlength="2000" rows="2"></textarea></label><div class="experiment-buttons"><button id="carrierStatusSave" class="secondary">Save carrier status</button><button id="carrierStatusReload" class="secondary" hidden>Reload saved status</button><button id="carrierSeen" class="secondary">Mark history read</button></div><p id="carrierStatusResult" class="hint" role="status"></p><p class="hint">Status labels and dates are for your workflow. They do not send email or clear opt-outs, uncertain sends or thread review requirements.</p></section><p id="mailroomReplyHistory" class="hint"></p><details><summary>Full thread &amp; message evidence</summary><div id="mailroomThreadHistory"></div></details><div class="experiment-buttons"><button id="replyMarkRead" class="secondary">Mark read</button><button id="replyMarkUnread" class="secondary">Mark unread</button><button id="replyStartThread" class="secondary" hidden>Create conversation</button></div><div id="assistantIntent" class="carrier-evidence"></div>      <details id="assistantCarrierDetails"><summary>Carrier details &amp; source evidence</summary><p class="hint">Extracted values are suggestions. Confirm each value against its matched carrier message. A reviewed email statement does not verify phone ownership or carrier authority.</p><div id="assistantDetails"></div><label class="check"><input id="assistantDetailsConfirm" type="checkbox">I reviewed the carrier-stated values and their source messages.</label><label>Detail review note<input id="assistantDetailsNote" maxlength="2000"></label><button id="assistantConfirmDetails" class="secondary">Confirm selected details</button><details><summary>Confirm a value the extractor missed</summary><label>Field<select id="assistantManualField"></select></label><label>Carrier-stated value<input id="assistantManualValue" maxlength="240"></label><label>Source carrier message<select id="assistantManualSource"></select></label><label>Exact quote containing the value<textarea id="assistantManualQuote" rows="2" maxlength="1000"></textarea></label><button id="assistantManualConfirm" class="secondary">Confirm cited value</button></details></details>    <section id="replyReviewPanel" class="reply-review" hidden>
+      <h3>Review selected message</h3><p id="replyReviewEvidence" class="hint"></p>
+      <label for="replyReviewCategory">Category<select id="replyReviewCategory"></select></label>
+      <div id="replyMatchPanel" hidden><label for="replyLink">Choose conversation<select id="replyLink"></select></label><label class="check"><input id="replyLinkConfirm" type="checkbox" />I checked the original evidence and confirm this manual link.</label><p class="hint">A manual link requires a note explaining the evidence. Subject similarity alone is insufficient.</p></div>
+      <label for="replyReviewNote">Review / evidence note<textarea id="replyReviewNote" rows="4" maxlength="2000"></textarea></label><div class="experiment-buttons"><button id="replyReviewSave">Save reply review</button><button id="replyIgnore" class="secondary" hidden>Ignore review item</button><button id="replyUnignore" class="secondary" hidden>Return to review</button></div><p class="hint">Drafts stay while navigating this page. Reload discards unsaved drafts. Changing a category or ignoring a review item never clears an existing opt-out protection.</p>
+    </section></dialog>
+  <dialog id="mailroomLibraryDialog" class="mailroom-dialog mailroom-wide" aria-label="Saved replies"><div class="mailroom-dialog-heading"><h2>Saved replies</h2><button class="secondary" data-close-mailroom="mailroomLibraryDialog">Close saved replies</button></div>  <details class="panel reply-library"><summary>Manage saved replies &amp; follow-up rules</summary><p class="hint">Saved wording is optional. Preview it inside a conversation before using it. Initial outreach templates are separate.</p><div class="reply-library-grid"><div><label for="replyLibrarySearch">Find saved replies<input id="replyLibrarySearch" type="search" placeholder="Search name or wording"></label><div id="replyLibraryCards" class="saved-reply-list"></div></div><div><label>Saved reply<select id="replyLibrarySelect"></select></label><button id="replyLibraryNew" class="secondary">New template</button><label>Name<input id="replyLibraryName" maxlength="100"></label><label>Use for<select id="replyLibraryCategory"><option value="interested">Interested</option><option value="positive">Positive response</option><option value="pricing">Pricing question</option><option value="how_it_works">How it works</option><option value="neutral">Clarify / neutral</option><option value="negative">Acknowledge decline</option><option value="follow_up">No-response follow-up</option></select></label><label>Body<textarea id="replyLibraryBody" rows="8" maxlength="12000"></textarea></label><p id="replyLibraryVariables" class="hint"></p><label class="check"><input id="replyLibraryActive" type="checkbox" checked>Active template</label><div id="replyLibraryFields" class="template-field-buttons"></div><div class="experiment-buttons"><button id="replyLibrarySave">Save wording</button><button id="replyLibraryCopy" class="secondary">Save as new copy</button></div><p id="replyLibraryVersion" class="hint"></p></div></div><div class="reply-config-grid"><label>Wait days before suggesting a follow-up<input id="replyFollowDays" type="number" min="1" max="30" value="3"></label><label>Maximum reviewed follow-ups<input id="replyFollowMax" type="number" min="1" max="3" value="1"></label><button id="replyFollowSave" class="secondary">Save follow-up rules</button></div><p id="replyLibraryStatus" class="hint" role="status" aria-live="polite"></p></details></dialog>
+  <dialog id="mailroomApprovalDialog" class="mailroom-dialog" aria-label="Review and approve reply"><div class="mailroom-dialog-heading"><h2>Review this reply</h2><button class="secondary" data-close-mailroom="mailroomApprovalDialog">Close review</button></div><p id="mailroomApprovalRecipient" class="hint"></p><pre id="mailroomApprovalBody"></pre><p id="mailroomApprovalError" class="experiment-error" role="alert" hidden></p>        <details id="assistantReview"><summary>Review &amp; approve this reply</summary><p class="hint">Check the exact text above and the sending account/recipient. Changes require fresh approval.</p><label for="assistantApprovalNote">Approval note<input id="assistantApprovalNote" maxlength="2000" placeholder="What you reviewed"></label><label class="check"><input id="assistantApproveConfirm" type="checkbox">I reviewed this exact text, recipient, sending account and message evidence.</label><button id="assistantApprove">Approve this exact draft</button></details></dialog>
+</section>
 
           <!-- ========================================== -->
           <!-- VIEW 4: TEMPLATES STUDIO                   -->
@@ -1366,7 +1462,7 @@
               </div>
               <section id="historyInspector" class="history-detail" hidden>
                 <div class="panel-head"><h2 class="panel-title">Message &amp; seen evidence</h2><button id="historyCloseDetail" class="secondary">Close details</button></div>
-                <pre id="historyMessage" class="history-inspector"></pre>
+                <button id="historyConversations" class="secondary">View captured conversations for this contact</button><pre id="historyMessage" class="history-inspector"></pre>
                 <div class="form-group"><label for="historyReviewStatus">Reply status · manually reviewed</label><select id="historyReviewStatus"><option value="unreviewed">Not reviewed</option><option value="replied">Replied</option><option value="no_reply">Checked mailbox · no reply</option></select></div>
                 <div class="form-group"><label for="historyReviewNote">Follow-up / reason notes</label><textarea id="historyReviewNote" rows="3" maxlength="2000" placeholder="Record what you checked, a recipient's stated reason, or your next step."></textarea><p class="hint">Only record a reason when you have evidence. The app does not infer why someone did not reply.</p></div>
                 <button id="historySaveReview">Save review</button><span id="historyReviewSaved" class="hint" role="status"></span>
@@ -1951,7 +2047,7 @@
     </div>
 
 
-    <script src="/app.js?v=2.1.0" type="module"></script>
+    <script src="/app.js?v=2.2.0-rc.9" type="module"></script>
   </body>
 </html>
 

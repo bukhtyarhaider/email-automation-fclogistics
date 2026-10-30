@@ -95,3 +95,5 @@ $("historyClearFilters").onclick = () => { for (const id of Object.values(histor
 $("historyRefresh").onclick = () => action($("historyRefresh"), loadHistory);
 $("historyPrev").onclick = () => { historyOffset = Math.max(0, historyOffset - 25); loadHistory().catch((e) => notice(e.message)); };
 $("historyNext").onclick = () => { historyOffset += 25; loadHistory().catch((e) => notice(e.message)); };
+
+$("historyConversations").onclick = () => { if (!historySelected) return; location.hash="conversations"; window.dispatchEvent(new CustomEvent("fc-conversation-search", { detail:historySelected.to })); };

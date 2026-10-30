@@ -48,6 +48,10 @@ const CSS_FILES = [
   "_settings.css",
   "_animations.css",
   "_history-catalog.css",
+  "_experiment.css",
+  "_conversations.css",
+  "_carrier-workspace.css",
+  "_mailroom.css",
 ];
 
 // === HTML partials (order matters) ===
@@ -58,6 +62,8 @@ const HTML_FILES = [
   "_view-dashboard.html",
   "_view-leads.html",
   "_view-campaigns.html",
+  "_view-imports.html",
+  "_view-conversations.html",
   "_view-templates.html",
   "_view-settings.html",
   "_view-live-activity.html",
@@ -87,6 +93,11 @@ const JS_FILES = [
   "_tracking.js",
   "_suppression.js",
   "_navigation.js",
+  "_experiment.js",
+  "_conversations.js",
+  "_carrier-workspace.js",
+  "_conversation-assistant.js",
+  "_mailroom.js",
   "_boot.js",
 ];
 
@@ -104,6 +115,14 @@ async function build() {
     fs.writeFile(path.join(PUBLIC, "style.css"), css),
     fs.writeFile(path.join(PUBLIC, "index.html"), html),
     fs.writeFile(path.join(PUBLIC, "app.js"), js),
+    ...[
+      ["html/experiment.html", "experiment.html"],
+      ["styles/_experiment.css", "experiment.css"],
+      ["js/_experiment.js", "experiment.js"],
+      ["html/conversations.html", "conversations.html"],
+      ["styles/_conversations.css", "conversations.css"],
+      ["js/_conversations.js", "conversations.js"],
+    ].map(async ([source, target]) => fs.writeFile(path.join(PUBLIC, target), await fs.readFile(path.join(UI_DIR, source)))),
   ]);
 
   const elapsed = (performance.now() - t0).toFixed(0);
