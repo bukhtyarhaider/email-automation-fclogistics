@@ -1,3 +1,28 @@
+import {
+  Activity,
+  Ban,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  FileText,
+  Icon,
+  Info,
+  Lightbulb,
+  Mail,
+  Mailbox,
+  Monitor,
+  RefreshCw,
+  Search,
+  Send,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Sprout,
+  Star,
+  X,
+  Zap,
+} from '../../design-system/icons';
 import { Button, Input, Select } from '../../design-system/primitives';
 export function TrackingPage() {
   return (
@@ -10,16 +35,7 @@ export function TrackingPage() {
               {' EVIDENCE & TELEMETRY MONITORING\n                '}
             </p>
             <h1 className={'page-title'}>
-              <svg
-                width={'22'}
-                height={'22'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2.2'}
-              >
-                <path d={'M22 12h-4l-3 9L9 3l-3 9H2'}></path>
-              </svg>
+              <Icon icon={Activity} size={22} />
               {'\n                  Email Tracking\n                '}
             </h1>
             <p className={'page-subtitle'}>
@@ -30,33 +46,11 @@ export function TrackingPage() {
           </div>
           <div className={'header-actions'}>
             <a href={'#trackingSeedStudio'} className={'header-nav-chip'}>
-              <svg
-                width={'13'}
-                height={'13'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <polygon
-                  points={
-                    '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'
-                  }
-                ></polygon>
-              </svg>
+              <Icon icon={Star} size={13} />
               {'\n                  Seed Studio\n                '}
             </a>
             <a href={'#trackingDomainHealth'} className={'header-nav-chip'}>
-              <svg
-                width={'13'}
-                height={'13'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <path d={'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'}></path>
-              </svg>
+              <Icon icon={Shield} size={13} />
               {'\n                  Domain Health\n                '}
             </a>
             <Button
@@ -64,20 +58,7 @@ export function TrackingPage() {
               className={'secondary'}
               title={'Sync opens from Firebase Cloud Firestore'}
             >
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <path
-                  d={
-                    'M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83'
-                  }
-                ></path>
-              </svg>
+              <Icon icon={RefreshCw} size={14} />
               {'\n                  Sync Firebase\n                '}
             </Button>
             <Button
@@ -85,20 +66,7 @@ export function TrackingPage() {
               className={'secondary refresh-btn'}
               title={'Refresh tracking telemetries'}
             >
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <polyline points={'23 4 23 10 17 10'}></polyline>
-                <polyline points={'1 20 1 14 7 14'}></polyline>
-                <path
-                  d={'M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15'}
-                ></path>
-              </svg>
+              <Icon icon={RefreshCw} size={14} />
               {'\n                  Refresh Data\n                '}
             </Button>
           </div>
@@ -106,18 +74,7 @@ export function TrackingPage() {
 
         <div className={'tracking-advisory-banner'}>
           <div className={'advisory-icon'}>
-            <svg
-              width={'20'}
-              height={'20'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'currentColor'}
-              strokeWidth={'2'}
-            >
-              <path d={'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'}></path>
-              <circle cx={'12'} cy={'11'} r={'1'}></circle>
-              <line x1={'12'} y1={'15'} x2={'12'} y2={'15.01'}></line>
-            </svg>
+            <Icon icon={ShieldAlert} size={20} />
           </div>
           <div className={'advisory-content'}>
             <strong>{'Evidence & Verification Protocol:'}</strong>
@@ -131,21 +88,7 @@ export function TrackingPage() {
           <div className={'panel-head tracking-panel-head'}>
             <div>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'17'}
-                  height={'17'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <path
-                    d={
-                      'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'
-                    }
-                  ></path>
-                  <polyline points={'22,6 12,13 2,6'}></polyline>
-                </svg>
+                <Icon icon={Mail} size={17} />
                 {'\n                    Delivery Telemetry & Outreach Audit\n                  '}
               </h2>
               <p className={'panel-subtitle'}>
@@ -170,32 +113,26 @@ export function TrackingPage() {
                 {'All Records'}
               </Button>
               <Button type={'button'} className={'filter-chip'} data-pill-status={'webmail_sent'}>
-                {'✓ Delivered'}
+                <Icon icon={Check} size={12} />
+                {'Delivered'}
               </Button>
               <Button type={'button'} className={'filter-chip'} data-pill-status={'open_detected'}>
-                {'👁️ Opened'}
+                <Icon icon={Eye} size={12} />
+                {'Opened'}
               </Button>
               <Button type={'button'} className={'filter-chip'} data-pill-status={'hard_bounced'}>
-                {'⛔ Bounced'}
+                <Icon icon={Ban} size={12} />
+                {'Bounced'}
               </Button>
               <Button type={'button'} className={'filter-chip'} data-pill-status={'seeds'}>
-                {'🌱 Seed Tests'}
+                <Icon icon={Sprout} size={12} />
+                {'Seed Tests'}
               </Button>
             </div>
 
             <div className={'tracking-filters-row'}>
               <div className={'filter-search-box'}>
-                <svg
-                  width={'14'}
-                  height={'14'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <circle cx={'11'} cy={'11'} r={'8'}></circle>
-                  <line x1={'21'} y1={'21'} x2={'16.65'} y2={'16.65'}></line>
-                </svg>
+                <Icon icon={Search} size={14} />
                 <Input
                   id={'trackingSearch'}
                   type={'search'}
@@ -243,17 +180,7 @@ export function TrackingPage() {
                 className={'secondary tracking-clear-btn'}
                 title={'Reset all active search filters'}
               >
-                <svg
-                  width={'12'}
-                  height={'12'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2.5'}
-                >
-                  <line x1={'18'} y1={'6'} x2={'6'} y2={'18'}></line>
-                  <line x1={'6'} y1={'6'} x2={'18'} y2={'18'}></line>
-                </svg>
+                <Icon icon={X} size={12} />
                 {'\n                    Reset\n                  '}
               </Button>
             </div>
@@ -288,30 +215,12 @@ export function TrackingPage() {
             <span id={'trackingPageInfo'} className={'tracking-page-info'}></span>
             <div className={'pagination-controls'}>
               <Button id={'trackingPrev'} className={'secondary'} title={'Previous 50 records'}>
-                <svg
-                  width={'13'}
-                  height={'13'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <polyline points={'15 18 9 12 15 6'}></polyline>
-                </svg>
+                <Icon icon={ChevronLeft} size={13} />
                 {'\n                    Previous\n                  '}
               </Button>
               <Button id={'trackingNext'} className={'secondary'} title={'Next 50 records'}>
                 {'\n                    Next\n                    '}
-                <svg
-                  width={'13'}
-                  height={'13'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <polyline points={'9 18 15 12 9 6'}></polyline>
-                </svg>
+                <Icon icon={ChevronRight} size={13} />
               </Button>
             </div>
           </div>
@@ -319,16 +228,7 @@ export function TrackingPage() {
           <form id={'placementForm'} className={'placement-dock-form'} hidden={true}>
             <Input id={'placementId'} type={'hidden'} />
             <div className={'placement-dock-header'}>
-              <svg
-                width={'16'}
-                height={'16'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'#60a5fa'}
-                strokeWidth={'2'}
-              >
-                <path d={'M22 12h-4l-3 9L9 3l-3 9H2'}></path>
-              </svg>
+              <Icon icon={Activity} size={16} color={'#60a5fa'} />
               <strong>{'Record Manual Seed Placement Inspection'}</strong>
             </div>
             <div className={'placement-dock-grid'}>
@@ -380,16 +280,7 @@ export function TrackingPage() {
                 {'DELIVERABILITY & INBOX PLACEMENT TESTING'}
               </span>
               <h2 className={'panel-title'} style={{ marginTop: '3px' }}>
-                <svg
-                  width={'18'}
-                  height={'18'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <path d={'M22 12h-4l-3 9L9 3l-3 9H2'}></path>
-                </svg>
+                <Icon icon={Activity} size={18} />
                 {'\n                    Controlled Seed Inbox Tests\n                  '}
               </h2>
               <p
@@ -413,7 +304,8 @@ export function TrackingPage() {
                   fontSize: '11.5px',
                 }}
               >
-                {'\n                    📬 Configured Seeds\n                  '}
+                <Icon icon={Mailbox} size={12} />
+                {'\n                     Configured Seeds\n                  '}
               </span>
             </div>
           </div>
@@ -446,7 +338,8 @@ export function TrackingPage() {
                       id={'seedGenKeyBtn'}
                       title={'Generate fresh unique key'}
                     >
-                      {'⚡ Auto'}
+                      <Icon icon={Zap} size={12} />
+                      {'Auto'}
                     </Button>
                   </div>
                   <span className={'form-hint'}>
@@ -475,7 +368,7 @@ export function TrackingPage() {
                     <Input
                       id={'seedSampleSearch'}
                       type={'search'}
-                      placeholder={'🔍 Search leads by company or name…'}
+                      placeholder={'Search leads by company or name…'}
                       style={{ fontSize: '12px', padding: '7px 10px' }}
                     />
                   </div>
@@ -505,17 +398,7 @@ export function TrackingPage() {
                       fontSize: '13px',
                     }}
                   >
-                    <svg
-                      width={'15'}
-                      height={'15'}
-                      viewBox={'0 0 24 24'}
-                      fill={'none'}
-                      stroke={'currentColor'}
-                      strokeWidth={'2'}
-                    >
-                      <line x1={'22'} y1={'2'} x2={'11'} y2={'13'}></line>
-                      <polygon points={'22 2 15 22 11 13 2 9 22 2'}></polygon>
-                    </svg>
+                    <Icon icon={Send} size={15} />
                     {'\n                        Reserve & Create Seed Plan\n                      '}
                   </Button>
                 </div>
@@ -571,7 +454,10 @@ export function TrackingPage() {
                 </div>
               </div>
               <div className={'seed-preview-instructions'}>
-                <div className={'inst-icon'}>{'💡'}</div>
+                <div className={'inst-icon'}>
+                  <Icon icon={Lightbulb} size={12} />
+                  {''}
+                </div>
                 <div className={'inst-text'}>
                   <strong>{'How seed testing works:'}</strong>
                   {' Once created, click '}
@@ -601,16 +487,7 @@ export function TrackingPage() {
                 {'SENDER REPUTATION & AUTHENTICATION'}
               </span>
               <h2 className={'panel-title'} style={{ marginTop: '3px' }}>
-                <svg
-                  width={'18'}
-                  height={'18'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <path d={'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'}></path>
-                </svg>
+                <Icon icon={Shield} size={18} />
                 {
                   '\n                    Domain Health & DNS Authentication Inspector\n                  '
                 }
@@ -635,7 +512,8 @@ export function TrackingPage() {
                   fontSize: '11.5px',
                 }}
               >
-                {'\n                    🛡️ Authentication Auditor\n                  '}
+                <Icon icon={ShieldCheck} size={12} />
+                {'\n                     Authentication Auditor\n                  '}
               </span>
             </div>
           </div>
@@ -736,17 +614,7 @@ export function TrackingPage() {
                     fontSize: '13px',
                   }}
                 >
-                  <svg
-                    width={'15'}
-                    height={'15'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <circle cx={'11'} cy={'11'} r={'8'}></circle>
-                    <line x1={'21'} y1={'21'} x2={'16.65'} y2={'16.65'}></line>
-                  </svg>
+                  <Icon icon={Search} size={15} />
                   {'\n                      Inspect DNS Records\n                    '}
                 </Button>
               </div>
@@ -779,18 +647,7 @@ export function TrackingPage() {
           <div className={'panel-head'}>
             <div>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'18'}
-                  height={'18'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <rect x={'2'} y={'3'} width={'20'} height={'14'} rx={'2'} ry={'2'}></rect>
-                  <line x1={'8'} y1={'21'} x2={'16'} y2={'21'}></line>
-                  <line x1={'12'} y1={'17'} x2={'12'} y2={'21'}></line>
-                </svg>
+                <Icon icon={Monitor} size={18} />
                 {'\n                    IMAP Monitor Daemon & Bounce Review\n                  '}
               </h2>
               <p className={'panel-subtitle'}>
@@ -805,18 +662,7 @@ export function TrackingPage() {
             </div>
           </div>
           <div className={'daemon-config-box'}>
-            <svg
-              width={'16'}
-              height={'16'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'#60a5fa'}
-              strokeWidth={'2'}
-            >
-              <circle cx={'12'} cy={'12'} r={'10'}></circle>
-              <line x1={'12'} y1={'16'} x2={'12'} y2={'12'}></line>
-              <line x1={'12'} y1={'8'} x2={'12.01'} y2={'8'}></line>
-            </svg>
+            <Icon icon={Info} size={16} color={'#60a5fa'} />
             <p id={'trackingConfig'} className={'tracking-note'} style={{ margin: '0' }}></p>
           </div>
           <div className={'daemon-terminal-window'}>
@@ -832,20 +678,7 @@ export function TrackingPage() {
           </div>
           <details className={'review-queue-details'}>
             <summary>
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <path d={'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'}></path>
-                <polyline points={'14 2 14 8 20 8'}></polyline>
-                <line x1={'16'} y1={'13'} x2={'8'} y2={'13'}></line>
-                <line x1={'16'} y1={'17'} x2={'8'} y2={'17'}></line>
-                <polyline points={'10 9 9 9 8 9'}></polyline>
-              </svg>
+              <Icon icon={FileText} size={14} />
               {'\n                  Notifications needing manual review\n                '}
             </summary>
             <pre

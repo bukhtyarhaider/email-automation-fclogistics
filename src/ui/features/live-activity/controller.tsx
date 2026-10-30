@@ -1,3 +1,5 @@
+import { Check, Icon } from '../../design-system/icons';
+import { captureContent } from '../../shared/regions';
 import { uiScope } from '../../shared/lifecycle';
 import { renderRegion } from '../../shared/regions';
 import { displayText } from '../../shared/utils';
@@ -381,10 +383,16 @@ export function mountLiveActivity() {
         const ok = await copyToClipboard(text);
         if (ok) {
           const btn = $('liveTerminalCopyBtn');
-          const orig = btn.textContent;
-          btn.textContent = '✓ Copied!';
+          const orig = captureContent(btn);
+          renderRegion(
+            btn,
+            <>
+              <Icon icon={Check} size={14} />
+              {' Copied!'}
+            </>,
+          );
           uiScope.timeout(() => {
-            btn.textContent = orig;
+            renderRegion(btn, orig);
           }, 1800);
           notice('Terminal console log copied to clipboard.');
         }

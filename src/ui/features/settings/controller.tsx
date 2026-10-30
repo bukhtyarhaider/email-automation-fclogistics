@@ -1,3 +1,4 @@
+import { Icon, Trash2 } from '../../design-system/icons';
 import type { BrowserDiscoveryResponse } from '../../shared/types/api';
 import { Button } from '../../design-system/primitives';
 import { uiScope } from '../../shared/lifecycle';
@@ -73,21 +74,7 @@ export function renderProfilesTable() {
                     {...{ disabled: session.state.profiles.length <= 1 }}
                     title={'Delete this mailbox profile'}
                   >
-                    <svg
-                      width={'12'}
-                      height={'12'}
-                      viewBox={'0 0 24 24'}
-                      fill={'none'}
-                      stroke={'currentColor'}
-                      strokeWidth={'2'}
-                    >
-                      <polyline points={'3 6 5 6 21 6'}></polyline>
-                      <path
-                        d={
-                          'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'
-                        }
-                      ></path>
-                    </svg>
+                    <Icon icon={Trash2} size={12} />
                   </Button>
                 </div>
               </td>

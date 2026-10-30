@@ -1,3 +1,14 @@
+import {
+  Activity,
+  CircleAlert,
+  Download,
+  Icon,
+  LayoutGrid,
+  Pause,
+  Search,
+  Terminal,
+  Trash2,
+} from '../../design-system/icons';
 import { Button, Input } from '../../design-system/primitives';
 export function LiveActivityPage() {
   return (
@@ -23,17 +34,7 @@ export function LiveActivityPage() {
               className={'secondary'}
               title={'Freeze or resume incoming event auto-updates'}
             >
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <rect x={'6'} y={'4'} width={'4'} height={'16'}></rect>
-                <rect x={'14'} y={'4'} width={'4'} height={'16'}></rect>
-              </svg>
+              <Icon icon={Pause} size={14} />
               <span id={'livePauseBtnText'}>{'Pause Feed'}</span>
             </Button>
             <a
@@ -43,18 +44,7 @@ export function LiveActivityPage() {
               download={'system-activity.json'}
               title={'Download entire event log as JSON'}
             >
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <path d={'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'}></path>
-                <polyline points={'7 10 12 15 17 10'}></polyline>
-                <line x1={'12'} y1={'15'} x2={'12'} y2={'3'}></line>
-              </svg>
+              <Icon icon={Download} size={14} />
               {'\n                  Export Log (JSON)\n                '}
             </a>
             <a
@@ -71,21 +61,7 @@ export function LiveActivityPage() {
               className={'secondary'}
               title={'Clear events console view'}
             >
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <polyline points={'3 6 5 6 21 6'}></polyline>
-                <path
-                  d={
-                    'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'
-                  }
-                ></path>
-              </svg>
+              <Icon icon={Trash2} size={14} />
               {'\n                  Clear Screen\n                '}
             </Button>
           </div>
@@ -217,16 +193,7 @@ export function LiveActivityPage() {
           <div className={'panel-head'} style={{ marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <polyline points={'22 12 18 12 15 21 9 3 6 12 2 12'}></polyline>
-                </svg>
+                <Icon icon={Activity} size={16} />
                 {'\n                    Live Operations Stream\n                  '}
               </h2>
               <span className={'live-indicator-chip'} id={'liveStreamCounter'}>
@@ -240,19 +207,7 @@ export function LiveActivityPage() {
                 id={'btnModeVisual'}
                 title={'Formatted Visual Cards'}
               >
-                <svg
-                  width={'13'}
-                  height={'13'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <rect x={'3'} y={'3'} width={'7'} height={'7'}></rect>
-                  <rect x={'14'} y={'3'} width={'7'} height={'7'}></rect>
-                  <rect x={'14'} y={'14'} width={'7'} height={'7'}></rect>
-                  <rect x={'3'} y={'14'} width={'7'} height={'7'}></rect>
-                </svg>
+                <Icon icon={LayoutGrid} size={13} />
                 {'\n                    Visual\n                  '}
               </Button>
               <Button
@@ -261,17 +216,7 @@ export function LiveActivityPage() {
                 id={'btnModeTerminal'}
                 title={'Monospace Terminal Console'}
               >
-                <svg
-                  width={'13'}
-                  height={'13'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <polyline points={'4 17 10 11 4 5'}></polyline>
-                  <line x1={'12'} y1={'19'} x2={'20'} y2={'19'}></line>
-                </svg>
+                <Icon icon={Terminal} size={13} />
                 {'\n                    Terminal\n                  '}
               </Button>
             </div>
@@ -342,10 +287,7 @@ export function LiveActivityPage() {
             </div>
             <div className={'live-toolbar-right'}>
               <div className={'toolbar-search live-search-box'}>
-                <svg viewBox={'0 0 24 24'} fill={'none'} stroke={'currentColor'} strokeWidth={'2'}>
-                  <circle cx={'11'} cy={'11'} r={'8'}></circle>
-                  <line x1={'21'} y1={'21'} x2={'16.65'} y2={'16.65'}></line>
-                </svg>
+                <Icon icon={Search} />
                 <Input
                   id={'liveSearchInput'}
                   type={'search'}
@@ -366,18 +308,7 @@ export function LiveActivityPage() {
           <div id={'liveVisualFeedContainer'} className={'live-visual-feed-wrap'}>
             <ol id={'liveVisualEventsList'} className={'live-visual-events'}></ol>
             <div id={'liveVisualEmptyState'} className={'live-empty-state'} hidden={true}>
-              <svg
-                width={'32'}
-                height={'32'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'1.5'}
-              >
-                <circle cx={'12'} cy={'10'} r={'10'}></circle>
-                <line x1={'12'} y1={'8'} x2={'12'} y2={'12'}></line>
-                <line x1={'12'} y1={'16'} x2={'12.01'} y2={'16'}></line>
-              </svg>
+              <Icon icon={CircleAlert} size={32} />
               <p>{'No activity events match your current filter or search criteria.'}</p>
             </div>
           </div>

@@ -1,3 +1,6 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { ChevronDown } from 'lucide-react';
 /** Production frontend build. The server's existing static routes and CSP remain compatible. */
 import { build, context } from 'esbuild';
 import fs from 'node:fs/promises';
@@ -5,6 +8,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const version = JSON.parse(await fs.readFile(path.join(ROOT, 'package.json'), 'utf8')).version;
+await fs.mkdir(path.join(ROOT, 'public/icons'), { recursive: true });
+await fs.writeFile(
+  path.join(ROOT, 'public/icons/chevron-down.svg'),
+  renderToStaticMarkup(createElement(ChevronDown, { size: 12, color: '#94a3b8', strokeWidth: 2 })),
+);
 const options = {
   absWorkingDir: ROOT,
   entryPoints: {
@@ -14,6 +22,7 @@ const options = {
   },
   outdir: 'public',
   bundle: true,
+  external: ['/icons/*'],
   splitting: false,
   format: 'esm',
   platform: 'browser',

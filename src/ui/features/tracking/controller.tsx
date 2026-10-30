@@ -1,3 +1,35 @@
+import {
+  Ban,
+  CalendarDays,
+  Check,
+  CircleCheck,
+  CircleDot,
+  CircleX,
+  Clock,
+  CodeXml,
+  Copy,
+  Eye,
+  FileText,
+  Fingerprint,
+  Folder,
+  Icon,
+  Inbox,
+  Info,
+  KeyRound,
+  Mail,
+  Rocket,
+  Search,
+  Send,
+  Shield,
+  ShieldCheck,
+  Siren,
+  Sprout,
+  Star,
+  Target,
+  Timer,
+  TriangleAlert,
+  X,
+} from '../../design-system/icons';
 import { resolveView } from '../../app/routes';
 import type { SeedPlanResponse } from '../../shared/types/api';
 import { Button } from '../../design-system/primitives';
@@ -114,16 +146,7 @@ export async function loadTracking() {
               <div className={'kpi-top'}>
                 <span className={'kpi-title'}>{'Dispatched (Sent)'}</span>
                 <div className={'kpi-icon-wrap icon-emerald'}>
-                  <svg
-                    width={'15'}
-                    height={'15'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2.5'}
-                  >
-                    <polyline points={'20 6 9 17 4 12'}></polyline>
-                  </svg>
+                  <Icon icon={Check} size={15} />
                 </div>
               </div>
               <div className={'kpi-val-row'}>
@@ -149,17 +172,7 @@ export async function loadTracking() {
               <div className={'kpi-top'}>
                 <span className={'kpi-title'}>{'Open Signals'}</span>
                 <div className={'kpi-icon-wrap icon-blue'}>
-                  <svg
-                    width={'15'}
-                    height={'15'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2.5'}
-                  >
-                    <path d={'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'}></path>
-                    <circle cx={'12'} cy={'12'} r={'3'}></circle>
-                  </svg>
+                  <Icon icon={Eye} size={15} />
                 </div>
               </div>
               <div className={'kpi-val-row'}>
@@ -181,20 +194,7 @@ export async function loadTracking() {
               <div className={'kpi-top'}>
                 <span className={'kpi-title'}>{'Seed Inbox Rate'}</span>
                 <div className={'kpi-icon-wrap icon-purple'}>
-                  <svg
-                    width={'15'}
-                    height={'15'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2.5'}
-                  >
-                    <polygon
-                      points={
-                        '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'
-                      }
-                    ></polygon>
-                  </svg>
+                  <Icon icon={Star} size={15} />
                 </div>
               </div>
               <div className={'kpi-val-row'}>
@@ -223,16 +223,7 @@ export async function loadTracking() {
               <div className={'kpi-top'}>
                 <span className={'kpi-title'}>{'Deliverability Health'}</span>
                 <div className={'kpi-icon-wrap ' + (bounced > 0 ? 'icon-amber' : 'icon-emerald')}>
-                  <svg
-                    width={'15'}
-                    height={'15'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2.5'}
-                  >
-                    <path d={'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'}></path>
-                  </svg>
+                  <Icon icon={Shield} size={15} />
                 </div>
               </div>
               <div className={'kpi-val-row'}>
@@ -345,18 +336,7 @@ export async function loadTracking() {
         <>
           <div className={'rate-callout-card'}>
             <div className={'rate-callout-icon'}>
-              <svg
-                width={'16'}
-                height={'16'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <circle cx={'12'} cy={'12'} r={'10'}></circle>
-                <line x1={'12'} y1={'16'} x2={'12'} y2={'12'}></line>
-                <line x1={'12'} y1={'8'} x2={'12.01'} y2={'8'}></line>
-              </svg>
+              <Icon icon={Info} size={16} />
             </div>
             <div className={'rate-callout-content'}>
               <div className={'rate-callout-title'}>
@@ -367,7 +347,8 @@ export async function loadTracking() {
                   </strong>
                 </span>
                 <span className={'rate-status-tag ' + (bounced === 0 ? 'good' : 'warn')}>
-                  {bounced === 0 ? '✓ Healthy Sender Score' : '⚠️ Failure Monitored'}
+                  <Icon icon={bounced === 0 ? Check : TriangleAlert} size={12} />
+                  {bounced === 0 ? 'Healthy Sender Score' : 'Failure Monitored'}
                 </span>
               </div>
               <div className={'rate-callout-desc'}>
@@ -395,21 +376,24 @@ export async function loadTracking() {
                 <>
                   <span className={'status-pill good'}>
                     <span className={'badge-dot dot-green'}></span>
-                    {'✓ Delivered'}
+                    <Icon icon={Check} size={12} />
+                    {'Delivered'}
                   </span>
                 </>
               ) : r.sendStatus === 'send_failed' ? (
                 <>
                   <span className={'status-pill blocked'}>
                     <span className={'badge-dot dot-red'}></span>
-                    {'✕ Failed'}
+                    <Icon icon={X} size={12} />
+                    {'Failed'}
                   </span>
                 </>
               ) : r.sendStatus === 'send_attempted' ? (
                 <>
                   <span className={'status-pill sent'}>
                     <span className={'badge-dot dot-blue'}></span>
-                    {'⏳ Sending...'}
+                    <Icon icon={Timer} size={12} />
+                    {'Sending...'}
                   </span>
                 </>
               ) : (
@@ -427,7 +411,8 @@ export async function loadTracking() {
                   <div className={'bounce-status-block'}>
                     <span className={'status-pill blocked'}>
                       <span className={'badge-dot dot-red'}></span>
-                      {'⛔ Hard Bounce '}
+                      <Icon icon={Ban} size={12} />
+                      {'Hard Bounce '}
                       <small className={'test-token'}>{'(hard_bounced)'}</small>
                     </span>
                   </div>
@@ -437,7 +422,8 @@ export async function loadTracking() {
                   <div className={'bounce-status-block'}>
                     <span className={'status-pill warn'}>
                       <span className={'badge-dot dot-amber'}></span>
-                      {'⚠️ Soft Bounce '}
+                      <Icon icon={TriangleAlert} size={12} />
+                      {'Soft Bounce '}
                       <small className={'test-token'}>{'(soft_bounced)'}</small>
                     </span>
                   </div>
@@ -445,17 +431,11 @@ export async function loadTracking() {
               ) : (
                 <>
                   <div className={'clean-delivery-chip'}>
-                    <svg
-                      width={'13'}
-                      height={'13'}
-                      viewBox={'0 0 24 24'}
-                      fill={'none'}
-                      stroke={'#10b981'}
-                      strokeWidth={'2.5'}
-                    >
-                      <path d={'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'}></path>
-                    </svg>
-                    <span>{'✓ Clean Delivery'}</span>
+                    <Icon icon={Shield} size={13} color={'#10b981'} />
+                    <span>
+                      <Icon icon={Check} size={12} />
+                      {'Clean Delivery'}
+                    </span>
                   </div>
                 </>
               );
@@ -463,17 +443,7 @@ export async function loadTracking() {
               <>
                 <div className={'seen-indicator-stack'}>
                   <span className={'status-pill good seen-pill'}>
-                    <svg
-                      width={'12'}
-                      height={'12'}
-                      viewBox={'0 0 24 24'}
-                      fill={'none'}
-                      stroke={'currentColor'}
-                      strokeWidth={'2.5'}
-                    >
-                      <path d={'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z'}></path>
-                      <circle cx={'12'} cy={'12'} r={'3'}></circle>
-                    </svg>
+                    <Icon icon={Eye} size={12} />
                     {'\n                     Seen'}
                     {r.opens?.length > 1 ? ` (${r.opens.length}x)` : ''}
                   </span>
@@ -489,21 +459,7 @@ export async function loadTracking() {
             ) : (
               <>
                 <span className={'status-pill unopened-pill'}>
-                  <svg
-                    width={'12'}
-                    height={'12'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <path
-                      d={
-                        'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'
-                      }
-                    ></path>
-                    <polyline points={'22,6 12,13 2,6'}></polyline>
-                  </svg>
+                  <Icon icon={Mail} size={12} />
                   {'\n                   Unopened\n                 '}
                 </span>
               </>
@@ -518,7 +474,8 @@ export async function loadTracking() {
                         className={'status-pill good'}
                         style={{ fontWeight: '700', padding: '2px 8px', fontSize: '11px' }}
                       >
-                        {'📥 Inbox'}
+                        <Icon icon={Inbox} size={12} />
+                        {'Inbox'}
                       </span>
                     </div>
                   </>
@@ -531,7 +488,8 @@ export async function loadTracking() {
                         className={'status-pill blocked'}
                         style={{ fontWeight: '700', padding: '2px 8px', fontSize: '11px' }}
                       >
-                        {'🚫 Spam'}
+                        <Icon icon={Ban} size={12} />
+                        {'Spam'}
                       </span>
                     </div>
                   </>
@@ -541,7 +499,8 @@ export async function loadTracking() {
                   <>
                     <div className={'placement-result-tag'}>
                       <span className={'status-pill'} style={{ fontSize: '11px' }}>
-                        {'📁 '}
+                        <Icon icon={Folder} size={12} />
+                        {''}
                         {displayText(r.placement.status)}
                       </span>
                     </div>
@@ -558,7 +517,8 @@ export async function loadTracking() {
                         data-place-status={'inbox'}
                         title={'Confirm email reached Inbox'}
                       >
-                        {'📥 Inbox'}
+                        <Icon icon={Inbox} size={12} />
+                        {'Inbox'}
                       </Button>
                       <Button
                         type={'button'}
@@ -567,7 +527,8 @@ export async function loadTracking() {
                         data-place-status={'spam'}
                         title={'Email landed in Spam folder'}
                       >
-                        {'🚫 Spam'}
+                        <Icon icon={Ban} size={12} />
+                        {'Spam'}
                       </Button>
                     </div>
                   </>
@@ -597,7 +558,10 @@ export async function loadTracking() {
                         </strong>
                         {r.seedId ? (
                           <>
-                            <span className={'badge-seed-tag'}>{'🌱 Seed'}</span>
+                            <span className={'badge-seed-tag'}>
+                              <Icon icon={Sprout} size={12} />
+                              {'Seed'}
+                            </span>
                           </>
                         ) : (
                           ''
@@ -656,17 +620,7 @@ export async function loadTracking() {
                         data-track={i}
                         title={'Inspect complete delivery timeline & technical specs'}
                       >
-                        <svg
-                          width={'13'}
-                          height={'13'}
-                          viewBox={'0 0 24 24'}
-                          fill={'none'}
-                          stroke={'currentColor'}
-                          strokeWidth={'2'}
-                        >
-                          <circle cx={'11'} cy={'11'} r={'8'}></circle>
-                          <line x1={'21'} y1={'21'} x2={'16.65'} y2={'16.65'}></line>
-                        </svg>
+                        <Icon icon={Search} size={13} />
                         {'\n                      Details\n                    '}
                       </Button>
                       {r.seedId && r.sendStatus === 'pending' && !r.preparationStartedAt ? (
@@ -676,17 +630,7 @@ export async function loadTracking() {
                             data-seed-send={displayText(r.id)}
                             title={'Send seed test email'}
                           >
-                            <svg
-                              width={'12'}
-                              height={'12'}
-                              viewBox={'0 0 24 24'}
-                              fill={'none'}
-                              stroke={'currentColor'}
-                              strokeWidth={'2'}
-                            >
-                              <line x1={'22'} y1={'2'} x2={'11'} y2={'13'}></line>
-                              <polygon points={'22 2 15 22 11 13 2 9 22 2'}></polygon>
-                            </svg>
+                            <Icon icon={Send} size={12} />
                             {'\n                           Send seed\n                         '}
                           </Button>
                         </>
@@ -744,21 +688,7 @@ export async function loadTracking() {
                 <>
                   <div className={'seed-target-tile'}>
                     <div className={'seed-target-badge-icon'}>
-                      <svg
-                        width={'16'}
-                        height={'16'}
-                        viewBox={'0 0 24 24'}
-                        fill={'none'}
-                        stroke={'currentColor'}
-                        strokeWidth={'2'}
-                      >
-                        <path
-                          d={
-                            'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'
-                          }
-                        ></path>
-                        <polyline points={'22,6 12,13 2,6'}></polyline>
-                      </svg>
+                      <Icon icon={Mail} size={16} />
                     </div>
                     <div>
                       <div className={'seed-target-address'}>
@@ -778,14 +708,15 @@ export async function loadTracking() {
         );
         if ($('seedCountBadge')) {
           $('seedCountBadge').textContent =
-            `📬 ${data.seeds.length} Active Test Mailbox${data.seeds.length > 1 ? 'es' : ''}`;
+            `${data.seeds.length} Active Test Mailbox${data.seeds.length > 1 ? 'es' : ''}`;
         }
       } else {
         renderRegion(
           $('trackingSeeds'),
           <>
             <div className={'seed-empty-alert'}>
-              {'⚠️ No seed recipients configured. Configure '}
+              <Icon icon={TriangleAlert} size={12} />
+              {'No seed recipients configured. Configure '}
               <code>{'FC_SEEDS'}</code>
               {' in '}
               <code>{'.env'}</code>
@@ -959,21 +890,24 @@ export function renderTrackingDetail(r: TrackingRecord) {
       <>
         <span className={'status-pill good'}>
           <span className={'badge-dot dot-green'}></span>
-          {'✓ Dispatched'}
+          <Icon icon={Check} size={12} />
+          {'Dispatched'}
         </span>
       </>
     ) : r.sendStatus === 'send_failed' ? (
       <>
         <span className={'status-pill blocked'}>
           <span className={'badge-dot dot-red'}></span>
-          {'✕ Failed'}
+          <Icon icon={X} size={12} />
+          {'Failed'}
         </span>
       </>
     ) : r.sendStatus === 'send_attempted' ? (
       <>
         <span className={'status-pill sent'}>
           <span className={'badge-dot dot-blue'}></span>
-          {'⏳ Sending...'}
+          <Icon icon={Timer} size={12} />
+          {'Sending...'}
         </span>
       </>
     ) : (
@@ -987,27 +921,40 @@ export function renderTrackingDetail(r: TrackingRecord) {
   const seenBadge = r.firstOpenAt ? (
     <>
       <span className={'status-pill good'}>
-        {'👁️ Seen'}
+        <Icon icon={Eye} size={12} />
+        {'Seen'}
         {r.opens?.length > 1 ? ` (${r.opens.length}x)` : ''}
       </span>
     </>
   ) : (
     <>
-      <span className={'status-pill unopened-pill'}>{'✉️ Unopened'}</span>
+      <span className={'status-pill unopened-pill'}>
+        <Icon icon={Mail} size={12} />
+        {'Unopened'}
+      </span>
     </>
   );
   const bounceBadge =
     r.bounceStatus === 'hard_bounced' ? (
       <>
-        <span className={'status-pill blocked'}>{'⛔ Hard Bounce'}</span>
+        <span className={'status-pill blocked'}>
+          <Icon icon={Ban} size={12} />
+          {'Hard Bounce'}
+        </span>
       </>
     ) : r.bounceStatus === 'soft_bounced' ? (
       <>
-        <span className={'status-pill warn'}>{'⚠️ Soft Bounce'}</span>
+        <span className={'status-pill warn'}>
+          <Icon icon={TriangleAlert} size={12} />
+          {'Soft Bounce'}
+        </span>
       </>
     ) : (
       <>
-        <span className={'status-pill good'}>{'✓ Clean Delivery'}</span>
+        <span className={'status-pill good'}>
+          <Icon icon={Check} size={12} />
+          {'Clean Delivery'}
+        </span>
       </>
     );
   // Relative timing calculation
@@ -1030,7 +977,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
           title: 'Queued for Outreach',
           desc: 'Message created and queued in campaign.',
           color: 'blue',
-          icon: '⏱️',
+          icon: Timer,
         });
       } else if (ev.type === 'send_attempted') {
         timelineEvents.push({
@@ -1038,7 +985,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
           title: 'Webmail Send Initiated',
           desc: 'Playwright initialized browser compose window and inserted content.',
           color: 'blue',
-          icon: '🚀',
+          icon: Rocket,
         });
       } else if (ev.type === 'webmail_sent') {
         timelineEvents.push({
@@ -1046,7 +993,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
           title: 'Webmail Confirmed Dispatched',
           desc: 'Namecheap mail server verified message was sent.',
           color: 'green',
-          icon: '✓',
+          icon: Check,
         });
       } else if (ev.type === 'sent_message_id') {
         timelineEvents.push({
@@ -1059,7 +1006,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
             </>
           ),
           color: 'blue',
-          icon: '🆔',
+          icon: Fingerprint,
         });
       } else if (ev.type === 'open_detected') {
         timelineEvents.push({
@@ -1079,7 +1026,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
             )
           }`,
           color: 'emerald',
-          icon: '👁️',
+          icon: Eye,
         });
       } else if (ev.type === 'hard_bounced') {
         timelineEvents.push({
@@ -1087,7 +1034,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
           title: 'Hard Bounce Reported (Permanent DSN)',
           desc: `${displayText(ev.diagnostic || ev.status || r.bounceReason || 'Mailbox unavailable.')}`,
           color: 'red',
-          icon: '⛔',
+          icon: Ban,
         });
       } else if (ev.type === 'soft_bounced') {
         timelineEvents.push({
@@ -1095,7 +1042,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
           title: 'Soft Bounce Reported (Temporary Delay)',
           desc: `${displayText(ev.diagnostic || ev.status || r.bounceReason || 'Temporary delivery delay.')}`,
           color: 'amber',
-          icon: '⚠️',
+          icon: TriangleAlert,
         });
       } else if (ev.type === 'seed_placement') {
         timelineEvents.push({
@@ -1110,7 +1057,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
             </>
           ),
           color: 'green',
-          icon: '🎯',
+          icon: Target,
         });
       } else {
         timelineEvents.push({
@@ -1118,7 +1065,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
           title: displayText(ev.type),
           desc: displayText(JSON.stringify(ev)),
           color: 'blue',
-          icon: '•',
+          icon: CircleDot,
         });
       }
     }
@@ -1129,7 +1076,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
         title: 'Message Initialized',
         desc: 'Added to tracking index.',
         color: 'blue',
-        icon: '⏱️',
+        icon: Timer,
       });
     if (r.attemptedAt)
       timelineEvents.push({
@@ -1137,7 +1084,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
         title: 'Send Attempted',
         desc: 'Webmail compose window prepared.',
         color: 'blue',
-        icon: '🚀',
+        icon: Rocket,
       });
     if (r.confirmedAt)
       timelineEvents.push({
@@ -1145,7 +1092,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
         title: 'Webmail Send Confirmed',
         desc: 'Message sent successfully.',
         color: 'green',
-        icon: '✓',
+        icon: Check,
       });
     if (r.firstOpenAt)
       timelineEvents.push({
@@ -1153,7 +1100,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
         title: 'Recipient Opened Email',
         desc: 'Tracking pixel loaded.',
         color: 'emerald',
-        icon: '👁️',
+        icon: Eye,
       });
     if (r.bounceStatus)
       timelineEvents.push({
@@ -1161,13 +1108,15 @@ export function renderTrackingDetail(r: TrackingRecord) {
         title: `${r.bounceStatus} Notification`,
         desc: r.bounceReason || 'Delivery failure notice.',
         color: 'red',
-        icon: '⛔',
+        icon: Ban,
       });
   }
   const timelineHtml = timelineEvents.map((ev) => (
     <>
       <div className={'timeline-item'}>
-        <div className={'timeline-node node-' + ev.color}>{ev.icon}</div>
+        <div className={'timeline-node node-' + ev.color}>
+          <Icon icon={ev.icon} size={14} />
+        </div>
         <div className={'timeline-content'}>
           <div className={'timeline-header'}>
             <span className={'timeline-title'}>{ev.title}</span>
@@ -1209,17 +1158,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
       <div id={'trackingSecOverview'} className={'drawer-tab-pane active'}>
         <div className={'lead-details-card'}>
           <h4 className={'lead-details-title'}>
-            <svg
-              width={'14'}
-              height={'14'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'currentColor'}
-              strokeWidth={'2'}
-            >
-              <circle cx={'12'} cy={'12'} r={'10'}></circle>
-              <polyline points={'12 6 12 12 16 14'}></polyline>
-            </svg>
+            <Icon icon={Clock} size={14} />
             {'\n          Delivery & Engagement Metrics\n        '}
           </h4>
           <div className={'lead-details-grid'}>
@@ -1275,22 +1214,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
           <>
             <div className={'lead-details-card'} style={{ borderLeft: '3px solid #ef4444' }}>
               <h4 className={'lead-details-title'} style={{ color: '#f87171' }}>
-                <svg
-                  width={'14'}
-                  height={'14'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <path
-                    d={
-                      'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'
-                    }
-                  ></path>
-                  <line x1={'12'} y1={'9'} x2={'12'} y2={'13'}></line>
-                  <line x1={'12'} y1={'17'} x2={'12.01'} y2={'17'}></line>
-                </svg>
+                <Icon icon={TriangleAlert} size={14} />
                 {'\n          Delivery Failure Diagnostic ('}
                 {displayText(r.bounceStatus || 'bounced')}
                 {')\n        '}
@@ -1319,17 +1243,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
         )}
         <div className={'lead-details-card'}>
           <h4 className={'lead-details-title'}>
-            <svg
-              width={'14'}
-              height={'14'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'currentColor'}
-              strokeWidth={'2'}
-            >
-              <circle cx={'12'} cy={'12'} r={'10'}></circle>
-              <polyline points={'12 6 12 12 16 14'}></polyline>
-            </svg>
+            <Icon icon={Clock} size={14} />
             {'\n          Lifecycle Event Timeline\n        '}
           </h4>
           <div className={'tracking-timeline'}>
@@ -1347,20 +1261,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
       <div id={'trackingSecSpecs'} className={'drawer-tab-pane'} style={{ display: 'none' }}>
         <div className={'lead-details-card'}>
           <h4 className={'lead-details-title'}>
-            <svg
-              width={'14'}
-              height={'14'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'currentColor'}
-              strokeWidth={'2'}
-            >
-              <path d={'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'}></path>
-              <polyline points={'14 2 14 8 20 8'}></polyline>
-              <line x1={'16'} y1={'13'} x2={'8'} y2={'13'}></line>
-              <line x1={'16'} y1={'17'} x2={'8'} y2={'17'}></line>
-              <polyline points={'10 9 9 9 8 9'}></polyline>
-            </svg>
+            <Icon icon={FileText} size={14} />
             {'\n          Message Identifiers & Routing\n        '}
           </h4>
           <div className={'lead-details-grid'}>
@@ -1374,17 +1275,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
                   data-copy={displayText(r.recipient)}
                   title={'Copy recipient'}
                 >
-                  <svg
-                    width={'12'}
-                    height={'12'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <rect x={'9'} y={'9'} width={'13'} height={'13'} rx={'2'} ry={'2'}></rect>
-                    <path d={'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'}></path>
-                  </svg>
+                  <Icon icon={Copy} size={12} />
                 </Button>
               </span>
             </div>
@@ -1408,17 +1299,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
                   data-copy={displayText(r.id)}
                   title={'Copy UUID'}
                 >
-                  <svg
-                    width={'12'}
-                    height={'12'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <rect x={'9'} y={'9'} width={'13'} height={'13'} rx={'2'} ry={'2'}></rect>
-                    <path d={'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'}></path>
-                  </svg>
+                  <Icon icon={Copy} size={12} />
                 </Button>
               </span>
             </div>
@@ -1434,17 +1315,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
                       data-copy={displayText(r.messageIds[0])}
                       title={'Copy Message-ID'}
                     >
-                      <svg
-                        width={'12'}
-                        height={'12'}
-                        viewBox={'0 0 24 24'}
-                        fill={'none'}
-                        stroke={'currentColor'}
-                        strokeWidth={'2'}
-                      >
-                        <rect x={'9'} y={'9'} width={'13'} height={'13'} rx={'2'} ry={'2'}></rect>
-                        <path d={'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'}></path>
-                      </svg>
+                      <Icon icon={Copy} size={12} />
                     </Button>
                   </span>
                 </div>
@@ -1456,19 +1327,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
         </div>
         <div className={'lead-details-card'}>
           <h4 className={'lead-details-title'}>
-            <svg
-              width={'14'}
-              height={'14'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'currentColor'}
-              strokeWidth={'2'}
-            >
-              <rect x={'3'} y={'4'} width={'18'} height={'18'} rx={'2'} ry={'2'}></rect>
-              <line x1={'16'} y1={'2'} x2={'16'} y2={'6'}></line>
-              <line x1={'8'} y1={'2'} x2={'8'} y2={'6'}></line>
-              <line x1={'3'} y1={'10'} x2={'21'} y2={'10'}></line>
-            </svg>
+            <Icon icon={CalendarDays} size={14} />
             {'\n          Transmission & Interaction Timestamps\n        '}
           </h4>
           <div className={'lead-details-grid'}>
@@ -1522,18 +1381,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
           <>
             <div className={'lead-details-card'}>
               <h4 className={'lead-details-title'}>
-                <svg
-                  width={'14'}
-                  height={'14'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <circle cx={'12'} cy={'12'} r={'10'}></circle>
-                  <circle cx={'12'} cy={'12'} r={'6'}></circle>
-                  <circle cx={'12'} cy={'12'} r={'2'}></circle>
-                </svg>
+                <Icon icon={Target} size={14} />
                 {'\n          Seed Inbox Placement Verification\n        '}
               </h4>
               <div className={'lead-details-grid'}>
@@ -1556,9 +1404,9 @@ export function renderTrackingDetail(r: TrackingRecord) {
                       )}
                     >
                       {r.placement?.status === 'inbox'
-                        ? '📥 Inbox (Verified)'
+                        ? 'Inbox (Verified)'
                         : r.placement?.status === 'spam'
-                          ? '🚫 Spam / Junk Folder'
+                          ? 'Spam / Junk Folder'
                           : displayText(r.placement?.status || 'Awaiting verification')}
                     </strong>
                   </span>
@@ -1594,7 +1442,8 @@ export function renderTrackingDetail(r: TrackingRecord) {
                           data-drawer-place={displayText(r.id)}
                           data-drawer-status={'inbox'}
                         >
-                          {'📥 Mark as Inbox'}
+                          <Icon icon={Inbox} size={12} />
+                          {'Mark as Inbox'}
                         </Button>
                         <Button
                           type={'button'}
@@ -1602,7 +1451,8 @@ export function renderTrackingDetail(r: TrackingRecord) {
                           data-drawer-place={displayText(r.id)}
                           data-drawer-status={'spam'}
                         >
-                          {'🚫 Mark as Spam'}
+                          <Icon icon={Ban} size={12} />
+                          {'Mark as Spam'}
                         </Button>
                         <Button
                           type={'button'}
@@ -1611,7 +1461,8 @@ export function renderTrackingDetail(r: TrackingRecord) {
                           data-drawer-status={'other'}
                           style={{ fontSize: '11.5px', padding: '6px 12px' }}
                         >
-                          {'📁 Other Folder'}
+                          <Icon icon={Folder} size={12} />
+                          {'Other Folder'}
                         </Button>
                       </div>
                     </div>
@@ -1637,17 +1488,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
             }}
           >
             <h4 className={'lead-details-title'} style={{ margin: '0' }}>
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <polyline points={'16 18 22 12 16 6'}></polyline>
-                <polyline points={'8 6 2 12 8 18'}></polyline>
-              </svg>
+              <Icon icon={CodeXml} size={14} />
               {'\n            Complete Tracking Record (JSON)\n          '}
             </h4>
             <Button
@@ -1693,16 +1534,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
         renderRegion(
           copySummaryBtn,
           <>
-            <svg
-              width={'14'}
-              height={'14'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'#10b981'}
-              strokeWidth={'2'}
-            >
-              <polyline points={'20 6 9 17 4 12'}></polyline>
-            </svg>
+            <Icon icon={Check} size={14} color={'#10b981'} />
             {' Copied!'}
           </>,
         );
@@ -1724,16 +1556,7 @@ export function renderTrackingDetail(r: TrackingRecord) {
         renderRegion(
           btn,
           <>
-            <svg
-              width={'12'}
-              height={'12'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'#10b981'}
-              strokeWidth={'2.5'}
-            >
-              <polyline points={'20 6 9 17 4 12'}></polyline>
-            </svg>
+            <Icon icon={Check} size={12} color={'#10b981'} />
           </>,
         );
         uiScope.timeout(() => {
@@ -1767,10 +1590,16 @@ export function renderTrackingDetail(r: TrackingRecord) {
     uiScope.handler(copyJsonBtn, 'onclick', async () => {
       const ok = await copyToClipboard(JSON.stringify(r, null, 2));
       if (ok) {
-        const orig = copyJsonBtn.textContent;
-        copyJsonBtn.textContent = '✓ Copied!';
+        const orig = captureContent(copyJsonBtn);
+        renderRegion(
+          copyJsonBtn,
+          <>
+            <Icon icon={Check} size={14} />
+            {' Copied!'}
+          </>,
+        );
         uiScope.timeout(() => {
-          copyJsonBtn.textContent = orig;
+          renderRegion(copyJsonBtn, orig);
         }, 1500);
         notice('Raw JSON copied to clipboard.');
       }
@@ -1851,7 +1680,8 @@ export function renderDomainReport(result: DomainReport) {
               fontSize: '11.5px',
             }}
           >
-            {'✅ 100% Authenticated (3/3)'}
+            <Icon icon={CircleCheck} size={12} />
+            {'100% Authenticated (3/3)'}
           </span>
         </>,
       );
@@ -1870,7 +1700,8 @@ export function renderDomainReport(result: DomainReport) {
               fontSize: '11.5px',
             }}
           >
-            {'⚠️ 67% Healthy (DMARC Missing)'}
+            <Icon icon={TriangleAlert} size={12} />
+            {'67% Healthy (DMARC Missing)'}
           </span>
         </>,
       );
@@ -1889,7 +1720,8 @@ export function renderDomainReport(result: DomainReport) {
               fontSize: '11.5px',
             }}
           >
-            {'❌ '}
+            <Icon icon={CircleX} size={12} />
+            {''}
             {passedChecks}
             {'/3 Checks Passing'}
           </span>
@@ -1907,26 +1739,7 @@ export function renderDomainReport(result: DomainReport) {
         <div>
           <div className={'domain-card-head'}>
             <div className={'domain-card-title'}>
-              <svg
-                width={'16'}
-                height={'16'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={spfFound ? '#10b981' : '#ef4444'}
-                strokeWidth={'2.5'}
-              >
-                <circle cx={'12'} cy={'12'} r={'10'}></circle>
-                {spfFound ? (
-                  <>
-                    <polyline points={'16 9 10 15 7 12'}></polyline>
-                  </>
-                ) : (
-                  <>
-                    <line x1={'15'} y1={'9'} x2={'9'} y2={'15'}></line>
-                    <line x1={'9'} y1={'9'} x2={'15'} y2={'15'}></line>
-                  </>
-                )}
-              </svg>
+              <Icon icon={spfFound ? CircleCheck : CircleX} size={16} />
               {'\n            SPF Record\n          '}
             </div>
             <span
@@ -1964,9 +1777,10 @@ export function renderDomainReport(result: DomainReport) {
               '; display: flex; align-items: center; gap: 6px;',
           )}
         >
+          <Icon icon={spfFound ? Check : TriangleAlert} size={12} />
           {spfFound
-            ? '✓ PrivateEmail mail server authorized'
-            : '⚠ Outreach may bounce or fail authentication'}
+            ? 'PrivateEmail mail server authorized'
+            : 'Outreach may bounce or fail authentication'}
         </div>
       </div>
     </>
@@ -1978,20 +1792,7 @@ export function renderDomainReport(result: DomainReport) {
         <div>
           <div className={'domain-card-head'}>
             <div className={'domain-card-title'}>
-              <svg
-                width={'16'}
-                height={'16'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={dkimFound ? '#10b981' : '#ef4444'}
-                strokeWidth={'2.5'}
-              >
-                <path
-                  d={
-                    'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4'
-                  }
-                ></path>
-              </svg>
+              <Icon icon={KeyRound} size={16} />
               {'\n            DKIM Signatures\n          '}
             </div>
             <span
@@ -2044,15 +1845,16 @@ export function renderDomainReport(result: DomainReport) {
               '; display: flex; align-items: center; gap: 6px;',
           )}
         >
+          <Icon icon={dkimFound ? Check : TriangleAlert} size={12} />
           {dkimFound
-            ? '✓ Valid DKIM key found on selector: ' +
+            ? 'Valid DKIM key found on selector: ' +
               displayText(
                 dkimResults
                   .filter((d) => d.state === 'found')
                   .map((d) => d.selector)
                   .join(', '),
               )
-            : '⚠ No valid DKIM keys located'}
+            : 'No valid DKIM keys located'}
         </div>
       </div>
     </>
@@ -2063,16 +1865,7 @@ export function renderDomainReport(result: DomainReport) {
         <div>
           <div className={'domain-card-head'}>
             <div className={'domain-card-title'}>
-              <svg
-                width={'16'}
-                height={'16'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={dmarcFound ? '#10b981' : '#f59e0b'}
-                strokeWidth={'2.5'}
-              >
-                <path d={'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'}></path>
-              </svg>
+              <Icon icon={Shield} size={16} />
               {'\n            DMARC Policy\n          '}
             </div>
             <span
@@ -2115,7 +1908,8 @@ export function renderDomainReport(result: DomainReport) {
               '; display: flex; align-items: center; gap: 6px;',
           )}
         >
-          {dmarcFound ? '✓ DMARC policy active' : '⚠ Required by 2024+ Gmail & Yahoo sender rules'}
+          <Icon icon={dmarcFound ? Check : TriangleAlert} size={12} />
+          {dmarcFound ? 'DMARC policy active' : 'Required by 2024+ Gmail & Yahoo sender rules'}
         </div>
       </div>
     </>
@@ -2125,7 +1919,10 @@ export function renderDomainReport(result: DomainReport) {
     dmarcGuide = (
       <>
         <div className={'dmarc-alert-box'}>
-          <div style={{ fontSize: '24px', lineHeight: '1' }}>{'🛡️'}</div>
+          <div style={{ fontSize: '24px', lineHeight: '1' }}>
+            <Icon icon={ShieldCheck} size={12} />
+            {''}
+          </div>
           <div style={{ flex: '1' }}>
             <div style={{ fontSize: '13.5px', fontWeight: '700', color: '#fde68a' }}>
               {
@@ -2208,17 +2005,7 @@ export function renderDomainReport(result: DomainReport) {
                   cursor: 'pointer',
                 }}
               >
-                <svg
-                  width={'14'}
-                  height={'14'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <rect x={'9'} y={'9'} width={'13'} height={'13'} rx={'2'} ry={'2'}></rect>
-                  <path d={'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'}></path>
-                </svg>
+                <Icon icon={Copy} size={14} />
                 {'\n              Copy DMARC TXT Record Value\n            '}
               </Button>
               <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
@@ -2250,7 +2037,10 @@ export function renderDomainReport(result: DomainReport) {
                 '; font-size: 20px;',
             )}
           >
-            {passedChecks === 3 ? '🛡️' : passedChecks === 2 ? '⚠️' : '🚨'}
+            <Icon
+              icon={passedChecks === 3 ? ShieldCheck : passedChecks === 2 ? TriangleAlert : Siren}
+              size={22}
+            />
           </div>
           <div>
             <div style={{ fontSize: '15px', fontWeight: '700', color: '#fff' }}>{bannerTitle}</div>
@@ -2278,22 +2068,18 @@ export function renderDomainReport(result: DomainReport) {
       const ok = await copyToClipboard(recommendedDmarcVal);
       if (ok) {
         notice('Copied recommended DMARC record to clipboard!');
-        copyBtn.textContent = '✓ Copied!';
+        renderRegion(
+          copyBtn,
+          <>
+            <Icon icon={Check} size={14} />
+            {' Copied!'}
+          </>,
+        );
         uiScope.timeout(() => {
           renderRegion(
             copyBtn,
             <>
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <rect x={'9'} y={'9'} width={'13'} height={'13'} rx={'2'} ry={'2'}></rect>
-                <path d={'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'}></path>
-              </svg>
+              <Icon icon={Copy} size={14} />
               {' Copy DMARC TXT Record Value'}
             </>,
           );
@@ -2479,16 +2265,7 @@ export function mountTracking() {
           $('seedPlanResult'),
           <>
             <div className={'seed-plan-success-box'}>
-              <svg
-                width={'16'}
-                height={'16'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'#10b981'}
-                strokeWidth={'2.5'}
-              >
-                <polyline points={'20 6 9 17 4 12'}></polyline>
-              </svg>
+              <Icon icon={Check} size={16} color={'#10b981'} />
               <div>
                 <strong>
                   {'Plan '}

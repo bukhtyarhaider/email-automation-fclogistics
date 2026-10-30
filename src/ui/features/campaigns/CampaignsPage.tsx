@@ -1,3 +1,4 @@
+import { CodeXml, Folder, Icon } from '../../design-system/icons';
 import { Button, Input, Textarea, Select } from '../../design-system/primitives';
 export function CampaignsPage() {
   return (
@@ -25,20 +26,7 @@ export function CampaignsPage() {
           <div className={'panel'}>
             <div className={'panel-head'}>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <path
-                    d={
-                      'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'
-                    }
-                  ></path>
-                </svg>
+                <Icon icon={Folder} size={16} />
                 {'\n                    Campaign Parameters\n                  '}
               </h2>
             </div>
@@ -72,17 +60,7 @@ export function CampaignsPage() {
           <div className={'panel'}>
             <div className={'panel-head'}>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <polyline points={'16 18 22 12 16 6'}></polyline>
-                  <polyline points={'8 6 2 12 8 18'}></polyline>
-                </svg>
+                <Icon icon={CodeXml} size={16} />
                 {'\n                    Custom Column Mapping (JSON)\n                  '}
               </h2>
             </div>

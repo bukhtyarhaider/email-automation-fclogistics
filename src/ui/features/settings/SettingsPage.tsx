@@ -1,3 +1,15 @@
+import {
+  Clock,
+  CodeXml,
+  Icon,
+  Info,
+  Mail,
+  RefreshCw,
+  Shield,
+  SquareCheckBig,
+  UserRound,
+  Users,
+} from '../../design-system/icons';
 import { Button, Input, Textarea, Select } from '../../design-system/primitives';
 export function SettingsPage() {
   return (
@@ -22,21 +34,7 @@ export function SettingsPage() {
             <div className={'panel-head'}>
               <div className={'settings-panel-heading'}>
                 <h2 className={'panel-title'}>
-                  <svg
-                    width={'16'}
-                    height={'16'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <path
-                      d={
-                        'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'
-                      }
-                    ></path>
-                    <polyline points={'22,6 12,13 2,6'}></polyline>
-                  </svg>
+                  <Icon icon={Mail} size={16} />
                   {'\n                        Configured Mailbox Profiles\n                      '}
                 </h2>
                 <span className={'status-pill ready'} id={'profilesCountBadge'}>
@@ -71,17 +69,7 @@ export function SettingsPage() {
           <div className={'panel'}>
             <div className={'panel-head'}>
               <h2 className={'panel-title'} id={'profileSetupTitle'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <circle cx={'12'} cy={'7'} r={'4'}></circle>
-                  <path d={'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'}></path>
-                </svg>
+                <Icon icon={UserRound} size={16} />
                 {'\n                      Mailbox Profile Setup\n                    '}
               </h2>
               <Button
@@ -199,17 +187,7 @@ export function SettingsPage() {
           <div className={'panel'}>
             <div className={'panel-head'}>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <circle cx={'12'} cy={'12'} r={'10'}></circle>
-                  <polyline points={'12 6 12 12 16 14'}></polyline>
-                </svg>
+                <Icon icon={Clock} size={16} />
                 {'\n                      Sending Pace & Quotas\n                    '}
               </h2>
             </div>
@@ -217,16 +195,7 @@ export function SettingsPage() {
             <div className={'pacing-presets-section'}>
               <div className={'pacing-presets-header'}>
                 <div className={'pacing-presets-title'}>
-                  <svg
-                    width={'14'}
-                    height={'14'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <path d={'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'}></path>
-                  </svg>
+                  <Icon icon={Shield} size={14} />
                   {
                     '\n                        Recommended Anti-Spam Deliverability Presets\n                      '
                   }
@@ -330,18 +299,7 @@ export function SettingsPage() {
               </div>
 
               <div className={'pacing-info-banner'}>
-                <svg
-                  width={'15'}
-                  height={'15'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <circle cx={'12'} cy={'12'} r={'10'}></circle>
-                  <line x1={'12'} y1={'16'} x2={'12'} y2={'12'}></line>
-                  <line x1={'12'} y1={'8'} x2={'12.01'} y2={'8'}></line>
-                </svg>
+                <Icon icon={Info} size={15} />
                 <div>
                   <strong>{'Spam & Rate-Limit Protections:'}</strong>
                   {
@@ -463,17 +421,7 @@ export function SettingsPage() {
           <div className={'panel'}>
             <div className={'panel-head'}>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <polyline points={'9 11 12 14 22 4'}></polyline>
-                  <path d={'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'}></path>
-                </svg>
+                <Icon icon={SquareCheckBig} size={16} />
                 {'\n                      Lead Eligibility Rules\n                    '}
               </h2>
             </div>
@@ -511,20 +459,7 @@ export function SettingsPage() {
             <div className={'panel-head'}>
               <div className={'settings-panel-heading'}>
                 <h2 className={'panel-title'}>
-                  <svg
-                    width={'16'}
-                    height={'16'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <path
-                      d={
-                        'M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83'
-                      }
-                    ></path>
-                  </svg>
+                  <Icon icon={RefreshCw} size={16} />
                   {'\n                        Firebase Open Telemetry Sync\n                      '}
                 </h2>
                 <span className={'status-pill'} id={'settingsFirebaseStatusBadge'}>
@@ -641,19 +576,7 @@ export function SettingsPage() {
           <div className={'panel'}>
             <div className={'panel-head'}>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <path d={'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'}></path>
-                  <circle cx={'9'} cy={'7'} r={'4'}></circle>
-                  <path d={'M23 21v-2a4 4 0 0 0-3-3.87'}></path>
-                  <path d={'M16 3.13a4 4 0 0 1 0 7.75'}></path>
-                </svg>
+                <Icon icon={Users} size={16} />
                 {'\n                      Shared Team Coordination\n                    '}
               </h2>
             </div>
@@ -690,17 +613,7 @@ export function SettingsPage() {
           <div className={'panel'}>
             <div className={'panel-head'}>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <polyline points={'16 18 22 12 16 6'}></polyline>
-                  <polyline points={'8 6 2 12 8 18'}></polyline>
-                </svg>
+                <Icon icon={CodeXml} size={16} />
                 {'\n                      Developer & System Info\n                    '}
               </h2>
               <span className={'status-pill ready'}>{'v1.0.0'}</span>

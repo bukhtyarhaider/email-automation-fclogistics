@@ -1,3 +1,16 @@
+import {
+  Activity,
+  Check,
+  CircleAlert,
+  Clock,
+  Icon,
+  Layers,
+  Mail,
+  Play,
+  Send,
+  Square,
+  UsersRound,
+} from '../../design-system/icons';
 import { Button, Input, Select, Progress } from '../../design-system/primitives';
 export function DashboardPage() {
   return (
@@ -13,33 +26,11 @@ export function DashboardPage() {
           </div>
           <div className={'header-actions'}>
             <Button id={'start'}>
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2.5'}
-                strokeLinecap={'round'}
-                strokeLinejoin={'round'}
-              >
-                <polygon points={'5 3 19 12 5 21 5 3'}></polygon>
-              </svg>
+              <Icon icon={Play} size={14} />
               {'\n                  Start continuous outreach\n                '}
             </Button>
             <Button id={'stop'} className={'danger'} hidden={true}>
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2.5'}
-                strokeLinecap={'round'}
-                strokeLinejoin={'round'}
-              >
-                <rect x={'6'} y={'6'} width={'12'} height={'12'}></rect>
-              </svg>
+              <Icon icon={Square} size={14} />
               {'\n                  Stop outreach\n                '}
             </Button>
           </div>
@@ -49,17 +40,7 @@ export function DashboardPage() {
           <div className={'stat-card total'}>
             <div className={'stat-label'}>
               {'\n                  Total Leads\n                  '}
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <path d={'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'}></path>
-                <circle cx={'9'} cy={'7'} r={'4'}></circle>
-              </svg>
+              <Icon icon={UsersRound} size={14} />
             </div>
             <div className={'stat-value'} id={'total'}>
               {'0'}
@@ -69,16 +50,7 @@ export function DashboardPage() {
           <div className={'stat-card ready'}>
             <div className={'stat-label'}>
               {'\n                  Ready For Outreach\n                  '}
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <polyline points={'20 6 9 17 4 12'}></polyline>
-              </svg>
+              <Icon icon={Check} size={14} />
             </div>
             <div className={'stat-value'} id={'ready'}>
               {'0'}
@@ -88,18 +60,7 @@ export function DashboardPage() {
           <div className={'stat-card excluded'}>
             <div className={'stat-label'}>
               {'\n                  Excluded From Sending\n                  '}
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <circle cx={'12'} cy={'12'} r={'10'}></circle>
-                <line x1={'12'} y1={'8'} x2={'12'} y2={'12'}></line>
-                <line x1={'12'} y1={'16'} x2={'12.01'} y2={'16'}></line>
-              </svg>
+              <Icon icon={CircleAlert} size={14} />
             </div>
             <div className={'stat-value'} id={'excluded'}>
               {'0'}
@@ -109,17 +70,7 @@ export function DashboardPage() {
           <div className={'stat-card sent'}>
             <div className={'stat-label'}>
               {'\n                  Sent By This Tool\n                  '}
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <line x1={'22'} y1={'2'} x2={'11'} y2={'13'}></line>
-                <polygon points={'22 2 15 22 11 13 2 9 22 2'}></polygon>
-              </svg>
+              <Icon icon={Send} size={14} />
             </div>
             <div className={'stat-value'} id={'sent'}>
               {'0'}
@@ -161,17 +112,7 @@ export function DashboardPage() {
               </p>
               <Progress id={'progress'} value={'0'} max={'1'}></Progress>
               <div className={'quota-banner'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <circle cx={'12'} cy={'12'} r={'10'}></circle>
-                  <polyline points={'12 6 12 12 16 14'}></polyline>
-                </svg>
+                <Icon icon={Clock} size={16} />
                 <span id={'quota'}>{'Checking rolling hour and daily allowances…'}</span>
               </div>
               <div className={'runner-meta'}>
@@ -183,17 +124,7 @@ export function DashboardPage() {
             <div className={'panel'}>
               <div className={'panel-head'}>
                 <h2 className={'panel-title'}>
-                  <svg
-                    width={'16'}
-                    height={'16'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <rect x={'3'} y={'3'} width={'18'} height={'18'} rx={'2'} ry={'2'}></rect>
-                    <line x1={'9'} y1={'9'} x2={'15'} y2={'15'}></line>
-                  </svg>
+                  <Icon icon={Layers} size={16} />
                   {'\n                      Manual Batch Dispatch\n                    '}
                 </h2>
                 <span className={'status-pill ready'} id={'selectedCount'}>
@@ -222,17 +153,7 @@ export function DashboardPage() {
               </div>
               <div className={'form-actions'}>
                 <Button id={'batch'} className={'secondary'}>
-                  <svg
-                    width={'14'}
-                    height={'14'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <line x1={'22'} y1={'2'} x2={'11'} y2={'13'}></line>
-                    <polygon points={'22 2 15 22 11 13 2 9 22 2'}></polygon>
-                  </svg>
+                  <Icon icon={Send} size={14} />
                   {'\n                      Send selected leads\n                    '}
                 </Button>
                 <a href={'#leads'} className={'button secondary'}>
@@ -246,21 +167,7 @@ export function DashboardPage() {
             <div className={'panel'}>
               <div className={'panel-head'}>
                 <h2 className={'panel-title'}>
-                  <svg
-                    width={'16'}
-                    height={'16'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <path
-                      d={
-                        'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'
-                      }
-                    ></path>
-                    <polyline points={'22,6 12,13 2,6'}></polyline>
-                  </svg>
+                  <Icon icon={Mail} size={16} />
                   {'\n                      Mailbox Connection\n                    '}
                 </h2>
               </div>
@@ -304,16 +211,7 @@ export function DashboardPage() {
             <div className={'panel'}>
               <div className={'panel-head'}>
                 <h2 className={'panel-title'}>
-                  <svg
-                    width={'16'}
-                    height={'16'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <polyline points={'22 12 18 12 15 21 9 3 6 12 2 12'}></polyline>
-                  </svg>
+                  <Icon icon={Activity} size={16} />
                   {'\n                      Live System Activity\n                    '}
                 </h2>
                 <a

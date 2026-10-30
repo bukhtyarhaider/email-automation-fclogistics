@@ -1,3 +1,12 @@
+import {
+  Check,
+  Copy,
+  FileText,
+  Icon,
+  Phone,
+  TableProperties,
+  Truck,
+} from '../../design-system/icons';
 import { Button } from '../../design-system/primitives';
 import { uiScope } from '../../shared/lifecycle';
 import type { ReactNode } from 'react';
@@ -184,20 +193,7 @@ export function renderLeadDetails(lead: Lead, message: Message | null, warnings:
       <>
         <div className={'lead-details-card'} style={{ borderLeft: '3px solid #f59e0b' }}>
           <h4 className={'lead-details-title'} style={{ color: '#fbbf24' }}>
-            <svg
-              width={'14'}
-              height={'14'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'currentColor'}
-              strokeWidth={'2'}
-            >
-              <path d={'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'}></path>
-              <polyline points={'14 2 14 8 20 8'}></polyline>
-              <line x1={'16'} y1={'13'} x2={'8'} y2={'13'}></line>
-              <line x1={'16'} y1={'17'} x2={'8'} y2={'17'}></line>
-              <polyline points={'10 9 9 9 8 9'}></polyline>
-            </svg>
+            <Icon icon={FileText} size={14} />
             {'\n          Historical Notes / Remarks\n        '}
           </h4>
           <div
@@ -315,20 +311,7 @@ export function renderLeadDetails(lead: Lead, message: Message | null, warnings:
       </section>
       <div className={'lead-details-card'}>
         <h4 className={'lead-details-title'}>
-          <svg
-            width={'14'}
-            height={'14'}
-            viewBox={'0 0 24 24'}
-            fill={'none'}
-            stroke={'currentColor'}
-            strokeWidth={'2'}
-          >
-            <path
-              d={
-                'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'
-              }
-            ></path>
-          </svg>
+          <Icon icon={Phone} size={14} />
           {'\n        Contact Information\n      '}
         </h4>
         <div className={'lead-details-grid'}>
@@ -344,17 +327,7 @@ export function renderLeadDetails(lead: Lead, message: Message | null, warnings:
                     data-copy={displayText(lead.email)}
                     title={'Copy email'}
                   >
-                    <svg
-                      width={'12'}
-                      height={'12'}
-                      viewBox={'0 0 24 24'}
-                      fill={'none'}
-                      stroke={'currentColor'}
-                      strokeWidth={'2'}
-                    >
-                      <rect x={'9'} y={'9'} width={'13'} height={'13'} rx={'2'} ry={'2'}></rect>
-                      <path d={'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'}></path>
-                    </svg>
+                    <Icon icon={Copy} size={12} />
                   </Button>
                 </>
               ) : (
@@ -374,17 +347,7 @@ export function renderLeadDetails(lead: Lead, message: Message | null, warnings:
                     data-copy={displayText(phone)}
                     title={'Copy phone'}
                   >
-                    <svg
-                      width={'12'}
-                      height={'12'}
-                      viewBox={'0 0 24 24'}
-                      fill={'none'}
-                      stroke={'currentColor'}
-                      strokeWidth={'2'}
-                    >
-                      <rect x={'9'} y={'9'} width={'13'} height={'13'} rx={'2'} ry={'2'}></rect>
-                      <path d={'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'}></path>
-                    </svg>
+                    <Icon icon={Copy} size={12} />
                   </Button>
                 </>
               ) : (
@@ -412,19 +375,7 @@ export function renderLeadDetails(lead: Lead, message: Message | null, warnings:
         <>
           <div className={'lead-details-card'}>
             <h4 className={'lead-details-title'}>
-              <svg
-                width={'14'}
-                height={'14'}
-                viewBox={'0 0 24 24'}
-                fill={'none'}
-                stroke={'currentColor'}
-                strokeWidth={'2'}
-              >
-                <rect x={'1'} y={'3'} width={'15'} height={'13'}></rect>
-                <polygon points={'16 8 20 8 23 11 23 16 16 16 8'}></polygon>
-                <circle cx={'5.5'} cy={'18.5'} r={'2.5'}></circle>
-                <circle cx={'18.5'} cy={'18.5'} r={'2.5'}></circle>
-              </svg>
+              <Icon icon={Truck} size={14} />
               {'\n        Carrier & Regulatory Credentials\n      '}
             </h4>
             <div className={'lead-details-grid'}>
@@ -464,20 +415,7 @@ export function renderLeadDetails(lead: Lead, message: Message | null, warnings:
       )}
       <div className={'lead-details-card'}>
         <h4 className={'lead-details-title'}>
-          <svg
-            width={'14'}
-            height={'14'}
-            viewBox={'0 0 24 24'}
-            fill={'none'}
-            stroke={'currentColor'}
-            strokeWidth={'2'}
-          >
-            <path d={'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'}></path>
-            <polyline points={'14 2 14 8 20 8'}></polyline>
-            <line x1={'16'} y1={'13'} x2={'8'} y2={'13'}></line>
-            <line x1={'16'} y1={'17'} x2={'8'} y2={'17'}></line>
-            <polyline points={'10 9 9 9 8 9'}></polyline>
-          </svg>
+          <Icon icon={FileText} size={14} />
           {'\n        Workbook Origin & Status\n      '}
         </h4>
         <div className={'lead-details-grid'}>
@@ -503,18 +441,7 @@ export function renderLeadDetails(lead: Lead, message: Message | null, warnings:
       {historicalNotesHtml}
       <div className={'lead-details-card'}>
         <h4 className={'lead-details-title'}>
-          <svg
-            width={'14'}
-            height={'14'}
-            viewBox={'0 0 24 24'}
-            fill={'none'}
-            stroke={'currentColor'}
-            strokeWidth={'2'}
-          >
-            <polyline points={'21 8 21 21 3 21 3 8'}></polyline>
-            <line x1={'1'} y1={'3'} x2={'23'} y2={'3'}></line>
-            <polygon points={'10 8 14 8 14 12 10 12'}></polygon>
-          </svg>
+          <Icon icon={TableProperties} size={14} />
           {'\n        All Spreadsheet Columns ('}
           {sortedKeys.length}
           {')\n      '}
@@ -570,16 +497,7 @@ export function renderLeadDetails(lead: Lead, message: Message | null, warnings:
         renderRegion(
           btn,
           <>
-            <svg
-              width={'12'}
-              height={'12'}
-              viewBox={'0 0 24 24'}
-              fill={'none'}
-              stroke={'#10b981'}
-              strokeWidth={'2.5'}
-            >
-              <polyline points={'20 6 9 17 4 12'}></polyline>
-            </svg>
+            <Icon icon={Check} size={12} color={'#10b981'} />
           </>,
         );
         uiScope.timeout(() => {

@@ -1,3 +1,4 @@
+import { Ban, Icon, Plus, Search, Shield } from '../../design-system/icons';
 import { Button, Input } from '../../design-system/primitives';
 export function SuppressionPage() {
   return (
@@ -19,17 +20,7 @@ export function SuppressionPage() {
           <div className={'panel'}>
             <div className={'panel-head'}>
               <h2 className={'panel-title'}>
-                <svg
-                  width={'16'}
-                  height={'16'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <circle cx={'12'} cy={'12'} r={'10'}></circle>
-                  <line x1={'4.93'} y1={'4.93'} x2={'19.07'} y2={'19.07'}></line>
-                </svg>
+                <Icon icon={Ban} size={16} />
                 {'\n                    Add Suppressed Recipient\n                  '}
               </h2>
             </div>
@@ -46,17 +37,7 @@ export function SuppressionPage() {
             </div>
             <div className={'form-actions'}>
               <Button id={'suppress'}>
-                <svg
-                  width={'14'}
-                  height={'14'}
-                  viewBox={'0 0 24 24'}
-                  fill={'none'}
-                  stroke={'currentColor'}
-                  strokeWidth={'2'}
-                >
-                  <line x1={'12'} y1={'5'} x2={'12'} y2={'19'}></line>
-                  <line x1={'5'} y1={'12'} x2={'19'} y2={'12'}></line>
-                </svg>
+                <Icon icon={Plus} size={14} />
                 {'\n                    Add to suppression list\n                  '}
               </Button>
             </div>
@@ -71,16 +52,7 @@ export function SuppressionPage() {
             <div className={'panel-head'}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <h2 className={'panel-title'}>
-                  <svg
-                    width={'16'}
-                    height={'16'}
-                    viewBox={'0 0 24 24'}
-                    fill={'none'}
-                    stroke={'currentColor'}
-                    strokeWidth={'2'}
-                  >
-                    <path d={'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'}></path>
-                  </svg>
+                  <Icon icon={Shield} size={16} />
                   {'\n                      Suppressed Records\n                    '}
                 </h2>
                 <span className={'status-pill blocked'} id={'suppressionCountBadge'}>
@@ -88,10 +60,7 @@ export function SuppressionPage() {
                 </span>
               </div>
               <div className={'toolbar-search'} style={{ minWidth: '180px', maxWidth: '260px' }}>
-                <svg viewBox={'0 0 24 24'} fill={'none'} stroke={'currentColor'} strokeWidth={'2'}>
-                  <circle cx={'11'} cy={'11'} r={'8'}></circle>
-                  <line x1={'21'} y1={'21'} x2={'16.65'} y2={'16.65'}></line>
-                </svg>
+                <Icon icon={Search} />
                 <Input
                   id={'suppressionSearch'}
                   type={'search'}
